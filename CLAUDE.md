@@ -29,19 +29,31 @@ engineering.
   addition — Python-trained agents could plug in without redoing the RL work.
   Not a current priority.
 
-## Open design questions (still being decided — check DEVLOG.md for the latest)
+## Design decisions & open questions
 
-- Full TTR ruleset (route claiming, ticket cards, longest-route bonus) vs. a
-  simplified subset to start
-- State/observation representation — how much of the board + hidden info
-  (opponents' hands, remaining tickets) agents see
-- Start with 2-agent games before scaling to full 2–5 player structure?
-- Reward shaping — raw score vs. shaping toward specific behaviors to study
+The roadmap, settled decisions (with rationale), and open questions live in
+`PLAN.md` — check there before proposing design changes. Settled so far:
+
+- **2 players first**, scaling to 3–5 later (engine should support N players).
+- **Full USA map and full ruleset** for bulk development. Don't propose a
+  simplified ruleset — a tiny toy map exists only as a smoke test, loaded as a
+  different board data file with the same rules.
+
+- **Trained agents get perfect memory of public information.** Scripted bots can be
+  weakened on purpose (memory, final-turn guards) to make easier opponents.
+- **Claiming is two steps:** choose the route, then choose the payment.
+
+Still open: observation encoding, the rest of the action-space encoding, reward
+shaping, RL library choice.
 
 ## Conventions
 
 - Build/test commands: TBD once the project scaffolding exists — update this
   section as soon as there's a real entry point.
-- Progress and reasoning behind decisions are logged in `DEVLOG.md`, not in
-  this file. Check there for the "why" behind anything that looks like an
-  in-progress decision.
+- `PLAN.md` holds the plan, roadmap, and reasoning behind decisions — update it
+  when a decision is made or the roadmap changes.
+- `DEVLOG.md` is the user's own handwritten session notes. **Do not edit it.**
+- **Game rules:** use `docs/RULES.md`, a Markdown transcription of the official rules
+  with this project's rulings for edge cases the PDF doesn't cover. The original is
+  `docs/tt_rules_2015_en.pdf` and is the final authority. If the two disagree, fix
+  RULES.md. Don't implement rules from memory.
