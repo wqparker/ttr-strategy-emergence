@@ -32,5 +32,14 @@
     {"a": "B", "b": "D", "points": 4},
     {"a": "E", "b": "A", "points": 7},
     {"a": "F", "b": "C", "points": 5}
-  ]
+  ],
+  "layout_note": "Display positions only (ASCII map); x/y are roughly longitude/latitude, hand-adjusted for legibility. Not game data.",
+  "layout": {
+    "A": {"x": 0, "y": 2, "code": "A"},
+    "B": {"x": 3, "y": 3, "code": "B"},
+    "C": {"x": 3, "y": 1, "code": "C"},
+    "D": {"x": 6, "y": 3, "code": "D"},
+    "E": {"x": 6, "y": 1, "code": "E"},
+    "F": {"x": 9, "y": 2, "code": "F"}
+  }
 }

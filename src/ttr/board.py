@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
@@ -46,6 +46,15 @@ class Ticket:
 
 
 @dataclass(frozen=True)
+class CityPos:
+    """Display position (ASCII map only; not game data). y grows northward."""
+
+    x: float
+    y: float
+    code: str
+
+
+@dataclass(frozen=True)
 class Board:
     name: str
     verified: bool
@@ -53,6 +62,7 @@ class Board:
     cities: Tuple[str, ...]
     routes: Tuple[Route, ...]
     tickets: Tuple[Ticket, ...]
+    layout: Dict[str, CityPos] = field(default_factory=dict, compare=False)
 
     def routes_between(self, a: str, b: str) -> List[Route]:
         return [r for r in self.routes if {r.a, r.b} == {a, b}]
@@ -121,6 +131,13 @@ def board_from_dict(data: dict) -> Board:
                 raise BoardError(f"ticket {i} references unknown city {end!r}")
         tickets.append(Ticket(id=i, a=t["a"], b=t["b"], points=t["points"]))
 
+    layout = {}
+    raw_layout = data.get("layout", {})
+    if raw_layout:
+        if set(raw_layout) != city_set:
+            raise BoardError("layout must give a position for every city")
+        layout = {c: CityPos(v["x"], v["y"], v.get("code", c)) for c, v in raw_layout.items()}
+
     board = Board(
         name=data["name"],
         verified=bool(data.get("verified", False)),
@@ -128,6 +145,7 @@ def board_from_dict(data: dict) -> Board:
         cities=cities,
         routes=routes,
         tickets=tuple(tickets),
+        layout=layout,
     )
     _check_connected(board)
     return board

@@ -142,7 +142,7 @@ in `PLAN.md`.
 | 17 | What is public information? | Every card taken from the face-up market, every card paid to claim a route, the discard pile, all claimed routes, and each player's hand size, ticket count, trains left and score. Hidden: blind draws, and the contents of hands and tickets, including which tickets were returned. |
 | 18 | Order of several tickets returned to the bottom of the deck at once. | **Random order** (not chosen by the player). |
 | 19 | Choosing which cards pay for a claim (a gray route's color, how many Locomotives to use). | **The player chooses.** In the environment this is a separate payment step after choosing the route (see PLAN.md). |
-| 20 | **Stalemate** *(added by Claude during unattended work; please confirm)*: every player can only Pass (no claimable route, no cards to draw, empty ticket deck) and nobody has reached the end trigger. | **The game ends and is scored normally once every player has passed in a row.** Otherwise it would never end. Found in stress tests on the toy map with 3–5 players, where all routes get claimed before anyone runs low on trains. It hasn't been seen on the USA map. |
+| 20 | **Stalemate**: every player can only Pass (no claimable route, no cards to draw, empty ticket deck) and nobody has reached the end trigger. | **The game ends and is scored normally once every player has passed in a row.** Otherwise it would never end. Found in stress tests on the toy map with 3–5 players, where all routes get claimed before anyone runs low on trains. It hasn't been seen on the USA map. |
 
 ---
 

@@ -1,7 +1,8 @@
 """Run bot-vs-bot games and summarize results.
 
     python -m ttr.simulate --agents greedy random --games 200
-    python -m ttr.simulate --agents greedy greedy --games 1 --show
+    python -m ttr.simulate --agents greedy greedy --show          # text log
+    python -m ttr.simulate --agents greedy greedy --show board --step   # ASCII board
 
 Seats are rotated across games (§9 #8) so first-player advantage averages out.
 """
@@ -22,7 +23,7 @@ from rich.table import Table
 from ttr.agents import Agent, GreedyAgent, RandomAgent
 from ttr.board import Board, load_board
 from ttr.game import Game, GameResult
-from ttr.render import render_game, render_result, render_routes
+from ttr.render import describe_event, render_board_view, render_game, render_result, render_routes
 
 AGENTS: Dict[str, Callable[[int], Agent]] = {
     "random": lambda seed: RandomAgent(seed),
@@ -107,6 +108,39 @@ def _summary_table(agent_names: Sequence[str], summary: Dict[str, object]) -> Ta
     return table
 
 
+def show_game(console: Console, board: Board, args: argparse.Namespace) -> None:
+    """Play one game, printing each turn as a text log or as the ASCII board view."""
+    n = len(args.agents)
+    agents = [AGENTS[name](args.seed + i) for i, name in enumerate(args.agents)]
+    game = Game(board, num_players=n, seed=args.seed, first_player=0, max_turns=args.max_turns)
+    seen = [0]  # log entries already shown
+    last_turn = [-1]
+
+    def frame(g: Game) -> None:
+        if g.turn == last_turn[0] and not g.game_over:
+            return  # mid-turn sub-step; wait for the turn to finish
+        last_turn[0] = g.turn
+        lines = [text for text in (describe_event(g, e) for e in g.log[seen[0]:]) if text]
+        seen[0] = len(g.log)
+        if args.show == "board":
+            if args.step or args.delay:
+                console.clear()
+            console.print(render_board_view(g, names=args.agents, recent=lines, width=console.width))
+        else:
+            console.rule(" · ".join(lines) or f"turn {g.turn}")
+            console.print(render_game(g))
+        if args.step and not g.game_over:
+            input("  [Enter] next turn ")
+        elif args.delay:
+            time.sleep(args.delay)
+
+    frame(game)  # starting position
+    result = play_game(game, agents, on_step=frame)
+    if args.show == "log":
+        console.print(render_routes(game))
+    console.print(render_result(result, names=args.agents))
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--agents", nargs="+", default=["greedy", "random"], choices=sorted(AGENTS))
@@ -114,7 +148,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--board", default="usa")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--max-turns", type=int, default=1000)
-    parser.add_argument("--show", action="store_true", help="play one game, printing state every turn")
+    parser.add_argument(
+        "--show", nargs="?", const="log", choices=["log", "board"],
+        help="play one game and display every turn: 'log' (text tables, default) or 'board' (ASCII map)",
+    )
+    parser.add_argument("--step", action="store_true", help="with --show: press Enter between turns")
+    parser.add_argument("--delay", type=float, default=0.0, help="with --show: seconds to pause per turn")
     args = parser.parse_args(argv)
 
     if hasattr(sys.stdout, "reconfigure"):  # Windows consoles/pipes default to cp1252
@@ -125,21 +164,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         console.print(f"[yellow]warning: board '{board.name}' data is UNVERIFIED (see data file note)[/]")
 
     if args.show:
-        n = len(args.agents)
-        agents = [AGENTS[name](args.seed + i) for i, name in enumerate(args.agents)]
-        game = Game(board, num_players=n, seed=args.seed, first_player=0, max_turns=args.max_turns)
-        last_turn = [-1]
-
-        def show(g: Game) -> None:
-            if g.turn != last_turn[0]:
-                last_turn[0] = g.turn
-                event = g.log[-1]
-                console.rule(f"after turn {g.turn}: P{event.player} {event.kind} {event.public}")
-                console.print(render_game(g))
-
-        result = play_game(game, agents, on_step=show)
-        console.print(render_routes(game))
-        console.print(render_result(result, names=args.agents))
+        show_game(console, board, args)
         return
 
     start = time.time()

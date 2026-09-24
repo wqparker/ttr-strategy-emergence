@@ -64,3 +64,16 @@ def _minimal(**overrides):
 def test_invalid_boards_rejected(overrides):
     with pytest.raises(BoardError):
         board_from_dict(_minimal(**overrides))
+
+
+def test_layout_loaded_for_bundled_boards():
+    for name in ("usa", "toy"):
+        board = load_board(name)
+        assert set(board.layout) == set(board.cities)
+    codes = [p.code for p in load_board("usa").layout.values()]
+    assert len(set(codes)) == len(codes)
+
+
+def test_layout_must_cover_every_city():
+    with pytest.raises(BoardError):
+        board_from_dict(_minimal(layout={"A": {"x": 0, "y": 0}}))
