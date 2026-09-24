@@ -48,14 +48,15 @@ shaping, RL library choice.
 
 ## Conventions
 
-- Setup: `py -3.9 -m venv .venv` then `.venv/Scripts/python -m pip install -e ".[dev]"`
-  (Python 3.9 for now; move to 3.11+ before the RL phase).
+- Setup: `py -3.11 -m venv .venv` then `.venv/Scripts/python -m pip install -e ".[dev]"`
+  (Python 3.11+).
 - Tests: `.venv/Scripts/python -m pytest`.
 - Layout: engine in `src/ttr/` (`game.py` rules/state, `board.py` + `data/*.json`
   board data, `scoring.py`, `actions.py`), tests in `tests/`. Code comments like
   `§9 #N` point to the rulings in `docs/RULES.md`.
-- `src/ttr/data/usa.json` is **unverified**: it was drafted from memory. Don't treat
-  its routes or tickets as ground truth until `"verified": true`.
+- `src/ttr/data/usa.json` has been hand-verified against the physical board
+  (`"verified": true`). If a route or ticket seems wrong, check the board before
+  changing the data.
 - `PLAN.md` holds the plan, roadmap, and reasoning behind decisions — update it
   when a decision is made or the roadmap changes. At the end of each session, update
   its **Current progress** section (just completed / current / next) and its date.

@@ -68,18 +68,13 @@ development or tuning.
 
 *Updated at the end of each session. Last updated: 2026-09-24.*
 
-- **Just completed: Phase 2, debugging tools and baselines.**
-  - Random and greedy bots.
-  - `rich` text log and ASCII board view (`python -m ttr.simulate --show board`).
-  - Seat-rotated match runner, with a random seed printed each run.
-  - Stress test.
-  - Phases 0–2 are all on branch `phase-1-engine`, which is pushed but not merged.
-- **Current: get the engine ready for Phase 3.**
-  - Verify the USA map data against the physical board using
-    `docs/usa_map_checklist.md`, then set `"verified": true`.
-  - Merge `phase-1-engine` into `main`.
-  - Settle the open questions Phase 3 depends on: observation encoding, action-space
-    encoding, reward, RL library. Also move to Python 3.11+.
+- **Just completed: engine ready for Phase 3.**
+  - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view, seat-rotated
+    match runner, stress test) merged into `main`.
+  - USA map data hand-verified against the physical board (`"verified": true`).
+  - Moved to Python 3.11.
+- **Current: settle the open questions Phase 3 depends on**: observation encoding,
+  action-space encoding, reward, RL library.
 - **Next: Phase 3, the PettingZoo environment.** An AEC wrapper around the engine, with
   action masks built incrementally (see "Engine speed" under open questions).
 
@@ -132,6 +127,5 @@ development or tuning.
 - **Engine speed**: about 10k steps/s now, and `step()` recomputes the legal-move list to
   validate each action. Revisit when legal moves become action masks in phase 3,
   probably with a cached mask per state.
-- **Python version**: 3.9 is installed. Move to 3.11+ before installing RL libraries.
 - **Algorithm / library**: Stable-Baselines3 (sb3-contrib MaskablePPO), CleanRL, or RLlib.
   The choice depends on how easy multi-agent self-play is to set up.

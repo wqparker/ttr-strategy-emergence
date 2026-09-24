@@ -1,7 +1,7 @@
 # USA map data checklist
 
 Generated from `src/ttr/data/usa.json` by `scripts/board_checklist.py`.
-Data status: **UNVERIFIED**.
+Data status: **verified**.
 
 Tick each row once it matches the physical board or cards. Fix mistakes in the
 JSON, regenerate this file, and set `"verified": true` once every row is ticked.

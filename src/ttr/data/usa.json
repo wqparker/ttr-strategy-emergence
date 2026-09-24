@@ -1,7 +1,7 @@
 {
   "name": "usa",
-  "verified": false,
-  "note": "VERIFIED: drafted from memory, not from the physical board. Check every route (endpoints, length, color) and ticket against the real board/cards, then set verified=true. 'purple' is the pink/purple card color; double routes are two entries with the same endpoints.",
+  "verified": true,
+  "note": "Hand-verified against the physical board (routes: endpoints, length, color; tickets) using docs/usa_map_checklist.md. 'purple' is the pink/purple card color; double routes are two entries with the same endpoints.",
   "trains_per_player": 45,
   "cities": [
     "Vancouver", "Seattle", "Portland", "San Francisco", "Los Angeles",

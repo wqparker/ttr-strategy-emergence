@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "ttr"
 version = "0.1.0"
 description = "Ticket to Ride as a multi-agent RL environment for studying emergent strategy"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "rich>=13",
 ]
