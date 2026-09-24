@@ -66,6 +66,10 @@ development or tuning.
 
 ## Roadmap
 
+**Status:** phases 0–2 are built on branch `phase-1-engine` (not merged yet). One thing
+blocks relying on the engine: the USA map data is unverified (use
+`docs/usa_map_checklist.md`).
+
 0. **Scaffolding**: package layout, `pyproject.toml`, test runner, `.gitignore`.
 1. **Game engine**: pure Python with no RL dependencies. It covers board data (USA map plus
    the toy map), game state, legal-move generation, rule enforcement, and scoring,
@@ -110,5 +114,9 @@ development or tuning.
   mask size manageable.
 - **Reward**: raw final score or win/loss, vs. shaping toward specific behaviors. Shaping
   risks building in the very strategies being studied.
+- **Engine speed**: about 10k steps/s now, and `step()` recomputes the legal-move list to
+  validate each action. Revisit when legal moves become action masks in phase 3,
+  probably with a cached mask per state.
+- **Python version**: 3.9 is installed. Move to 3.11+ before installing RL libraries.
 - **Algorithm / library**: Stable-Baselines3 (sb3-contrib MaskablePPO), CleanRL, or RLlib.
   The choice depends on how easy multi-agent self-play is to set up.
