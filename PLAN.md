@@ -64,11 +64,26 @@ environment and the training loop run end to end. The board is loaded from data 
 so the toy map is just another data file with the same rules. It gets no separate
 development or tuning.
 
-## Roadmap
+## Current progress
 
-**Status:** phases 0–2 are built on branch `phase-1-engine` (not merged yet). One thing
-blocks relying on the engine: the USA map data is unverified (use
-`docs/usa_map_checklist.md`).
+*Updated at the end of each session. Last updated: 2026-09-24.*
+
+- **Just completed: Phase 2, debugging tools and baselines.**
+  - Random and greedy bots.
+  - `rich` text log and ASCII board view (`python -m ttr.simulate --show board`).
+  - Seat-rotated match runner, with a random seed printed each run.
+  - Stress test.
+  - Phases 0–2 are all on branch `phase-1-engine`, which is pushed but not merged.
+- **Current: get the engine ready for Phase 3.**
+  - Verify the USA map data against the physical board using
+    `docs/usa_map_checklist.md`, then set `"verified": true`.
+  - Merge `phase-1-engine` into `main`.
+  - Settle the open questions Phase 3 depends on: observation encoding, action-space
+    encoding, reward, RL library. Also move to Python 3.11+.
+- **Next: Phase 3, the PettingZoo environment.** An AEC wrapper around the engine, with
+  action masks built incrementally (see "Engine speed" under open questions).
+
+## Roadmap
 
 0. **Scaffolding**: package layout, `pyproject.toml`, test runner, `.gitignore`.
 1. **Game engine**: pure Python with no RL dependencies. It covers board data (USA map plus

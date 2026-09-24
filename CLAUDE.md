@@ -57,7 +57,8 @@ shaping, RL library choice.
 - `src/ttr/data/usa.json` is **unverified**: it was drafted from memory. Don't treat
   its routes or tickets as ground truth until `"verified": true`.
 - `PLAN.md` holds the plan, roadmap, and reasoning behind decisions — update it
-  when a decision is made or the roadmap changes.
+  when a decision is made or the roadmap changes. At the end of each session, update
+  its **Current progress** section (just completed / current / next) and its date.
 - `DEVLOG.md` is the user's own handwritten session notes. **Do not edit it.**
 - **Game rules:** use `docs/RULES.md`, a Markdown transcription of the official rules
   with this project's rulings for edge cases the PDF doesn't cover. The original is
