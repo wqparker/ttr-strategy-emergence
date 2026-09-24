@@ -6,7 +6,7 @@ import pytest
 
 from ttr.board import load_board
 from ttr.cards import Color
-from ttr.viz.geometry import TRACK_CELLS, load_layout, track_cells
+from ttr.viz.geometry import load_layout
 
 from helpers import route_id, started_game
 
@@ -101,20 +101,62 @@ def test_display_data_matches_board():
             assert color in colors and side in (1, -1)
 
 
-def test_score_track_goes_around_the_border():
-    canvas = (1151, 764)
-    cells = track_cells(canvas, 28)
-    assert len(cells) == TRACK_CELLS
-    x, y, w, h = cells[0]
-    assert x == 0 and y + h == canvas[1]  # bottom-left
-    assert cells[20][:2] == (0, 0)  # top-left
-    assert cells[50][0] + cells[50][2] == canvas[0] and cells[50][1] == 0  # top-right
-    assert cells[70][0] + cells[70][2] == canvas[0]  # bottom-right
-    assert cells[1][1] < cells[0][1] and cells[19][1] > cells[20][1]  # up the left side
-    assert cells[21][0] < cells[49][0]  # left to right along the top
-    assert cells[71][0] > cells[99][0]  # right to left along the bottom
-    for cx, cy, cw, ch in cells:
-        assert cx >= -1e-6 and cy >= -1e-6 and cx + cw <= canvas[0] + 1e-6 and cy + ch <= canvas[1] + 1e-6
+def test_no_cars_of_different_routes_overlap(usa):
+    board, layout = usa
+    ids = sorted(layout.routes)
+    bad = []
+    for i, r in enumerate(ids):
+        for q in ids[i + 1:]:
+            if any(a.overlaps(b) for a in layout.routes[r].cars for b in layout.routes[q].cars):
+                bad.append((board.routes[r].a, board.routes[r].b, board.routes[q].a, board.routes[q].b))
+    assert not bad
+
+
+def test_cars_within_a_route_do_not_overlap(usa):
+    _, layout = usa
+    for shape in layout.routes.values():
+        for a, b in zip(shape.cars, shape.cars[1:]):
+            assert not a.overlaps(b, clearance=-1.0)  # neighbors may touch, not overlap
+
+
+def test_measured_car_counts_match_route_lengths():
+    board = load_board("usa")
+    d = json.loads(resources.files("ttr").joinpath("data", "usa_display.json").read_text(encoding="utf-8"))
+    lengths = {frozenset((r.a, r.b)): r.length for r in board.routes}
+    for entry in d["routes"]:
+        if "cars" in entry:
+            assert len(entry["cars"]) == lengths[frozenset((entry["a"], entry["b"]))], entry
+
+
+def test_backdrop_loaded_and_inside_canvas(usa):
+    _, layout = usa
+    b = layout.backdrop
+    assert b is not None and b.land and b.states and b.lakes
+    w, h = layout.canvas
+    # The warp pins cities, so each city is on (or, for coastal cities like
+    # Miami, within a few pixels of) drawn land.
+    for city, (x, y) in layout.cities.items():
+        near = [(x + dx, y + dy) for dx in (-6, 0, 6) for dy in (-6, 0, 6)]
+        assert any(_inside(p, ring) for p in near for ring in b.land), city
+    # The five Great Lakes: large lakes between Duluth and Montreal.
+    great = [
+        ring for ring in b.lakes
+        if _area(ring) > 1000 and all(640 <= x <= 980 and 110 <= y <= 320 for x, y in ring)
+    ]
+    assert len(great) == 5
+
+
+def _area(ring):
+    return abs(sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1) in zip(ring, ring[1:] + ring[:1]))) / 2
+
+
+def _inside(p, ring):
+    x, y = p
+    inside = False
+    for (x0, y0), (x1, y1) in zip(ring, ring[1:] + ring[:1]):
+        if (y0 > y) != (y1 > y) and x < x0 + (y - y0) * (x1 - x0) / (y1 - y0):
+            inside = not inside
+    return inside
 
 
 def test_hit_testing(usa):

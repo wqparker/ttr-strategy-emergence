@@ -31,12 +31,14 @@ PLAYER: Tuple[RGB, ...] = (
     (35, 35, 40),     # black
 )
 
-MAP_BG = (224, 228, 226)
-MAP_GRID = (208, 214, 214)
-TRACK_BG = (128, 32, 26)
-TRACK_ALT = (112, 26, 22)
-TRACK_TEXT = (240, 226, 196)
-TRACK_TEXT_5 = (236, 180, 64)  # every 5th number, as on the board
+MAP_BG = (224, 228, 226)  # boards without a backdrop
+FRAME = (122, 30, 24)  # the board's red border
+FRAME_LINE = (196, 150, 70)  # thin gold line inside the frame
+WATER = (196, 214, 222)
+LAND = (234, 234, 226)
+STATE_LINE = (178, 180, 172)
+COUNTRY_LINE = (140, 136, 128)
+COAST_LINE = (150, 170, 180)
 CITY_FILL = (206, 86, 38)
 CITY_RING = (70, 30, 20)
 CITY_SHINE = (250, 190, 150)

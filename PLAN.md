@@ -139,12 +139,20 @@ viewer and the overlays, and later let us review any trained agent's game move b
 3. **Board renderer:** replicate the physical board as closely as practical, using a
    photo of it (`docs/ticket-to-ride_usa_map.jpg`, gitignored as publisher artwork) as
    the reference. Match city positions, route shapes (many routes are curved), train-car
-   placement for each space, double routes side by side, the score track around the
-   border, and the route-points table. Coordinates are measured from the photo and stored
-   as display-only data. Everything is drawn by us; the photo is never used as a
-   background. Claimed routes are filled in the owner's color. A `--screenshot` option
-   renders a PNG without a window, for checking against the photo and for tests.
-4. **Side panels and perspective toggle:** players (score, trains, hand size, tickets),
+   placement for each space, double routes side by side, and the route-points table.
+   Coordinates are measured from the photo and stored as display-only data. Everything
+   is drawn by us; the photo is never used as a background. Claimed routes are filled in
+   the owner's color. A `--screenshot` option renders a PNG without a window, for
+   checking against the photo and for tests.
+   - **Revisions after review:** a plain red frame instead of the numbered score track
+     (scores go in the side panels); a map backdrop of state, province and country
+     borders (Natural Earth, public domain) warped so real city locations land on the
+     board's cities (`scripts/build_backdrop.py`); supersampled drawing for smooth
+     edges; no two cars of different routes may overlap (enforced by a test). Crowded
+     routes use car centers measured from the photo; other route ends are trimmed back
+     slightly at busy cities.
+4. **Side panels and perspective toggle:** players (score, trains, hand size, tickets; the
+   board has no score track, so scores live here),
    market, pile sizes, current sub-step, recent events. All-seeing view shows every
    hand and ticket; player view shows only that player's information plus their
    card-memory estimates.

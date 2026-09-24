@@ -30,6 +30,8 @@ tensorboard/
 docs/closedNotes/
 # Board art photo: reference for the renderer's layout, publisher's artwork
 docs/ticket-to-ride_usa_map.jpg
+# Screenshots at the repo root (--compare output blends in the photo)
+/*.png
 
 # Editor / OS
 .DS_Store

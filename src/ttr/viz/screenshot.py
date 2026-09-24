@@ -41,7 +41,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--board", default="usa")
     parser.add_argument("--record", type=Path, help="draw the state from a game record")
     parser.add_argument("--step", type=int, default=None, help="with --record: action index (default: end)")
-    parser.add_argument("--scale", type=float, default=1.0)
+    parser.add_argument("--scale", type=float, default=2.0)
     parser.add_argument("--compare", action="store_true", help="blend with the board photo at 50%%")
     args = parser.parse_args(argv)
 
