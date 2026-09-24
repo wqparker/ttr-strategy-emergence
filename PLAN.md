@@ -70,18 +70,18 @@ development or tuning.
 
 *Updated at the end of each session. Last updated: 2026-09-24.*
 
-- **Just completed: engine ready for Phase 3.**
-  - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view, seat-rotated
-    match runner, stress test) merged into `main`.
+- **Just completed: engine ready, and every RL design question settled.**
+  - Phases 0–2 (engine, random/greedy bots, `rich` log, temporary ASCII board view,
+    seat-rotated match runner, stress test) merged into `main`.
   - USA map data hand-verified against the physical board (`"verified": true`).
   - Moved to Python 3.11.
-- **Current: settle the open questions Phase 3 depends on.** Settled: card memory
-  (Level 2), the methods to compare (with CleanRL-style implementations), the action
-  space (flat 168 with sub-step masks), no final-turn guard for trained agents, and the
-  observation (flat vector, about 760 numbers), and reward (a setting, default dense
-  score margin). The design questions Phase 3 depends on are all settled.
-- **Next: Phase 3, the PettingZoo environment.** An AEC wrapper around the engine, with
-  action masks built incrementally (see "Engine speed" under open questions).
+  - Settled: card memory (Level 2), the methods to compare (CleanRL-style), the action
+    space (flat 168 with sub-step masks), no final-turn guard for trained agents, the
+    observation (flat vector, about 760 numbers), and reward (a setting, default dense
+    score margin).
+- **Current: Phase 3, visualization.** A proper Pygame viewer comes before any training
+  (see "Visualization"). Milestone 1, game records and replay, is next.
+- **Next: Phase 4, the PettingZoo environment.**
 
 ## Roadmap
 
@@ -92,16 +92,63 @@ development or tuning.
 2. **Debugging tools and baselines**: `rich` terminal rendering of the game state.
    Random and simple greedy/heuristic agents serve as sanity checks and as evaluation
    opponents.
-3. **PettingZoo environment**: an AEC wrapper around the engine, with action masking and
-   the observation design (see open questions).
-4. **Training and search agents**: the method roster (see "Methods to compare"), each
+3. **Visualization**: a Pygame viewer with live, replay and human-play modes, a
+   perspective toggle, and analysis overlays (see "Visualization"). Built before any
+   training so every later phase can be watched and checked.
+4. **PettingZoo environment**: an AEC wrapper around the engine, with action masking and
+   the observation design (see "Agent design decisions").
+5. **Training and search agents**: the method roster (see "Methods to compare"), each
    plugged into the same agent interface and evaluated the same way. Smoke-test each on
    the toy map first, then train on the full map.
-5. **Strategy analysis**: metrics that capture play style (blocking rate, route-length
+6. **Strategy analysis**: metrics that capture play style (blocking rate, route-length
    distribution, ticket draw/keep behavior, tempo), compared across methods, plus
-   pandas/matplotlib notebooks.
-6. **Later / optional**: 3–5 players, the AlphaZero-style stretch agent, live Pygame
-   visualization, and Unity + ML-Agents for presentation.
+   pandas/matplotlib notebooks and the viewer's overlays.
+7. **Later / optional**: 3–5 players, the AlphaZero-style stretch agent, and Unity +
+   ML-Agents for presentation.
+
+## Visualization (Phase 3)
+
+A robust viewer before any training, replacing the temporary ASCII board view. The
+engine stays free of Pygame: the viewer lives in `src/ttr/viz/` and Pygame is an
+optional `[viz]` dependency.
+
+**Decided scope:** live viewer, replay viewer, human play, analysis overlays, and a
+perspective toggle between an all-seeing view and one player's view.
+
+**Key idea: a game is a seed plus a list of actions.** The engine is deterministic given
+its seed, so a record of `{board, players, seed, first player, max turns, agent names,
+actions}` replays the game exactly. Records are small JSON files. They drive the replay
+viewer and the overlays, and later let us review any trained agent's game move by move.
+
+**Milestones, in build order:**
+
+1. **Game records and replay** (`src/ttr/record.py`): save and load records, serialize
+   actions, rebuild the game state at any step. `simulate.py --record DIR` saves games.
+   Tests: replaying a record reproduces the original final state and result.
+2. **Card-memory tracker** (`src/ttr/memory.py`): Levels 0–2 from "Card memory", built
+   from the event log. It moves up from Phase 4 because the player view shows it too;
+   the env reuses it. Tests: known counts never exceed the true hand, and the unseen
+   pool always equals deck plus opponents' unknown cards.
+3. **Board renderer:** project city positions (the `layout` block) to screen; draw
+   routes as train-car segments (one per space), with double routes offset side by
+   side; claimed routes filled in the owner's color; cities and labels. A `--screenshot`
+   option renders a PNG without a window, for checking layouts and for tests. Tune the
+   `layout` coordinates where the map is cramped (display only, not game data).
+4. **Side panels and perspective toggle:** players (score, trains, hand size, tickets),
+   market, pile sizes, current sub-step, recent events. All-seeing view shows every
+   hand and ticket; player view shows only that player's information plus their
+   card-memory estimates.
+5. **Live and replay viewers:** play, pause, step, speed; replay scrubs forward and back
+   through every sub-step. Keyboard shortcuts plus on-screen buttons.
+6. **Human play:** click a route, then choose a payment; click market cards or the deck
+   to draw; tick tickets to keep. The UI only offers `game.legal_actions()`.
+7. **Analysis overlays:** from a folder of records, color routes by a statistic (claim
+   rate, claim rate per agent, average turn claimed, how often contested).
+8. **Retire the ASCII board view** once the viewer covers it. The `rich` text log stays
+   for terminal debugging.
+
+**Library:** `pygame-ce`, the actively maintained drop-in fork of Pygame (same
+`import pygame`), with Python 3.11 wheels.
 
 ## Methods to compare
 
@@ -129,7 +176,7 @@ not just to find the strongest one. Each tier teaches something different:
   (`src/ttr/agents/base.py`), so the existing match runner plays any method against any
   other.
 - **Common evaluation:** win rate against the random and greedy bots; a head-to-head
-  round robin turned into Elo ratings; the Phase 5 strategy metrics; and curves against
+  round robin turned into Elo ratings; the Phase 6 strategy metrics; and curves against
   training budget (games played and wall time), so methods are compared fairly.
 
 ## Agent design decisions
@@ -253,5 +300,5 @@ not just to find the strongest one. Each tier teaches something different:
 ## Open questions
 
 - **Engine speed**: about 10k steps/s now, and `step()` recomputes the legal-move list to
-  validate each action. Revisit when legal moves become action masks in phase 3,
+  validate each action. Revisit when legal moves become action masks in Phase 4,
   probably with a cached mask per state.

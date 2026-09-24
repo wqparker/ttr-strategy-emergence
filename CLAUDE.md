@@ -23,7 +23,9 @@ engineering.
 - **Tree-search agents** (MCTS with determinization is in the method roster): hand-rolled,
   same approach as the CS440 Uno agent but lighter in Python — no external
   MCTS library
-- **Live visualization during dev**: Pygame (board/route rendering)
+- **Visualization**: Pygame (`pygame-ce`), in `src/ttr/viz/` as an optional `[viz]`
+  dependency; the engine never imports it. Live, replay and human-play modes plus
+  analysis overlays; built before any training (PLAN.md Phase 3)
 - **Terminal debugging**: `rich` for formatted state/tables
 - **Training & strategy analysis**: matplotlib/pandas, Jupyter for
   interactive exploration
@@ -58,8 +60,8 @@ The roadmap, settled decisions (with rationale), and open questions live in
 - **Reward:** an env setting (own score / score margin / win-loss), default dense score
   margin, γ = 1, no shaping. See PLAN.md.
 
-Nothing blocking Phase 3 is still open. Engine speed (cached masks) is handled while
-building the env.
+No design questions are open. Engine speed (cached masks) is handled while building
+the env (Phase 4).
 
 ## Conventions
 
