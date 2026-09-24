@@ -48,8 +48,14 @@ shaping, RL library choice.
 
 ## Conventions
 
-- Build/test commands: TBD once the project scaffolding exists — update this
-  section as soon as there's a real entry point.
+- Setup: `py -3.9 -m venv .venv` then `.venv/Scripts/python -m pip install -e ".[dev]"`
+  (Python 3.9 for now; move to 3.11+ before the RL phase).
+- Tests: `.venv/Scripts/python -m pytest`.
+- Layout: engine in `src/ttr/` (`game.py` rules/state, `board.py` + `data/*.json`
+  board data, `scoring.py`, `actions.py`), tests in `tests/`. Code comments like
+  `§9 #N` point to the rulings in `docs/RULES.md`.
+- `src/ttr/data/usa.json` is **unverified**: it was drafted from memory. Don't treat
+  its routes or tickets as ground truth until `"verified": true`.
 - `PLAN.md` holds the plan, roadmap, and reasoning behind decisions — update it
   when a decision is made or the roadmap changes.
 - `DEVLOG.md` is the user's own handwritten session notes. **Do not edit it.**

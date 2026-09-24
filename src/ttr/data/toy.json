@@ -1,0 +1,36 @@
+{
+  "name": "toy",
+  "verified": true,
+  "note": "Smoke-test map only (PLAN.md). Same rules as the real game, just a tiny board and fewer trains so games finish fast. Includes gray routes, colored routes, and double routes of each kind.",
+  "trains_per_player": 12,
+  "cities": ["A", "B", "C", "D", "E", "F"],
+  "routes": [
+    {"a": "A", "b": "B", "length": 2, "color": "red"},
+    {"a": "A", "b": "B", "length": 2, "color": "blue"},
+    {"a": "A", "b": "C", "length": 3, "color": "gray"},
+    {"a": "B", "b": "C", "length": 1, "color": "gray"},
+    {"a": "B", "b": "C", "length": 1, "color": "gray"},
+    {"a": "B", "b": "D", "length": 4, "color": "green"},
+    {"a": "C", "b": "D", "length": 2, "color": "yellow"},
+    {"a": "C", "b": "E", "length": 3, "color": "black"},
+    {"a": "D", "b": "E", "length": 1, "color": "gray"},
+    {"a": "D", "b": "F", "length": 3, "color": "white"},
+    {"a": "E", "b": "F", "length": 2, "color": "purple"},
+    {"a": "E", "b": "F", "length": 2, "color": "orange"},
+    {"a": "A", "b": "F", "length": 6, "color": "gray"}
+  ],
+  "tickets": [
+    {"a": "A", "b": "D", "points": 6},
+    {"a": "A", "b": "E", "points": 7},
+    {"a": "B", "b": "F", "points": 8},
+    {"a": "C", "b": "F", "points": 5},
+    {"a": "A", "b": "C", "points": 3},
+    {"a": "B", "b": "E", "points": 5},
+    {"a": "D", "b": "F", "points": 3},
+    {"a": "C", "b": "D", "points": 2},
+    {"a": "A", "b": "F", "points": 9},
+    {"a": "B", "b": "D", "points": 4},
+    {"a": "E", "b": "A", "points": 7},
+    {"a": "F", "b": "C", "points": 5}
+  ]
+}
