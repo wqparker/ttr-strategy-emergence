@@ -277,6 +277,55 @@ def test_pass_only_when_nothing_else_legal():  # §9 #11
     assert game.legal_actions() == [Pass()]
 
 
+def test_stuck_market_resets_once_claim_payment_adds_discards():  # §9 #2 guard, regression
+    game = started_game()
+    # Every card outside the market is in hands, so a 3-Locomotive market is stuck.
+    set_market(game, L, L, L, Color.RED, Color.BLUE)
+    rid = route_id(game, "Montreal", "New York")  # blue, 3
+    set_hand(game, 0, blue=3)
+    hand1 = game.players[1].hand
+    for card in game.deck + game.discard:
+        hand1[card] += 1
+    game.deck, game.discard = [], []
+    game._check_market_reset()
+    assert game.market.count(L) == 3
+    game.step(ClaimRoute(rid))
+    game.step(Pay(Color.BLUE, 0))  # 3 blue cards reach the discard pile
+    assert game.market.count(L) < 3
+    assert total_cards(game) == 110
+
+
+def test_short_market_refills_after_claim_payment():  # §9 #3, regression
+    game = started_game()
+    set_market(game, Color.RED, Color.GREEN)
+    set_hand(game, 0, blue=3)
+    hand1 = game.players[1].hand
+    for card in game.deck + game.discard:
+        hand1[card] += 1
+    game.deck, game.discard = [], []
+    game.step(ClaimRoute(route_id(game, "Montreal", "New York")))
+    game.step(Pay(Color.BLUE, 0))
+    assert len(game.market) == 5
+
+
+def test_stalemate_ends_game_when_everyone_passes():  # §9 #20
+    game = started_game(num_players=3)
+    game.ticket_deck = []
+    for p in range(3):
+        set_hand(game, p)
+    hand = game.players[0].hand  # park every card in P0's hand; P0 still can't claim
+    for card in game.deck + game.discard + game.market:
+        hand[card] += 1
+    game.deck, game.discard, game.market = [], [], []
+    for rid in range(len(game.board.routes)):
+        game.route_owner[rid] = 2
+    for _ in range(2):
+        game.step(Pass())
+        assert not game.game_over
+    game.step(Pass())
+    assert game.game_over and not game.result.truncated
+
+
 # ------------------------------------------------------------ game end (§7)
 
 

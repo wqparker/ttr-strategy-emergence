@@ -118,6 +118,7 @@ class Game:
         self.market_resets = 0
         self.final_turns_remaining: Optional[int] = None
         self.pending_route: Optional[int] = None
+        self.consecutive_passes = 0
         self.result: Optional[GameResult] = None
 
         # §9 #8: random first seat unless the caller fixes it (evaluation rotates it).
@@ -241,16 +242,23 @@ class Game:
             actions.append(DrawBlind())
         return actions
 
-    def _can_claim(self, p: int, route: Route) -> bool:
+    def route_open_to(self, p: int, route: Route) -> bool:
+        """Unclaimed and not closed to player p by the double-route rules (§6).
+        Ignores cards and trains; public information only."""
         if route.id in self.route_owner:
-            return False
-        if self.players[p].trains < route.length:  # §9 #10
             return False
         if route.sibling is not None and route.sibling in self.route_owner:
             if self.num_players <= 3:  # §6: only one of a double route in 2-3p
                 return False
             if self.route_owner[route.sibling] == p:  # §6: never both halves
                 return False
+        return True
+
+    def _can_claim(self, p: int, route: Route) -> bool:
+        if not self.route_open_to(p, route):
+            return False
+        if self.players[p].trains < route.length:  # §9 #10
+            return False
         return next(iter(self._payments(p, route)), None) is not None
 
     def _payments(self, p: int, route: Route):
@@ -304,7 +312,16 @@ class Game:
             self.phase = Phase.KEEP_TICKETS
         elif isinstance(action, Pass):
             self._log(p, "pass")
+            self.consecutive_passes += 1
+            if self.consecutive_passes >= self.num_players:
+                # §9 #20: nobody can do anything, so the game can never progress.
+                self._log(None, "stalemate")
+                self.turn += 1
+                self._finish(truncated=False)
+                return
             self._end_turn()
+            return
+        self.consecutive_passes = 0
 
     def _after_card_draw(self, ends_turn: bool) -> None:
         if self.phase is Phase.DRAW_SECOND_CARD or ends_turn:
@@ -325,6 +342,9 @@ class Game:
             player.hand[card] -= 1
         player.hand += Counter()  # drop zero counts
         self.discard.extend(paid)
+        # New discards may let a short market fill up, or a stuck 3-Locomotive
+        # market (§9 #2 guard) finally reset.
+        self._refill_market()
         self.route_owner[route.id] = p
         player.routes.append(route.id)
         player.trains -= route.length
