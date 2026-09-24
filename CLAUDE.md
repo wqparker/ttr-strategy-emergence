@@ -17,8 +17,10 @@ engineering.
   a starting point.
 - **Multi-agent env structure**: PettingZoo
 - **Single-agent / self-play wrapping**: Gymnasium (if needed)
-- **RL algorithms**: Stable-Baselines3 / CleanRL / RLlib
-- **Tree-search agents** (if any MCTS-based agents are added): hand-rolled,
+- **RL algorithms**: our own CleanRL-style single-file scripts (DQN, PPO), and
+  hand-rolled linear Q-learning/SARSA. Not SB3 or RLlib (see PLAN.md
+  "Methods to compare").
+- **Tree-search agents** (MCTS with determinization is in the method roster): hand-rolled,
   same approach as the CS440 Uno agent but lighter in Python — no external
   MCTS library
 - **Live visualization during dev**: Pygame (board/route rendering)
@@ -44,9 +46,12 @@ The roadmap, settled decisions (with rationale), and open questions live in
   (see PLAN.md). Scripted bots can be weakened on purpose (memory level, final-turn
   guards) to make easier opponents.
 - **Claiming is two steps:** choose the route, then choose the payment.
+- **Methods to compare:** linear Q-learning vs. SARSA, DQN, PPO self-play, MCTS
+  (AlphaZero-style as a stretch goal). The aim is comparing methods, not only finding
+  the strongest.
 
-Still open: observation encoding, the rest of the action-space encoding, reward
-shaping, RL library choice.
+Still open: observation encoding (beyond card memory), the rest of the action-space
+encoding, reward shaping.
 
 ## Conventions
 

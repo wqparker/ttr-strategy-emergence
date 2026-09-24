@@ -75,8 +75,10 @@ development or tuning.
     match runner, stress test) merged into `main`.
   - USA map data hand-verified against the physical board (`"verified": true`).
   - Moved to Python 3.11.
-- **Current: settle the open questions Phase 3 depends on**: observation encoding,
-  action-space encoding, reward, RL library.
+- **Current: settle the open questions Phase 3 depends on.** Settled: card memory
+  (Level 2) and the methods to compare (with CleanRL-style implementations). Still open:
+  action-space encoding, the rest of the observation encoding, reward, and the
+  final-turn ticket guard.
 - **Next: Phase 3, the PettingZoo environment.** An AEC wrapper around the engine, with
   action masks built incrementally (see "Engine speed" under open questions).
 
@@ -91,12 +93,43 @@ development or tuning.
    opponents.
 3. **PettingZoo environment**: an AEC wrapper around the engine, with action masking and
    the observation design (see open questions).
-4. **Training**: self-play (e.g. PPO with action masking), evaluated against the baselines.
-   Smoke-test on the toy map first, then train on the full map.
+4. **Training and search agents**: the method roster (see "Methods to compare"), each
+   plugged into the same agent interface and evaluated the same way. Smoke-test each on
+   the toy map first, then train on the full map.
 5. **Strategy analysis**: metrics that capture play style (blocking rate, route-length
-   distribution, ticket draw/keep behavior, tempo), plus pandas/matplotlib notebooks.
-6. **Later / optional**: 3–5 players, live Pygame visualization, an MCTS agent, and Unity +
-   ML-Agents for presentation.
+   distribution, ticket draw/keep behavior, tempo), compared across methods, plus
+   pandas/matplotlib notebooks.
+6. **Later / optional**: 3–5 players, the AlphaZero-style stretch agent, live Pygame
+   visualization, and Unity + ML-Agents for presentation.
+
+## Methods to compare
+
+The point is to exercise several RL and search methods and compare what each learns,
+not just to find the strongest one. Each tier teaches something different:
+
+| Tier | Method | What it lets us study | Implementation |
+| --- | --- | --- | --- |
+| A. Classic TD | Linear approximate **Q-learning vs. SARSA**, full map, hand-made features | Off- vs. on-policy, ε-greedy schedules; readable weights show what each agent values | Hand-rolled |
+| B. Deep value-based | **DQN** with action masking (+ Double DQN) | Replay and target networks; how value methods cope with a large masked action space | CleanRL-style script |
+| C. Policy gradient | **PPO** with self-play and action masking | Main agent for studying emergent strategy | CleanRL-style script |
+| D. Search | **MCTS** with determinization (sample hidden hands and tickets, then search) | Planning with no training, as a contrast to the learned agents | Hand-rolled |
+| Stretch | AlphaZero-style (MCTS guided by learned policy/value networks) | Combines C and D | Later |
+
+- **Why linear rather than tabular for tier A:** tabular methods are only feasible on the
+  toy map, which is a smoke test only. Linear features keep the same update rules and
+  the same Q-learning vs. SARSA comparison on the full map.
+- **Why no expectiminimax:** with 100+ legal moves per turn, chance nodes on every
+  draw and hidden hands, it could only search 1–2 plies deep. MCTS with
+  determinization handles all three better.
+- **Why CleanRL-style scripts rather than SB3 or RLlib:** single-file implementations
+  are readable and easy to change for masking and self-play, which suits learning the
+  methods. SB3's DQN has no masking support, and RLlib is heavy to configure and debug.
+- **Common interface:** every method implements `Agent.act(game, player)`
+  (`src/ttr/agents/base.py`), so the existing match runner plays any method against any
+  other.
+- **Common evaluation:** win rate against the random and greedy bots; a head-to-head
+  round robin turned into Elo ratings; the Phase 5 strategy metrics; and curves against
+  training budget (games played and wall time), so methods are compared fairly.
 
 ## Agent design decisions
 
@@ -150,5 +183,3 @@ development or tuning.
 - **Engine speed**: about 10k steps/s now, and `step()` recomputes the legal-move list to
   validate each action. Revisit when legal moves become action masks in phase 3,
   probably with a cached mask per state.
-- **Algorithm / library**: Stable-Baselines3 (sb3-contrib MaskablePPO), CleanRL, or RLlib.
-  The choice depends on how easy multi-agent self-play is to set up.
