@@ -84,7 +84,10 @@ development or tuning.
   - Done: milestone 1, game records and replay (`record.py`, `Game.clone()`,
     `simulate.py --record DIR`).
   - Done: milestone 2, the card-memory tracker (`memory.py`, Levels 0–2).
-  - Next: milestone 3, the board renderer.
+  - Done: milestone 3, the board renderer (`viz/geometry.py`, `viz/board_view.py`,
+    `viz/screenshot.py`, display data in `data/usa_display.json`). Checked against the
+    board photo with `--compare`; routes are within about one car width.
+  - Next: milestone 4, side panels and the perspective toggle.
 - **Next: Phase 4, the PettingZoo environment.**
 
 ## Roadmap
