@@ -26,6 +26,9 @@ wandb/
 tensorboard/
 *.zip
 
+# Course notes (reference only, not redistributed)
+docs/closedNotes/
+
 # Editor / OS
 .DS_Store
 Thumbs.db

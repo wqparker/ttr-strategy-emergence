@@ -19,6 +19,8 @@ Research questions to explore:
   they keep, and how often does it backfire?
 - **Tempo**: how do they balance drawing cards against claiming routes before
   someone else takes them?
+- **Value of memory**: how much does card counting (memory Level 0 vs. Level 2) change
+  play and win rate?
 
 ## Scope decisions
 
@@ -98,13 +100,32 @@ development or tuning.
 
 ## Agent design decisions
 
-- **Perfect memory for trained agents (for now).** The observation includes everything
-  public (RULES.md §9 #17), including a running record of the cards each opponent has
-  taken face up or paid with, so an agent can partly infer opponents' hands. This follows
-  the Uno agent's approach. It may be revisited later.
+- **Card memory for trained agents: Level 2, computed by the env.**
+  - **Memory vs. inference.** Memory means exact bookkeeping of public facts
+    (RULES.md §9 #17), which the env computes into the observation. Inference, such as
+    guessing an opponent's tickets or intent, is left to the agent. That is where
+    strategies like blocking come from, so handing it over would build in the behavior
+    being studied.
+  - **Levels** (each adds to the one before):
+    - **0, snapshot:** what the table shows now: market, claimed routes, hand sizes,
+      ticket counts, trains, scores, discard pile.
+    - **1, known opponent cards:** per opponent and color, a lower bound on cards held.
+      A face-up take adds 1. Paying subtracts the amount paid, floored at 0 (paying 4 red
+      with 2 known red means 2 came from blind draws). Unknown = hand size − known total.
+    - **2, unseen pool:** the 110-card makeup minus your own hand, the market, the
+      discard pile and opponents' known cards. With no other information, each unseen
+      card is equally likely to be in the deck or in an opponent's unknown slots, so this
+      one count vector estimates both blind draws and opponents' hidden cards.
+    - **3 (not planned):** reshuffle-aware deck contents (after a reshuffle the new deck
+      is exactly the old discard pile, order unknown) and knowing your returned tickets
+      sit at the bottom of the ticket deck.
+  - **The level is an env observation setting**, not hard-wired. Trained agents default
+    to Level 2, and training at Level 0 vs. Level 2 is an experiment (see research
+    questions). Scripted bots use the same levels as difficulty settings.
+  - Since memory is precomputed, policies don't need to be recurrent.
 - **Scripted/baseline bots can be weakened on purpose.** Each option is a per-bot setting
   that the engine doesn't enforce:
-  - **Memory:** limited or no tracking of opponents' cards.
+  - **Memory:** a memory level from 0–2 (see above).
   - **Final-turn ticket guard:** whether the bot avoids drawing tickets on its last turn.
   These give a range of difficulty for evaluation opponents.
   - **Undecided:** whether the trained agent should get the final-turn guard as an action
@@ -116,8 +137,10 @@ development or tuning.
 
 ## Open questions
 
-- **Observation encoding**: how to represent the public history compactly, e.g. a count
-  of known cards per opponent per color vs. the full event log.
+- **Observation encoding**: card memory is settled as fixed-size count vectors, not
+  the event log: per opponent, 9 known counts + 1 unknown count, and 9 unseen-pool
+  counts (see "Card memory"). Still open: how to encode routes, tickets, the market and
+  the rest.
 - **Action-space encoding**: the game has multi-step turns (drawing two cards, choosing
   which tickets to keep, choosing which cards to pay with). Payment is already decided
   as a sub-step. Should the rest be flat actions or sub-steps too? Also, how to keep the

@@ -39,8 +39,10 @@ The roadmap, settled decisions (with rationale), and open questions live in
   simplified ruleset — a tiny toy map exists only as a smoke test, loaded as a
   different board data file with the same rules.
 
-- **Trained agents get perfect memory of public information.** Scripted bots can be
-  weakened on purpose (memory, final-turn guards) to make easier opponents.
+- **Trained agents get Level 2 memory of public information**: known opponent cards
+  plus unseen-pool counts, computed by the env. Memory level is a configurable knob
+  (see PLAN.md). Scripted bots can be weakened on purpose (memory level, final-turn
+  guards) to make easier opponents.
 - **Claiming is two steps:** choose the route, then choose the payment.
 
 Still open: observation encoding, the rest of the action-space encoding, reward
