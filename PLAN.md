@@ -83,7 +83,8 @@ development or tuning.
   (see "Visualization").
   - Done: milestone 1, game records and replay (`record.py`, `Game.clone()`,
     `simulate.py --record DIR`).
-  - Next: milestone 2, the card-memory tracker.
+  - Done: milestone 2, the card-memory tracker (`memory.py`, Levels 0–2).
+  - Next: milestone 3, the board renderer.
 - **Next: Phase 4, the PettingZoo environment.**
 
 ## Roadmap
