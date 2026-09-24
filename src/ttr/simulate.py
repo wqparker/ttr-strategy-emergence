@@ -3,6 +3,7 @@
     python -m ttr.simulate --agents greedy random --games 200
     python -m ttr.simulate --agents greedy greedy --show          # text log
     python -m ttr.simulate --agents greedy greedy --show board --step   # ASCII board
+    python -m ttr.simulate --games 50 --record runs/records   # save replayable games
 
 Seats are rotated across games (§9 #8) so first-player advantage averages out.
 """
@@ -16,14 +17,17 @@ import sys
 import time
 from collections import Counter
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence
 
 from rich.console import Console
 from rich.table import Table
 
+from ttr.actions import Action
 from ttr.agents import Agent, GreedyAgent, RandomAgent
 from ttr.board import Board, load_board
 from ttr.game import Game, GameResult
+from ttr.record import GameRecord
 from ttr.render import describe_event, render_board_view, render_game, render_result, render_routes
 
 AGENTS: Dict[str, Callable[[int], Agent]] = {
@@ -32,14 +36,35 @@ AGENTS: Dict[str, Callable[[int], Agent]] = {
 }
 
 
-def play_game(game: Game, agents: Sequence[Agent], on_step=None) -> GameResult:
+def play_game(
+    game: Game,
+    agents: Sequence[Agent],
+    on_step=None,
+    actions_out: Optional[List[Action]] = None,
+) -> GameResult:
+    """Play to the end. If `actions_out` is given, every action is appended to it
+    (for a GameRecord)."""
     while not game.game_over:
         p = game.current_player
-        game.step(agents[p].act(game, p))
+        action = agents[p].act(game, p)
+        game.step(action)
+        if actions_out is not None:
+            actions_out.append(action)
         if on_step:
             on_step(game)
     assert game.result is not None
     return game.result
+
+
+def _save_record(
+    record_dir: Optional[Path], game: Game, actions: List[Action], agents: Sequence[str],
+    seed: int, board: str, name: str,
+) -> None:
+    if record_dir is None:
+        return
+    GameRecord.from_game(game, actions, agents=agents, board=board, seed=seed).save(
+        record_dir / f"{name}.json"
+    )
 
 
 @dataclass
@@ -60,7 +85,11 @@ def run_matches(
     board: Board,
     seed: int = 0,
     max_turns: Optional[int] = 1000,
+    record_dir: Optional[Path] = None,
+    board_ref: Optional[str] = None,
 ) -> Dict[str, object]:
+    """`record_dir` saves every game as a GameRecord; `board_ref` is how the record
+    names the board (defaults to the board's name)."""
     n = len(agent_names)
     stats = [AgentStats() for _ in range(n)]  # indexed by agent slot, not seat
     turns: List[int] = []
@@ -69,10 +98,18 @@ def run_matches(
         # Rotate seats: agent slot i sits in seat (i + g) % n and seat 0 goes first.
         seat_of = [(i + g) % n for i in range(n)]
         agents_by_seat: List[Optional[Agent]] = [None] * n
+        names_by_seat: List[str] = [""] * n
         for slot, seat in enumerate(seat_of):
             agents_by_seat[seat] = AGENTS[agent_names[slot]](seed * 1000 + g * 10 + slot)
-        game = Game(board, num_players=n, seed=seed * 100000 + g, first_player=0, max_turns=max_turns)
-        result = play_game(game, agents_by_seat)
+            names_by_seat[seat] = agent_names[slot]
+        game_seed = seed * 100000 + g
+        game = Game(board, num_players=n, seed=game_seed, first_player=0, max_turns=max_turns)
+        actions: List[Action] = []
+        result = play_game(game, agents_by_seat, actions_out=actions if record_dir else None)
+        _save_record(
+            record_dir, game, actions, names_by_seat, game_seed,
+            board_ref or board.name, f"seed{seed}_game{g:04d}",
+        )
         turns.append(game.turn)
         truncated += result.truncated
         for slot, seat in enumerate(seat_of):
@@ -136,7 +173,9 @@ def show_game(console: Console, board: Board, args: argparse.Namespace) -> None:
             time.sleep(args.delay)
 
     frame(game)  # starting position
-    result = play_game(game, agents, on_step=frame)
+    actions: List[Action] = []
+    result = play_game(game, agents, on_step=frame, actions_out=actions)
+    _save_record(args.record, game, actions, args.agents, args.seed, args.board, f"seed{args.seed}_show")
     if args.show == "log":
         console.print(render_routes(game))
     console.print(render_result(result, names=args.agents))
@@ -158,6 +197,10 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     )
     parser.add_argument("--step", action="store_true", help="with --show: press Enter between turns")
     parser.add_argument("--delay", type=float, default=0.0, help="with --show: seconds to pause per turn")
+    parser.add_argument(
+        "--record", type=Path, default=None, metavar="DIR",
+        help="save every game as a replayable record (seed + actions) in DIR",
+    )
     args = parser.parse_args(argv)
 
     if hasattr(sys.stdout, "reconfigure"):  # Windows consoles/pipes default to cp1252
@@ -175,9 +218,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         return
 
     start = time.time()
-    summary = run_matches(args.agents, args.games, board, seed=args.seed, max_turns=args.max_turns)
+    summary = run_matches(
+        args.agents, args.games, board, seed=args.seed, max_turns=args.max_turns,
+        record_dir=args.record, board_ref=args.board,
+    )
     elapsed = time.time() - start
     console.print(_summary_table(args.agents, summary))
+    if args.record:
+        console.print(f"[dim]records saved to {args.record}[/]")
     turns = summary["turns"]
     console.print(
         f"{args.games} games in {elapsed:.1f}s · turns median {statistics.median(turns):.0f}"

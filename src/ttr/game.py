@@ -8,9 +8,10 @@ dependencies. Environments and agents drive it through `legal_actions()` and
 
 from __future__ import annotations
 
+import copy
 import random
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from itertools import combinations
 from typing import Any, Dict, List, Optional
@@ -443,6 +444,32 @@ class Game:
     @property
     def game_over(self) -> bool:
         return self.phase is Phase.GAME_OVER
+
+    def clone(self) -> "Game":
+        """Independent copy of the full state (for replay snapshots and search).
+        The board is immutable and shared; log events are never mutated, so the
+        log list is copied but its events are shared."""
+        g = copy.copy(self)
+        g.players = [
+            replace(
+                p,
+                hand=Counter(p.hand),
+                tickets=list(p.tickets),
+                routes=list(p.routes),
+                pending_tickets=list(p.pending_tickets),
+            )
+            for p in self.players
+        ]
+        g.route_owner = dict(self.route_owner)
+        g.deck = list(self.deck)
+        g.discard = list(self.discard)
+        g.market = list(self.market)
+        g.ticket_deck = list(self.ticket_deck)
+        g.log = list(self.log)
+        g._initial_returns = list(self._initial_returns)
+        g.rng = random.Random()
+        g.rng.setstate(self.rng.getstate())
+        return g
 
     def _log(self, player: Optional[int], kind: str, private: Optional[dict] = None, **public: Any) -> None:
         self.log.append(Event(self.turn, player, kind, public, private or {}))

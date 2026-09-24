@@ -28,6 +28,8 @@ tensorboard/
 
 # Course notes (reference only, not redistributed)
 docs/closedNotes/
+# Board art photo: reference for the renderer's layout, publisher's artwork
+docs/ticket-to-ride_usa_map.jpg
 
 # Editor / OS
 .DS_Store

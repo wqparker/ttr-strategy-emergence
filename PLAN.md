@@ -80,7 +80,10 @@ development or tuning.
     observation (flat vector, about 760 numbers), and reward (a setting, default dense
     score margin).
 - **Current: Phase 3, visualization.** A proper Pygame viewer comes before any training
-  (see "Visualization"). Milestone 1, game records and replay, is next.
+  (see "Visualization").
+  - Done: milestone 1, game records and replay (`record.py`, `Game.clone()`,
+    `simulate.py --record DIR`).
+  - Next: milestone 2, the card-memory tracker.
 - **Next: Phase 4, the PettingZoo environment.**
 
 ## Roadmap
@@ -129,11 +132,14 @@ viewer and the overlays, and later let us review any trained agent's game move b
    from the event log. It moves up from Phase 4 because the player view shows it too;
    the env reuses it. Tests: known counts never exceed the true hand, and the unseen
    pool always equals deck plus opponents' unknown cards.
-3. **Board renderer:** project city positions (the `layout` block) to screen; draw
-   routes as train-car segments (one per space), with double routes offset side by
-   side; claimed routes filled in the owner's color; cities and labels. A `--screenshot`
-   option renders a PNG without a window, for checking layouts and for tests. Tune the
-   `layout` coordinates where the map is cramped (display only, not game data).
+3. **Board renderer:** replicate the physical board as closely as practical, using a
+   photo of it (`docs/ticket-to-ride_usa_map.jpg`, gitignored as publisher artwork) as
+   the reference. Match city positions, route shapes (many routes are curved), train-car
+   placement for each space, double routes side by side, the score track around the
+   border, and the route-points table. Coordinates are measured from the photo and stored
+   as display-only data. Everything is drawn by us; the photo is never used as a
+   background. Claimed routes are filled in the owner's color. A `--screenshot` option
+   renders a PNG without a window, for checking against the photo and for tests.
 4. **Side panels and perspective toggle:** players (score, trains, hand size, tickets),
    market, pile sizes, current sub-step, recent events. All-seeing view shows every
    hand and ticket; player view shows only that player's information plus their
@@ -147,8 +153,8 @@ viewer and the overlays, and later let us review any trained agent's game move b
 8. **Retire the ASCII board view** once the viewer covers it. The `rich` text log stays
    for terminal debugging.
 
-**Library:** `pygame-ce`, the actively maintained drop-in fork of Pygame (same
-`import pygame`), with Python 3.11 wheels.
+**Library:** `pygame-ce` (decided), the actively maintained drop-in fork of Pygame
+(same `import pygame`), with Python 3.11 wheels.
 
 ## Methods to compare
 
