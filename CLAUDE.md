@@ -52,7 +52,11 @@ The roadmap, settled decisions (with rationale), and open questions live in
   (AlphaZero-style as a stretch goal). The aim is comparing methods, not only finding
   the strongest.
 
-Still open: observation encoding (beyond card memory), reward shaping.
+- **Observation:** one flat vector from the acting player's view, tickets by ID, plus
+  computed values (route open to me, ticket completed, trains to finish, endgame
+  flags). See PLAN.md.
+
+Still open: reward.
 
 ## Conventions
 

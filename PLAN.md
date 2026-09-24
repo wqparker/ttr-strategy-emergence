@@ -77,8 +77,8 @@ development or tuning.
   - Moved to Python 3.11.
 - **Current: settle the open questions Phase 3 depends on.** Settled: card memory
   (Level 2), the methods to compare (with CleanRL-style implementations), the action
-  space (flat 168 with sub-step masks), and no final-turn guard for trained agents.
-  Still open: the rest of the observation encoding, and reward.
+  space (flat 168 with sub-step masks), no final-turn guard for trained agents, and the
+  observation (flat vector, about 760 numbers). Still open: reward.
 - **Next: Phase 3, the PettingZoo environment.** An AEC wrapper around the engine, with
   action masks built incrementally (see "Engine speed" under open questions).
 
@@ -189,13 +189,45 @@ not just to find the strongest one. Each tier teaches something different:
     which tickets are on offer, which keeps this to 7 actions.
   - Every method uses the same 168 outputs. MCTS can work on engine actions directly.
   - Discounting per sub-step rather than per turn is uneven, so keep γ ≈ 1 (see "Reward").
+- **Observation: one flat vector from the acting player's view**, for a plain multilayer
+  network. "Me" comes first and opponents follow in seat order, so one network can play
+  any seat (needed for self-play with shared weights). Counts are scaled to about [0, 1].
+  About 760 numbers for 2 players:
+
+  | Block | Encoding | Size (2p) |
+  | --- | --- | --- |
+  | Current sub-step | one-hot over the 5 phases | 5 |
+  | Route ownership | per route: unclaimed / mine / each opponent | 300 |
+  | Route open to me | per route: claimable by me (double-route rule, trains left) | 100 |
+  | Route being paid for | one-hot, payment step only | 100 |
+  | Market | counts per color | 9 |
+  | Pile sizes | train deck, discard, ticket deck | 3 |
+  | Per player | trains left, public score, hand size, ticket count | 8 |
+  | Endgame | final round started; this is my last turn | 2 |
+  | Card memory (Level 2) | per opponent: 9 known + 1 unknown; unseen pool: 9 | 19 |
+  | My hand | counts per color | 9 |
+  | My tickets | held, multi-hot by ticket ID | 30 |
+  | Ticket completed | per held ticket: already connected by my routes | 30 |
+  | Trains to finish | per held ticket: fewest trains still needed + an "impossible" flag | 60 |
+  | Tickets on offer | 3 offer slots × one-hot ticket ID (matches `KeepTickets` action order) | 90 |
+
+  - **Tickets are identified by ID.** The board never changes, so the network can learn
+    what each ticket means.
+  - **Computed values** ("open to me", "completed", "trains to finish", endgame flags) are
+    exact computations on information the agent already has. The endgame flags are
+    required because the final-turn ticket draw is unmasked.
+  - **Trains to finish** is the fewest trains needed to connect a held ticket's cities,
+    counting the player's own routes as free and using only routes still open to them.
+    It changes only when a route is claimed, so compute it then and cache it. It leans
+    furthest toward strategy of the computed values; switching it off is a possible
+    experiment.
+  - **Tier A doesn't use this vector.** Linear Q-learning/SARSA needs hand-made features
+    of state *and* action, designed with that tier. The vector is for DQN, PPO and a
+    later AlphaZero-style agent.
+  - **A graph network** (cities as nodes, routes as edges) is a possible later experiment.
 
 ## Open questions
 
-- **Observation encoding**: card memory is settled as fixed-size count vectors, not
-  the event log: per opponent, 9 known counts + 1 unknown count, and 9 unseen-pool
-  counts (see "Card memory"). Still open: how to encode routes, tickets, the market and
-  the rest.
 - **Reward**: raw final score or win/loss, vs. shaping toward specific behaviors. Shaping
   risks building in the very strategies being studied.
 - **Engine speed**: about 10k steps/s now, and `step()` recomputes the legal-move list to
