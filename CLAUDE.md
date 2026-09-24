@@ -55,8 +55,11 @@ The roadmap, settled decisions (with rationale), and open questions live in
 - **Observation:** one flat vector from the acting player's view, tickets by ID, plus
   computed values (route open to me, ticket completed, trains to finish, endgame
   flags). See PLAN.md.
+- **Reward:** an env setting (own score / score margin / win-loss), default dense score
+  margin, γ = 1, no shaping. See PLAN.md.
 
-Still open: reward.
+Nothing blocking Phase 3 is still open. Engine speed (cached masks) is handled while
+building the env.
 
 ## Conventions
 

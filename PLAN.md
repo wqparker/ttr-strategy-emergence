@@ -78,7 +78,8 @@ development or tuning.
 - **Current: settle the open questions Phase 3 depends on.** Settled: card memory
   (Level 2), the methods to compare (with CleanRL-style implementations), the action
   space (flat 168 with sub-step masks), no final-turn guard for trained agents, and the
-  observation (flat vector, about 760 numbers). Still open: reward.
+  observation (flat vector, about 760 numbers), and reward (a setting, default dense
+  score margin). The design questions Phase 3 depends on are all settled.
 - **Next: Phase 3, the PettingZoo environment.** An AEC wrapper around the engine, with
   action masks built incrementally (see "Engine speed" under open questions).
 
@@ -225,11 +226,32 @@ not just to find the strongest one. Each tier teaches something different:
     of state *and* action, designed with that tier. The vector is for DQN, PPO and a
     later AlphaZero-style agent.
   - **A graph network** (cities as nodes, routes as edges) is a possible later experiment.
+- **Reward: an env setting, defaulting to dense score margin.** The reward decides which
+  strategies are worth learning at all, so it is an experiment variable, like memory level.
+
+  | Mode | Signal | Rewards blocking? |
+  | --- | --- | --- |
+  | Own score | + route points on each claim; tickets and longest route at game end | No |
+  | **Score margin (default)** | my points − opponents' points, same schedule | Yes |
+  | Win/loss | +1 / −1 at game end, 0 for a shared win | Yes |
+
+  - **Dense isn't shaping:** in the score modes, rewards summed over a game equal exactly
+    the final score or margin. Earlier feedback, same objective.
+  - **Default is margin** because it rewards blocking, learns faster than sparse win/loss,
+    and suits every tier (DQN and linear TD struggle with win/loss alone). Scale by about
+    1/100.
+  - **Win/loss** cares only about winning, so once safely ahead it has no reason to push
+    the margin. Comparing it with margin speaks to the risk-tolerance question.
+  - **Experiment:** train in all three modes. "Does blocking only emerge when the reward
+    includes the opponent?" tests the route-hoarding vs. blocking question directly.
+  - **γ = 1**, since every game ends. Win rate is the evaluation metric whatever the
+    reward mode.
+  - **Shaping is off.** If added later, use potential-based shaping,
+    `F(s,a,s') = γΦ(s') − Φ(s)` (Ng et al., 1999), which doesn't change which policy is
+    optimal. For example, Φ = −(trains to finish held tickets).
 
 ## Open questions
 
-- **Reward**: raw final score or win/loss, vs. shaping toward specific behaviors. Shaping
-  risks building in the very strategies being studied.
 - **Engine speed**: about 10k steps/s now, and `step()` recomputes the legal-move list to
   validate each action. Revisit when legal moves become action masks in phase 3,
   probably with a cached mask per state.
