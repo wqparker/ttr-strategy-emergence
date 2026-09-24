@@ -10,6 +10,7 @@ Seats are rotated across games (§9 #8) so first-player advantage averages out.
 from __future__ import annotations
 
 import argparse
+import random
 import statistics
 import sys
 import time
@@ -146,7 +147,10 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--agents", nargs="+", default=["greedy", "random"], choices=sorted(AGENTS))
     parser.add_argument("--games", type=int, default=100)
     parser.add_argument("--board", default="usa")
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--seed", type=int, default=None,
+        help="fix the seed to replay a game/batch exactly (default: random, printed at start)",
+    )
     parser.add_argument("--max-turns", type=int, default=1000)
     parser.add_argument(
         "--show", nargs="?", const="log", choices=["log", "board"],
@@ -159,6 +163,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if hasattr(sys.stdout, "reconfigure"):  # Windows consoles/pipes default to cp1252
         sys.stdout.reconfigure(encoding="utf-8")
     console = Console()
+    if args.seed is None:
+        args.seed = random.randrange(1_000_000)
+    console.print(f"[dim]seed {args.seed}  (rerun with --seed {args.seed} to replay)[/]")
     board = load_board(args.board)
     if not board.verified:
         console.print(f"[yellow]warning: board '{board.name}' data is UNVERIFIED (see data file note)[/]")
