@@ -76,9 +76,9 @@ development or tuning.
   - USA map data hand-verified against the physical board (`"verified": true`).
   - Moved to Python 3.11.
 - **Current: settle the open questions Phase 3 depends on.** Settled: card memory
-  (Level 2) and the methods to compare (with CleanRL-style implementations). Still open:
-  action-space encoding, the rest of the observation encoding, reward, and the
-  final-turn ticket guard.
+  (Level 2), the methods to compare (with CleanRL-style implementations), the action
+  space (flat 168 with sub-step masks), and no final-turn guard for trained agents.
+  Still open: the rest of the observation encoding, and reward.
 - **Next: Phase 3, the PettingZoo environment.** An AEC wrapper around the engine, with
   action masks built incrementally (see "Engine speed" under open questions).
 
@@ -161,12 +161,34 @@ not just to find the strongest one. Each tier teaches something different:
   - **Memory:** a memory level from 0–2 (see above).
   - **Final-turn ticket guard:** whether the bot avoids drawing tickets on its last turn.
   These give a range of difficulty for evaluation opponents.
-  - **Undecided:** whether the trained agent should get the final-turn guard as an action
-    mask, or have to learn to avoid that move. Leaving it unmasked is also an interesting
-    thing to measure.
+  - **Trained agents don't get the guard.** Drawing tickets on the final turn stays
+    unmasked, so the agent has to learn to avoid it. How often it still does is an
+    endgame metric (see "Ticket risk").
 - **Choosing the payment is a separate sub-step.** Claiming a route is two steps: choose
   the route, then choose the payment (the color for a gray route, how many Locomotives).
   This keeps each action mask small and the logic organized.
+- **Action space: one flat `Discrete(168)` with a mask per sub-step.** Each engine action
+  (`src/ttr/actions.py`) maps to a fixed index; the observation includes the current
+  phase, and the mask allows only that phase's legal actions.
+
+  | Actions | Count | Legal in phase |
+  | --- | --- | --- |
+  | `DrawFaceUp(color)`: 8 colors + Locomotive | 9 | choose action; second draw (no Locomotive) |
+  | `DrawBlind` | 1 | choose action; second draw |
+  | `ClaimRoute(id)` | 100 | choose action |
+  | `Pay(color, k)`: 8 colors × k = 0–5 Locomotives, plus all-Locomotive | 49 | choose payment |
+  | `DrawTickets` | 1 | choose action |
+  | `KeepTickets`: non-empty subsets of the offer, by offer position | 7 | keep tickets (initial: subsets of 2+) |
+  | `Pass` | 1 | choose action |
+
+  - **Sub-steps rather than whole-turn actions:** a blind draw reveals a card, and a
+    face-up take refills the market, before the second draw. A combined "pair of draws"
+    action would force the agent to commit before seeing either. Merging claim and payment
+    would give about 4,900 actions.
+  - **Ticket choices are indexed by offer position**, not ticket ID. The observation shows
+    which tickets are on offer, which keeps this to 7 actions.
+  - Every method uses the same 168 outputs. MCTS can work on engine actions directly.
+  - Discounting per sub-step rather than per turn is uneven, so keep γ ≈ 1 (see "Reward").
 
 ## Open questions
 
@@ -174,10 +196,6 @@ not just to find the strongest one. Each tier teaches something different:
   the event log: per opponent, 9 known counts + 1 unknown count, and 9 unseen-pool
   counts (see "Card memory"). Still open: how to encode routes, tickets, the market and
   the rest.
-- **Action-space encoding**: the game has multi-step turns (drawing two cards, choosing
-  which tickets to keep, choosing which cards to pay with). Payment is already decided
-  as a sub-step. Should the rest be flat actions or sub-steps too? Also, how to keep the
-  mask size manageable.
 - **Reward**: raw final score or win/loss, vs. shaping toward specific behaviors. Shaping
   risks building in the very strategies being studied.
 - **Engine speed**: about 10k steps/s now, and `step()` recomputes the legal-move list to

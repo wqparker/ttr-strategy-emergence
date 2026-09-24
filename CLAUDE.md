@@ -46,12 +46,13 @@ The roadmap, settled decisions (with rationale), and open questions live in
   (see PLAN.md). Scripted bots can be weakened on purpose (memory level, final-turn
   guards) to make easier opponents.
 - **Claiming is two steps:** choose the route, then choose the payment.
+- **Action space:** flat `Discrete(168)` following the engine's sub-steps, with a mask
+  per sub-step (see PLAN.md). Trained agents don't get the final-turn ticket guard.
 - **Methods to compare:** linear Q-learning vs. SARSA, DQN, PPO self-play, MCTS
   (AlphaZero-style as a stretch goal). The aim is comparing methods, not only finding
   the strongest.
 
-Still open: observation encoding (beyond card memory), the rest of the action-space
-encoding, reward shaping.
+Still open: observation encoding (beyond card memory), reward shaping.
 
 ## Conventions
 
