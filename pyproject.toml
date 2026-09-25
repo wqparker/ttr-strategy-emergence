@@ -11,6 +11,12 @@ dependencies = [
     "rich>=13",
 ]
 
+[project.scripts]
+# Installed into .venv/Scripts (.venv/bin elsewhere); the viewer ones need the [viz] extra.
+ttr-sim = "ttr.simulate:main"
+ttr-view = "ttr.viz.app:main"
+ttr-shot = "ttr.viz.screenshot:main"
+
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 viz = ["pygame-ce>=2.5"]

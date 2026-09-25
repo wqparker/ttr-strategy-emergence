@@ -1,9 +1,11 @@
 """Run bot-vs-bot games and summarize results.
 
-    python -m ttr.simulate --agents greedy random --games 200
-    python -m ttr.simulate --agents greedy greedy --show          # text log
-    python -m ttr.simulate --agents greedy greedy --show board --step   # ASCII board
-    python -m ttr.simulate --games 50 --record runs/records   # save replayable games
+    ttr-sim --agents greedy random --games 200
+    ttr-sim --agents greedy greedy --show                 # text log
+    ttr-sim --agents greedy greedy --show board --step    # ASCII board
+    ttr-sim --games 50 --record runs/records              # save replayable games
+
+(or `python -m ttr.simulate ...`, which is the same entry point)
 
 Seats are rotated across games (§9 #8) so first-player advantage averages out.
 """

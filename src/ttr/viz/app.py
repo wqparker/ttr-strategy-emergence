@@ -1,9 +1,11 @@
 """The live and replay viewers (PLAN.md Phase 3, milestone 5).
 
-    python -m ttr.viz.app                                   # live: greedy vs random
-    python -m ttr.viz.app --agents greedy greedy greedy     # three seats
-    python -m ttr.viz.app --record runs/records/g.json      # replay a saved game
-    python -m ttr.viz.app --record g.json --perspective 0   # from one seat's view
+    ttr-view                                   # live: greedy vs random
+    ttr-view --agents greedy greedy greedy     # three seats
+    ttr-view --record runs/records/g.json      # replay a saved game
+    ttr-view --record g.json --perspective 0   # from one seat's view
+
+(or `python -m ttr.viz.app ...`, which is the same entry point)
 
 Both modes walk a `Timeline` of game states, one per sub-step, so stepping back
 is an index move rather than a re-simulation. A replay loads every state from the

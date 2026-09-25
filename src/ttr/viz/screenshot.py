@@ -1,10 +1,12 @@
 """Render the viewer to a PNG without opening a window.
 
-    python -m ttr.viz.screenshot --out shot.png                   # board + panels
-    python -m ttr.viz.screenshot --out shot.png --perspective 0   # seat 0's view
-    python -m ttr.viz.screenshot --record runs/records/g.json --step 120 --out mid.png
-    python -m ttr.viz.screenshot --board-only --out board.png
-    python -m ttr.viz.screenshot --compare --out check.png   # blend with the board photo
+    ttr-shot --out shot.png                   # board + panels
+    ttr-shot --out shot.png --perspective 0   # seat 0's view
+    ttr-shot --record runs/records/g.json --step 120 --out mid.png
+    ttr-shot --board-only --out board.png
+    ttr-shot --compare --out check.png        # blend with the board photo
+
+(or `python -m ttr.viz.screenshot ...`, which is the same entry point)
 
 With no --record, greedy agents play `--turns` turns of a seeded game so the
 panels and the claimed routes have something to show. --compare overlays the

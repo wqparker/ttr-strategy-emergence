@@ -1,16 +1,20 @@
 # Commands
 
-Every command runs from the repo root with the venv's Python (`py -3.11` created it;
-`.venv/Scripts/python` is the interpreter on Windows, `.venv/bin/python` elsewhere).
+Installing the package puts three commands in the venv: `ttr-view` (the viewer),
+`ttr-shot` (a PNG of it) and `ttr-sim` (bot games in the terminal). They are shown
+below with the venv path, `.venv/Scripts/` on Windows and `.venv/bin/` elsewhere;
+activate the venv and the prefix goes away. Each one is also reachable as
+`python -m ttr.viz.app`, `python -m ttr.viz.screenshot` and `python -m ttr.simulate`.
+
 Roadmap and reasoning live in [PLAN.md](PLAN.md).
 
 ## Watch a game (viewer window)
 
 ```
-.venv/Scripts/python -m ttr.viz.app                              # live: greedy vs random
-.venv/Scripts/python -m ttr.viz.app --agents greedy greedy greedy random
-.venv/Scripts/python -m ttr.viz.app --record runs/records/g.json # replay a saved game
-.venv/Scripts/python -m ttr.viz.app --record g.json --perspective 0 --paused
+.venv/Scripts/ttr-view                              # live: greedy vs random
+.venv/Scripts/ttr-view --agents greedy greedy greedy random
+.venv/Scripts/ttr-view --record runs/records/g.json # replay a saved game
+.venv/Scripts/ttr-view --record g.json --perspective 0 --paused
 ```
 
 | Key | Does |
@@ -26,13 +30,10 @@ The same actions are buttons in the bottom-left of the panel, and the legend is
 in the top-left of the window. Other flags: `--seed`, `--board toy`,
 `--memory-level 0|1|2`, `--scale` (default: fit the display), `--max-turns`.
 
-## See the board
-
-The viewer render, board plus the side panels, saved as a PNG (no window yet — the
-live viewer is Phase 3 milestone 5):
+## See the board (PNG, no window)
 
 ```
-.venv/Scripts/python -m ttr.viz.screenshot --out shot.png --scale 1.0 --turns 30
+.venv/Scripts/ttr-shot --out shot.png --scale 1.0 --turns 30
 ```
 
 Greedy agents play `--turns` turns of a seeded game first, so the panels and the
@@ -55,11 +56,11 @@ gitignored as publisher artwork and has to be put back locally first.
 ## Play games in the terminal
 
 ```
-.venv/Scripts/python -m ttr.simulate --games 100                  # batch, summary table
-.venv/Scripts/python -m ttr.simulate --show                       # one game, rich text log
-.venv/Scripts/python -m ttr.simulate --show board                 # one game, ASCII map view
-.venv/Scripts/python -m ttr.simulate --show board --step          # Enter between turns
-.venv/Scripts/python -m ttr.simulate --show board --delay 0.3     # or auto-advance
+.venv/Scripts/ttr-sim --games 100              # batch, summary table
+.venv/Scripts/ttr-sim --show                   # one game, rich text log
+.venv/Scripts/ttr-sim --show board             # one game, ASCII map view
+.venv/Scripts/ttr-sim --show board --step      # Enter between turns
+.venv/Scripts/ttr-sim --show board --delay 0.3 # or auto-advance
 ```
 
 Useful flags: `--agents greedy random` (two to five of `greedy`, `random`; the count
@@ -69,12 +70,12 @@ start of every run, so any game can be replayed exactly), `--max-turns N`.
 ## Save and replay games
 
 ```
-.venv/Scripts/python -m ttr.simulate --games 20 --record runs/records
+.venv/Scripts/ttr-sim --games 20 --record runs/records
 ```
 
 A record is the seed plus the list of actions, so it replays the game exactly
-(`ttr.record.GameRecord`). Feed one to the screenshot command with `--record` and
-`--step` to look at any point in the game.
+(`ttr.record.GameRecord`). Feed one to `ttr-view --record` to watch it, or to
+`ttr-shot --record ... --step N` for one moment of it.
 
 ## Tests
 
@@ -85,7 +86,8 @@ A record is the seed plus the list of actions, so it replays the game exactly
 ```
 
 The viz tests render headlessly (SDL dummy driver) and skip themselves if pygame is
-not installed.
+not installed. To test an old commit, see the note at the end of PLAN.md: the
+editable install points at this working tree, so a worktree needs `PYTHONPATH`.
 
 ## Setup
 
@@ -96,10 +98,14 @@ py -3.11 -m venv .venv
 .venv/Scripts/python -m pip install -e ".[photo]"   # numpy + OpenCV, board-data tools only
 ```
 
+Any of these installs the three commands. Re-run one after changing
+`[project.scripts]` in `pyproject.toml`; editing the code itself needs no reinstall.
+
 ## Board data tools
 
 Only needed when the map data changes. The first two need the board photo at
-`docs/ticket-to-ride_usa_map.jpg` and the `[photo]` extra.
+`docs/ticket-to-ride_usa_map.jpg` and the `[photo]` extra. These stay plain scripts
+rather than installed commands: they are development tools, not part of the package.
 
 ```
 .venv/Scripts/python scripts/fit_tiles.py fit             # re-fit every tile to the photo
