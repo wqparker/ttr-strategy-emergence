@@ -6,4 +6,5 @@ Though I would rather do a larger share of the work strictly myself, I am decidi
 
 The game is recreated as a multi-agent reinforcement learning environment. Agents are trained on it to see which strategies emerge, for example blocking opponents vs. hoarding routes, or long risky routes vs. short safe ones.
 
-See [PLAN.md](PLAN.md) for the roadmap and design decisions.
+See [PLAN.md](PLAN.md) for the roadmap and design decisions, and
+[COMMANDS.md](COMMANDS.md) for how to run everything.

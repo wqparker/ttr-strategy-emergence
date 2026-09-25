@@ -34,9 +34,12 @@ from ttr.viz.screen import Screen  # noqa: E402
 PHOTO = Path(__file__).resolve().parents[3] / "docs" / "ticket-to-ride_usa_map.jpg"
 
 
-def demo_game(board_name: str, num_players: int, seed: int, turns: int) -> Game:
-    """A seeded game with greedy agents played for `turns` turns."""
-    game = Game(load_board(board_name), num_players=num_players, seed=seed, first_player=0)
+def demo_game(board_name: str, num_players: int, seed: int, turns: int,
+              first_player: Optional[int] = None) -> Game:
+    """A seeded game with greedy agents played for `turns` turns. The starting
+    seat is drawn from the seed unless `first_player` fixes it (§9 #8), so seat 0
+    is not always the one to move."""
+    game = Game(load_board(board_name), num_players=num_players, seed=seed, first_player=first_player)
     agents = [GreedyAgent(seed + i) for i in range(num_players)]
     while not game.game_over and game.turn < turns:
         p = game.current_player
@@ -71,6 +74,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--players", type=int, default=2)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--turns", type=int, default=12, help="turns to play when there is no --record")
+    parser.add_argument("--first-player", type=int, default=None,
+                        help="fix the starting seat (default: drawn from the seed)")
     parser.add_argument("--perspective", default="all", help="'all' or a seat number")
     parser.add_argument("--memory-level", type=int, default=2, choices=(0, 1, 2))
     parser.add_argument("--board-only", action="store_true", help="no panels")
@@ -83,7 +88,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         states = record.replay_states()
         game = states[-1 if args.step is None else args.step]
     else:
-        game = demo_game(args.board, args.players, args.seed, args.turns)
+        game = demo_game(args.board, args.players, args.seed, args.turns, args.first_player)
 
     if args.compare or args.board_only:
         surface = render_board(game, 1.0 if args.compare else args.scale)

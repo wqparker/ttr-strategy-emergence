@@ -12,3 +12,8 @@ Further refining of claude and plan md files. Emphasis on planning things more m
 
 ## 9/24/26
 
+fucking didnt save, need to grab and merge and not roll over
+
+# 9/25/26
+
+Testing putting in behavior input changes for Claude itself. Going for tersness, short, and clarity with brevity. Continuing work to expand render view with border tiles to display player positions and fields (caards etc) and other relevant info to game and analysis. Fairly happy with how board is for now, very serviceable, though there is a bit too much blank space and I'd want to fill and/or scale other parts up. 
