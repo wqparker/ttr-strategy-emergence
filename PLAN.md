@@ -159,9 +159,10 @@ viewer and the overlays, and later let us review any trained agent's game move b
      renderer strokes the outline on the car's edge) on the 1151 x 764 canvas. Double-
      route pairs came out ~14 px apart center to center, so they touch without overlapping,
      as on the board. The first trace (36 x 11, angles set by eye) was off by a few
-     pixels and degrees per tile, which showed as gaps and odd angles. The fitting
-     scripts need OpenCV and the local photo, so only the resulting coordinates are
-     committed.
+     pixels and degrees per tile, which showed as gaps and odd angles. The fit is
+     `scripts/fit_tiles.py` (`fit`, `size`, `check`, `overlay`); it needs the local photo
+     and the optional `[photo]` extra (numpy, OpenCV). Re-running `fit` on the committed
+     data moves no tile more than about 1 px.
 ocal photo, so only the resulting
      coordinates are committed.
 4. **Side panels and perspective toggle** (layout decided):
