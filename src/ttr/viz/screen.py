@@ -38,6 +38,18 @@ GAP = 5.0  # between panel boxes
 LEFT_SEATS = (1, 3)
 RIGHT_SEATS = (2, 4)
 
+# Key legend for the table strip's top-left corner. The bindings themselves live
+# in viz/app.py; this is only what the viewer tells the player about them.
+CONTROLS = (
+    ("space", "play / pause"),
+    (". ,", "step fwd / back"),
+    ("] [", "faster / slower"),
+    ("v", "perspective"),
+    ("end home", "jump to end / start"),
+    ("esc", "quit"),
+)
+BUTTON_W, BUTTON_H, BUTTON_GAP = 46.0, 22.0, 5.0
+
 
 class Screen:
     """Composes a `BoardView` with the panels. Holds the perspective; the live
@@ -110,6 +122,28 @@ class Screen:
                     rects[seat] = self._rect(x, y, SIDE_W - 2 * GAP, slot_h)
         return rects
 
+    def button_rects(self, names: Sequence[str]) -> List[pygame.Rect]:
+        """Slots for the on-screen controls, in the bottom panel's left margin
+        (seat 0's fields are centered, so nothing else sits there)."""
+        r = self.bottom_rect
+        rows = 1 if len(names) <= 4 else 2
+        per_row = -(-len(names) // rows)
+        top = (r.centery / self.scale) - rows * (BUTTON_H + BUTTON_GAP) / 2
+        left = r.left / self.scale + 9
+        out = []
+        for i in range(len(names)):
+            col, row = i % per_row, i // per_row
+            out.append(self._rect(left + col * (BUTTON_W + BUTTON_GAP),
+                                  top + row * (BUTTON_H + BUTTON_GAP), BUTTON_W, BUTTON_H))
+        return out
+
+    def button_at(self, pos: Tuple[float, float], buttons) -> Optional[str]:
+        """Which on-screen control a click landed on, if any."""
+        for name, _, rect in buttons:
+            if rect.collidepoint(pos):
+                return name
+        return None
+
     def board_point(self, pos: Tuple[float, float]) -> Optional[Point]:
         """Window pixel -> board canvas coordinate, or None if off the board.
         Human play (milestone 6) turns this into a route or city."""
@@ -143,6 +177,9 @@ class Screen:
         highlight_routes: Iterable[int] = (),
         highlight_cities: Iterable[str] = (),
         events: int = 3,
+        controls: Optional[Sequence[Tuple[str, str]]] = None,
+        buttons: Sequence[Tuple[str, str, pygame.Rect]] = (),
+        active: Sequence[str] = (),
     ) -> ViewModel:
         """Draw everything and return the view model that was drawn."""
         self._num_players = game.num_players
@@ -157,11 +194,18 @@ class Screen:
             highlight_routes=highlight_routes,
             highlight_cities=highlight_cities,
         )
-        panels.draw_table(target, self.table_rect, vm, k=k)
+        r = self.table_rect
+        legend = panels.controls_width(controls or (), k=k)
+        panels.draw_table(target, r, vm, k=k,
+                          left_bound=r.left + 10 * k + legend + (14 * k if legend else 0))
+        if controls:
+            panels.draw_controls(target, (r.left + 10 * k, r.top + 9 * k), controls, k=k)
         panels.draw_ticker(target, self.ticker_rect, vm.events, k=k)
         rects = self.seat_rects(game.num_players)
         for seat, rect in rects.items():
             panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0), codes=self.codes)
+        if buttons:
+            panels.draw_buttons(target, buttons, k=k, active=active)
         return vm
 
     def render(self, game: Game, **kw) -> Tuple[pygame.Surface, ViewModel]:

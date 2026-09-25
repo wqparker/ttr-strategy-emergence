@@ -4,6 +4,28 @@ Every command runs from the repo root with the venv's Python (`py -3.11` created
 `.venv/Scripts/python` is the interpreter on Windows, `.venv/bin/python` elsewhere).
 Roadmap and reasoning live in [PLAN.md](PLAN.md).
 
+## Watch a game (viewer window)
+
+```
+.venv/Scripts/python -m ttr.viz.app                              # live: greedy vs random
+.venv/Scripts/python -m ttr.viz.app --agents greedy greedy greedy random
+.venv/Scripts/python -m ttr.viz.app --record runs/records/g.json # replay a saved game
+.venv/Scripts/python -m ttr.viz.app --record g.json --perspective 0 --paused
+```
+
+| Key | Does |
+| --- | --- |
+| `space` | play / pause |
+| `.` `,` | step forward / back one sub-step |
+| `]` `[` | faster / slower |
+| `v` | cycle perspective: all-seeing, then each seat |
+| `end` `home` | jump to the end / back to the start |
+| `esc` | quit |
+
+The same actions are buttons in the bottom-left of the panel, and the legend is
+in the top-left of the window. Other flags: `--seed`, `--board toy`,
+`--memory-level 0|1|2`, `--scale` (default: fit the display), `--max-turns`.
+
 ## See the board
 
 The viewer render, board plus the side panels, saved as a PNG (no window yet — the

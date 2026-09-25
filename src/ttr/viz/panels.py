@@ -150,10 +150,12 @@ def _chips_w(counts: Counter, chip_w: float, gap: float, per_row: int) -> float:
 # -------------------------------------------------------------- table strip
 
 
-def draw_table(s: pygame.Surface, rect: pygame.Rect, vm: ViewModel, k: float = 1.0) -> None:
+def draw_table(s: pygame.Surface, rect: pygame.Rect, vm: ViewModel, k: float = 1.0,
+               left_bound: Optional[float] = None) -> None:
     """Top strip: the 5 face-up cards, the pile counts, the unseen pool in a
     player view, and the current sub-step. The table blocks are centered in the
-    strip; the sub-step stays anchored to the right end."""
+    strip; the sub-step stays anchored to the right end, and `left_bound` keeps
+    the blocks clear of the key legend."""
     _box(s, rect, theme.PANEL_BG)
     pad = 10 * k
     cw, ch = 30 * k, 42 * k
@@ -174,7 +176,8 @@ def draw_table(s: pygame.Surface, rect: pygame.Rect, vm: ViewModel, k: float = 1
         total += gap + unseen_w
 
     x = rect.centerx - total / 2
-    x = max(rect.left + pad, min(x, rect.right - _substep_w(vm, k) - 12 * k - total))
+    x = max(left_bound if left_bound is not None else rect.left + pad,
+            min(x, rect.right - _substep_w(vm, k) - 12 * k - total))
 
     text(s, "FACE UP", (x, rect.top + pad), 9 * k, theme.PANEL_LABEL, bold=True)
     for i, color in enumerate(vm.table.market):
@@ -225,6 +228,46 @@ def _substep(s: pygame.Surface, rect: pygame.Rect, vm: ViewModel, k: float) -> N
     if t.final_turns_remaining is not None:
         text(s, f"FINAL ROUND · {t.final_turns_remaining} turns left", (right, rect.top + 60 * k),
              11 * k, theme.CARD[Color.YELLOW], bold=True, right=True)
+
+
+# ------------------------------------------------------------ controls
+
+
+def controls_width(entries, k: float = 1.0, per_col: int = 3) -> float:
+    """How much of the strip the key legend needs, so the table blocks can clear it."""
+    if not entries:
+        return 0.0
+    key_w = max(_text_w(keys, 9 * k, True) for keys, _ in entries)
+    col_w = key_w + 8 * k + max(_text_w(name, 9 * k) for _, name in entries) + 14 * k
+    return col_w * -(-len(entries) // per_col)
+
+
+def draw_controls(s: pygame.Surface, pos: Tuple[float, float], entries, k: float = 1.0,
+                  per_col: int = 3) -> None:
+    """The key legend in the table strip's top-left corner: (keys, what it does)
+    pairs, in columns. The app owns the bindings; this only draws them."""
+    key_w = max((_text_w(keys, 9 * k, True) for keys, _ in entries), default=0)
+    col_w = key_w + 8 * k + max((_text_w(name, 9 * k) for _, name in entries), default=0) + 14 * k
+    x, y = pos
+    for i, (keys, name) in enumerate(entries):
+        col, row = i // per_col, i % per_col
+        cx, cy = x + col * col_w, y + row * 12 * k
+        text(s, keys, (cx, cy), 9 * k, theme.PANEL_TEXT, bold=True)
+        text(s, name, (cx + key_w + 8 * k, cy), 9 * k, theme.PANEL_LABEL)
+
+
+def draw_buttons(s: pygame.Surface, buttons, k: float = 1.0, active=()) -> None:
+    """On-screen controls: (id, label, rect) triples. Ids in `active` are drawn
+    lit, for a toggle that is currently on."""
+    for name, label, rect in buttons:
+        lit = name in active
+        pygame.draw.rect(s, theme.PANEL_BG if lit else theme.PANEL_SLOT, rect,
+                         border_radius=max(2, round(3 * k)))
+        pygame.draw.rect(s, theme.HIGHLIGHT if lit else theme.PANEL_EDGE, rect,
+                         max(1, round(k)), border_radius=max(2, round(3 * k)))
+        img = font(10 * k, bold=True).render(label, True,
+                                             theme.HIGHLIGHT if lit else theme.PANEL_TEXT)
+        s.blit(img, img.get_rect(center=rect.center))
 
 
 # ---------------------------------------------------------------- seat panel

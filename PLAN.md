@@ -93,7 +93,12 @@ development or tuning.
     of what one viewer may see; the panels draw only that, so the hiding is tested
     without a display. `ttr.viz.screenshot` renders the whole screen
     (`--perspective all|<seat>`, `--memory-level`, `--board-only`).
-  - Next: milestone 5, the live and replay viewers (play/pause/step/speed, scrubbing).
+  - Done: milestone 5, the live and replay viewers (`viz/app.py`). Both modes walk a
+    `Timeline` of states, one per sub-step, so stepping back is an index move rather
+    than a re-simulation; a live game produces the next state on demand by cloning
+    the last one. Keys and on-screen buttons for play/pause, step, speed, perspective
+    and jumping to either end, with the key legend in the table strip's top-left.
+  - Next: milestone 6, human play (click a route, then choose the payment).
 - **Next: Phase 4, the PettingZoo environment.**
 
 ## Roadmap
@@ -194,6 +199,15 @@ viewer and the overlays, and later let us review any trained agent's game move b
      player's information plus their card-memory estimates.
 5. **Live and replay viewers:** play, pause, step, speed; replay scrubs forward and back
    through every sub-step. Keyboard shortcuts plus on-screen buttons.
+   - **Built as:** `viz/app.py`. A `Timeline` holds the states in order plus an optional
+     producer for the next one, which is what makes live and replay the same code path:
+     a replay preloads every state from the record, a live game clones the last state and
+     lets the seat's agent act. Either way stepping back is an index move.
+   - `Viewer` owns the timeline, the clock and the bindings but not the window loop, so
+     the tests feed it events and frames with no display.
+   - The key legend sits in the table strip's top-left, with the timeline position and
+     speed in the same columns. Button labels stay ASCII: the system font pygame resolves
+     here has no geometric shapes, and a missing glyph draws a box.
 6. **Human play:** click a route, then choose a payment; click market cards or the deck
    to draw; tick tickets to keep. The UI only offers `game.legal_actions()`.
 7. **Analysis overlays:** from a folder of records, color routes by a statistic (claim
