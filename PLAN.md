@@ -247,10 +247,13 @@ Noticed while using the viewer; none of them blocks Phase 4.
   distribution, blocking frequency, how the methods differ on each. These belong with the
   analysis work (matplotlib/pandas out of a folder of records), not in the Pygame viewer,
   but the records already hold everything they need.
-- **In-place Replacement of Face-up pile.** When a face-up card is taken, any remaining face-up 
-  cards to the right of it are 'slid' down to the left, and new card from deck is always on the 
-  right most spot. Behavior should be taking a card from face up and that position is
-  then replaced by newly drawn card.
+- **In-place replacement of the face-up pile.** *(Done.)* Taking a face-up card used to
+  slide the cards to its right down to the left, with the replacement always landing in
+  the rightmost slot. `Game._refill_market(at=slot)` now puts the replacement back in the
+  slot that was taken, as at a real table. It matters beyond looks: a human clicking a
+  face-up card should not have the rest of the row jump under the cursor, and Phase 4
+  encodes the market by position, so a shifting row is noise the agent has to learn
+  around. When the deck is spent the row closes up instead (§9 #3).
 
 **Library:** `pygame-ce` (decided), the actively maintained drop-in fork of Pygame
 (same `import pygame`), with Python 3.11 wheels.

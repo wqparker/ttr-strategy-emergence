@@ -134,6 +134,26 @@ def test_market_reset_guard_when_legal_market_impossible():  # §9 #2 hard guard
     assert game.market.count(L) == 3
 
 
+def test_face_up_card_is_replaced_in_place():  # §4
+    """The replacement lands in the slot that was taken, so the row does not
+    shift: a player clicking a face-up card sees the others stay put."""
+    game = started_game(seed=11)
+    set_market(game, Color.RED, Color.BLUE, Color.GREEN, Color.WHITE, Color.BLACK)
+    before = list(game.market)
+    game.step(DrawFaceUp(Color.GREEN))  # slot 2
+    assert len(game.market) == 5
+    assert game.market[:2] == before[:2] and game.market[3:] == before[3:]
+    assert game.market[2] is not None
+
+
+def test_market_closes_up_when_the_deck_is_spent():  # §9 #3
+    game = started_game(seed=11)
+    set_market(game, Color.RED, Color.BLUE, Color.GREEN, Color.WHITE, Color.BLACK)
+    empty_the_piles(game)
+    game.step(DrawFaceUp(Color.GREEN))
+    assert game.market == [Color.RED, Color.BLUE, Color.WHITE, Color.BLACK]
+
+
 def test_empty_deck_and_discard_disables_blind_draw():  # §4
     game = started_game()
     empty_the_piles(game)

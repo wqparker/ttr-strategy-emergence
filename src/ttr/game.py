@@ -165,11 +165,19 @@ class Game:
     def _cards_available(self) -> bool:
         return bool(self.deck or self.discard)
 
-    def _refill_market(self) -> None:
+    def _refill_market(self, at: Optional[int] = None) -> None:
+        """Top the market back up to five. `at` is the slot a card was just taken
+        from: its replacement goes back into that slot, as at a real table, so the
+        row does not shift under the player who is looking at it. If the deck is
+        spent the row closes up instead (§9 #3: the market may hold fewer than 5)."""
+        if at is not None and len(self.market) < MARKET_SIZE:
+            card = self._draw_from_deck()
+            if card is not None:
+                self.market.insert(at, card)
         while len(self.market) < MARKET_SIZE:
             card = self._draw_from_deck()
             if card is None:
-                break  # §9 #3: market may hold fewer than 5
+                break
             self.market.append(card)
         self._check_market_reset()
 
@@ -290,10 +298,11 @@ class Game:
         if isinstance(action, KeepTickets):
             self._keep_tickets(p, action.ticket_ids)
         elif isinstance(action, DrawFaceUp):
-            self.market.remove(action.color)
+            slot = self.market.index(action.color)
+            del self.market[slot]
             player.hand[action.color] += 1
             self._log(p, "draw_face_up", color=action.color.value)
-            self._refill_market()
+            self._refill_market(slot)
             locomotive = action.color is Color.LOCOMOTIVE
             self._after_card_draw(ends_turn=locomotive)  # §3A: face-up Loco is the whole draw
         elif isinstance(action, DrawBlind):
