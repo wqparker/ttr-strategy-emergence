@@ -215,6 +215,39 @@ viewer and the overlays, and later let us review any trained agent's game move b
 8. **Retire the ASCII board view** once the viewer covers it. The `rich` text log stays
    for terminal debugging.
 
+### Viewer backlog (tweaks and fixes, in no fixed order)
+
+Noticed while using the viewer; none of them blocks Phase 4.
+
+- **Exact deck composition in the all-seeing view.** The player view already shows the
+  unseen pool by color (memory Level 2). The all-seeing view should show the real thing:
+  how many of each color are left in the draw deck. Same widget, different source — the
+  deck itself rather than `MemoryView.unseen` — and it stays out of the player view,
+  where it would leak hidden information.
+- **Uniform card borders.** `panels.card_chip` draws its edge as `darker(fill, 0.45)`, so
+  the edge's contrast depends on the card color: the locomotive and the white cards read
+  as fully outlined, while blue, green and black nearly lose their edge against the dark
+  panel. Give every chip the same edge treatment (one fixed outline color, or a light rim
+  like the seat swatches) so the five face-up cards look like one set.
+- **The bottom panel's empty space.** Centering seat 0's fields left a wide gap on the
+  right (the left side now holds the viewer's buttons). Candidates: the current legal
+  moves for a human player (Phase 3 milestone 6), a longest-path / ticket-progress
+  summary, the last few actions in full rather than the one-line ticker, or simply a
+  larger hand and ticket display.
+- **Better ticket display.** Tickets are city codes plus points (`MTL–ATL 9`). Either
+  write the full city names, or draw them as small ticket cards with the route drawn on
+  them — closer to the physical card, and easier to read at a glance. Points are the
+  weakest part of the current row: they look like a card count.
+- **End-of-game results popup.** When the game ends the viewer just stops. It should
+  overlay the scoreboard: the winner, and for every seat the route points, ticket points
+  with completed/failed counts, the longest-path bonus and the total. `GameResult` already
+  carries all of it, and `render.render_result` is the same table in text.
+- **Charts for the strategy analysis (Phase 6).** Beyond the per-route overlays in
+  milestone 7: claim rate over time, which tickets get completed and when, route length
+  distribution, blocking frequency, how the methods differ on each. These belong with the
+  analysis work (matplotlib/pandas out of a folder of records), not in the Pygame viewer,
+  but the records already hold everything they need.
+
 **Library:** `pygame-ce` (decided), the actively maintained drop-in fork of Pygame
 (same `import pygame`), with Python 3.11 wheels.
 

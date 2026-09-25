@@ -233,27 +233,36 @@ def _substep(s: pygame.Surface, rect: pygame.Rect, vm: ViewModel, k: float) -> N
 # ------------------------------------------------------------ controls
 
 
-def controls_width(entries, k: float = 1.0, per_col: int = 3) -> float:
-    """How much of the strip the key legend needs, so the table blocks can clear it."""
+def controls_layout(entries, rect: pygame.Rect, k: float = 1.0, per_col: int = 4):
+    """Type size, row height, column width and total width for the key legend,
+    sized to fill `rect` (the table strip) down its full height."""
     if not entries:
-        return 0.0
-    key_w = max(_text_w(keys, 9 * k, True) for keys, _ in entries)
-    col_w = key_w + 8 * k + max(_text_w(name, 9 * k) for _, name in entries) + 14 * k
-    return col_w * -(-len(entries) // per_col)
+        return 0.0, 0.0, 0.0, 0.0
+    pad = 8 * k
+    row_h = (rect.height - 2 * pad) / per_col
+    size = max(8 * k, min(13 * k, row_h * 0.66))
+    key_w = max(_text_w(keys, size, True) for keys, _ in entries)
+    label_w = max(_text_w(name, size) for _, name in entries)
+    col_w = key_w + 10 * k + label_w + 20 * k
+    cols = -(-len(entries) // per_col)
+    return size, row_h, col_w, col_w * cols
 
 
-def draw_controls(s: pygame.Surface, pos: Tuple[float, float], entries, k: float = 1.0,
-                  per_col: int = 3) -> None:
-    """The key legend in the table strip's top-left corner: (keys, what it does)
-    pairs, in columns. The app owns the bindings; this only draws them."""
-    key_w = max((_text_w(keys, 9 * k, True) for keys, _ in entries), default=0)
-    col_w = key_w + 8 * k + max((_text_w(name, 9 * k) for _, name in entries), default=0) + 14 * k
-    x, y = pos
+def draw_controls(s: pygame.Surface, rect: pygame.Rect, entries, k: float = 1.0,
+                  per_col: int = 4) -> None:
+    """The key legend down the table strip's left side: (keys, what it does)
+    pairs in columns. The app owns the bindings; this only draws them."""
+    size, row_h, col_w, _ = controls_layout(entries, rect, k, per_col)
+    if not size:
+        return
+    pad = 8 * k
+    key_w = max(_text_w(keys, size, True) for keys, _ in entries)
     for i, (keys, name) in enumerate(entries):
         col, row = i // per_col, i % per_col
-        cx, cy = x + col * col_w, y + row * 12 * k
-        text(s, keys, (cx, cy), 9 * k, theme.PANEL_TEXT, bold=True)
-        text(s, name, (cx + key_w + 8 * k, cy), 9 * k, theme.PANEL_LABEL)
+        cx = rect.left + pad + col * col_w
+        cy = rect.top + pad + row * row_h + (row_h - size * 1.35) / 2
+        text(s, keys, (cx, cy), size, theme.PANEL_TEXT, bold=True)
+        text(s, name, (cx + key_w + 10 * k, cy), size, theme.PANEL_LABEL)
 
 
 def draw_buttons(s: pygame.Surface, buttons, k: float = 1.0, active=()) -> None:

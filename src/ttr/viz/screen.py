@@ -195,11 +195,11 @@ class Screen:
             highlight_cities=highlight_cities,
         )
         r = self.table_rect
-        legend = panels.controls_width(controls or (), k=k)
+        legend = panels.controls_layout(controls or (), r, k=k)[3]
         panels.draw_table(target, r, vm, k=k,
-                          left_bound=r.left + 10 * k + legend + (14 * k if legend else 0))
+                          left_bound=r.left + 8 * k + legend + (24 * k if legend else 2 * k))
         if controls:
-            panels.draw_controls(target, (r.left + 10 * k, r.top + 9 * k), controls, k=k)
+            panels.draw_controls(target, r, controls, k=k)
         panels.draw_ticker(target, self.ticker_rect, vm.events, k=k)
         rects = self.seat_rects(game.num_players)
         for seat, rect in rects.items():
