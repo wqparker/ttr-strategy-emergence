@@ -49,7 +49,27 @@ TRAIN_RIM = (16, 16, 18)
 TABLE_BG = (238, 234, 222)
 PANEL_BG = (34, 36, 42)
 PANEL_TEXT = (230, 230, 230)
+PANEL_EDGE = (58, 62, 70)
+PANEL_SLOT = (44, 47, 54)  # a seat's box inside a panel
+PANEL_DIM = (148, 152, 160)  # secondary text
+PANEL_LABEL = (120, 124, 132)  # small captions
+TICKER_TEXT = (186, 190, 198)
+DONE = (126, 190, 58)  # a completed ticket
 HIGHLIGHT = (255, 255, 255)
+# The locomotive card's rainbow, drawn as diagonal bands on its chip.
+LOCO_BANDS: Tuple[RGB, ...] = (
+    (214, 52, 40),
+    (246, 214, 48),
+    (126, 190, 58),
+    (40, 146, 214),
+    (214, 120, 196),
+)
+
+
+def chip_text(c: RGB) -> RGB:
+    """Black or white text, whichever reads on a chip of this color."""
+    luma = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
+    return (20, 20, 24) if luma > 140 else (250, 250, 250)
 
 
 def darker(c: RGB, f: float = 0.6) -> RGB:

@@ -1,11 +1,15 @@
-"""Render the board to a PNG without opening a window.
+"""Render the viewer to a PNG without opening a window.
 
-    python -m ttr.viz.screenshot --out board.png
+    python -m ttr.viz.screenshot --out shot.png                   # board + panels
+    python -m ttr.viz.screenshot --out shot.png --perspective 0   # seat 0's view
     python -m ttr.viz.screenshot --record runs/records/g.json --step 120 --out mid.png
+    python -m ttr.viz.screenshot --board-only --out board.png
     python -m ttr.viz.screenshot --compare --out check.png   # blend with the board photo
 
---compare overlays the render on docs/ticket-to-ride_usa_map.jpg (kept locally,
-not in the repo) at 50% so positions can be checked against the real board.
+With no --record, greedy agents play `--turns` turns of a seeded game so the
+panels and the claimed routes have something to show. --compare overlays the
+render on docs/ticket-to-ride_usa_map.jpg (kept locally, not in the repo) at 50%
+so positions can be checked against the real board; it implies --board-only.
 """
 
 from __future__ import annotations
@@ -19,20 +23,42 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
 import pygame  # noqa: E402
 
+from ttr.agents import GreedyAgent  # noqa: E402
 from ttr.board import load_board  # noqa: E402
 from ttr.game import Game  # noqa: E402
 from ttr.record import GameRecord  # noqa: E402
 from ttr.viz.board_view import BoardView  # noqa: E402
+from ttr.viz.perspective import Perspective  # noqa: E402
+from ttr.viz.screen import Screen  # noqa: E402
 
 PHOTO = Path(__file__).resolve().parents[3] / "docs" / "ticket-to-ride_usa_map.jpg"
 
 
-def render(board_name: str, game: Optional[Game], scale: float) -> pygame.Surface:
-    board = game.board if game is not None else load_board(board_name)
-    view = BoardView(board, scale=scale)
+def demo_game(board_name: str, num_players: int, seed: int, turns: int) -> Game:
+    """A seeded game with greedy agents played for `turns` turns."""
+    game = Game(load_board(board_name), num_players=num_players, seed=seed, first_player=0)
+    agents = [GreedyAgent(seed + i) for i in range(num_players)]
+    while not game.game_over and game.turn < turns:
+        p = game.current_player
+        game.step(agents[p].act(game, p))
+    return game
+
+
+def render_board(game: Game, scale: float) -> pygame.Surface:
+    view = BoardView(game.board, scale=scale)
     surface = pygame.Surface(view.size)
     view.draw(surface, game)
     return surface
+
+
+def render_screen(game: Game, scale: float, viewer: Optional[int], level: int) -> pygame.Surface:
+    screen = Screen(game.board, scale=scale, perspective=Perspective(viewer, level))
+    surface, _ = screen.render(game)
+    return surface
+
+
+def _viewer(raw: str) -> Optional[int]:
+    return None if raw in ("all", "none") else int(raw)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -42,16 +68,28 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--record", type=Path, help="draw the state from a game record")
     parser.add_argument("--step", type=int, default=None, help="with --record: action index (default: end)")
     parser.add_argument("--scale", type=float, default=2.0)
+    parser.add_argument("--players", type=int, default=2)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--turns", type=int, default=12, help="turns to play when there is no --record")
+    parser.add_argument("--perspective", default="all", help="'all' or a seat number")
+    parser.add_argument("--memory-level", type=int, default=2, choices=(0, 1, 2))
+    parser.add_argument("--board-only", action="store_true", help="no panels")
     parser.add_argument("--compare", action="store_true", help="blend with the board photo at 50%%")
     args = parser.parse_args(argv)
 
     pygame.init()
-    game = None
     if args.record:
         record = GameRecord.load(args.record)
         states = record.replay_states()
         game = states[-1 if args.step is None else args.step]
-    surface = render(args.board, game, 1.0 if args.compare else args.scale)
+    else:
+        game = demo_game(args.board, args.players, args.seed, args.turns)
+
+    if args.compare or args.board_only:
+        surface = render_board(game, 1.0 if args.compare else args.scale)
+    else:
+        surface = render_screen(game, args.scale, _viewer(args.perspective), args.memory_level)
+
     if args.compare:
         if not PHOTO.exists():
             raise SystemExit(f"--compare needs the board photo at {PHOTO}")

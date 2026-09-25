@@ -68,7 +68,7 @@ development or tuning.
 
 ## Current progress
 
-*Updated at the end of each session. Last updated: 2026-09-24.*
+*Updated at the end of each session. Last updated: 2026-09-25.*
 
 - **Just completed: engine ready, and every RL design question settled.**
   - Phases 0–2 (engine, random/greedy bots, `rich` log, temporary ASCII board view,
@@ -88,7 +88,12 @@ development or tuning.
     `viz/screenshot.py`, display data in `data/usa_display.json`, measured from the
     board photo). Every tile is fitted to the photo; outlines drawn over the photo match
     the printed tiles to about a pixel, double-route pairs sit flush as on the board.
-  - Next: milestone 4, side panels and the perspective toggle.
+  - Done: milestone 4, side panels and the perspective toggle (`viz/perspective.py`,
+    `viz/panels.py`, `viz/screen.py`). `Perspective` turns a state into a view model
+    of what one viewer may see; the panels draw only that, so the hiding is tested
+    without a display. `ttr.viz.screenshot` renders the whole screen
+    (`--perspective all|<seat>`, `--memory-level`, `--board-only`).
+  - Next: milestone 5, the live and replay viewers (play/pause/step/speed, scrubbing).
 - **Next: Phase 4, the PettingZoo environment.**
 
 ## Roadmap
@@ -176,7 +181,12 @@ viewer and the overlays, and later let us review any trained agent's game move b
      scores live here.
    - **Top: the table.** The 5 face-up cards and the draw-deck, discard-pile and
      ticket-deck counts.
-   - Current sub-step and recent events also need a place (to decide when building).
+   - **Decided while building:** the current sub-step goes at the right end of the top
+     strip (with the turn, whose view this is, and the final-round warning), and recent
+     public events run as a one-line ticker along the top edge of seat 0's panel. A
+     dedicated log column was rejected: it costs ~200px of width and crowds the seats.
+   - The unseen pool (memory Level 2) sits in the top strip next to the pile counts,
+     since it is a fact about the table rather than about one seat.
    - All-seeing view shows every hand and ticket; player view shows only that
      player's information plus their card-memory estimates.
 5. **Live and replay viewers:** play, pause, step, speed; replay scrubs forward and back
