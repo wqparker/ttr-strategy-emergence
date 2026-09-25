@@ -1,21 +1,31 @@
 # Commands
 
+Activate the venv once per terminal, then every command below works as written:
+
+```
+.venv\Scripts\Activate.ps1     # PowerShell
+.venv\Scripts\activate         # cmd
+source .venv/Scripts/activate   # Git Bash (.venv/bin/activate on macOS/Linux)
+```
+
+Without activating, put `.venv/Scripts/` in front of each command
+(`.venv/bin/` on macOS/Linux).
+
 Installing the package puts three commands in the venv: `ttr-view` (the viewer),
-`ttr-shot` (a PNG of it) and `ttr-sim` (bot games in the terminal). They are shown
-below with the venv path, `.venv/Scripts/` on Windows and `.venv/bin/` elsewhere;
-activate the venv and the prefix goes away. Each one is also reachable as
-`python -m ttr.viz.app`, `python -m ttr.viz.screenshot` and `python -m ttr.simulate`.
+`ttr-shot` (a PNG of it) and `ttr-sim` (bot games in the terminal). Each is also
+reachable as `python -m ttr.viz.app`, `python -m ttr.viz.screenshot` and
+`python -m ttr.simulate`.
 
 Roadmap and reasoning live in [PLAN.md](PLAN.md).
 
 ## Watch a game (viewer window)
 
 ```
-.venv/Scripts/ttr-view                              # live: greedy vs random
-.venv/Scripts/ttr-view --agents greedy greedy greedy random
-.venv/Scripts/ttr-view --human 0                    # play seat 0 yourself
-.venv/Scripts/ttr-view --record runs/records/g.json # replay a saved game
-.venv/Scripts/ttr-view --record g.json --perspective 0 --paused
+ttr-view                              # live: greedy vs random
+ttr-view --agents greedy greedy greedy random
+ttr-view --human 0                    # play seat 0 yourself
+ttr-view --record runs/records/g.json # replay a saved game
+ttr-view --record g.json --perspective 0 --paused
 ```
 
 | Key | Does |
@@ -78,7 +88,7 @@ bonus and total.
 ## See the board (PNG, no window)
 
 ```
-.venv/Scripts/ttr-shot --out shot.png --scale 1.0 --turns 30
+ttr-shot --out shot.png --scale 1.0 --turns 30
 ```
 
 Greedy agents play `--turns` turns of a seeded game first, so the panels and the
@@ -102,11 +112,11 @@ gitignored as publisher artwork and has to be put back locally first.
 ## Play games in the terminal
 
 ```
-.venv/Scripts/ttr-sim --games 100              # batch, summary table
-.venv/Scripts/ttr-sim --show                   # one game, rich text log
-.venv/Scripts/ttr-sim --show board             # one game, ASCII map view
-.venv/Scripts/ttr-sim --show board --step      # Enter between turns
-.venv/Scripts/ttr-sim --show board --delay 0.3 # or auto-advance
+ttr-sim --games 100              # batch, summary table
+ttr-sim --show                   # one game, rich text log
+ttr-sim --show board             # one game, ASCII map view
+ttr-sim --show board --step      # Enter between turns
+ttr-sim --show board --delay 0.3 # or auto-advance
 ```
 
 Useful flags: `--agents greedy random` (two to five of `greedy`, `random`; the count
@@ -116,7 +126,7 @@ start of every run, so any game can be replayed exactly), `--max-turns N`.
 ## Save and replay games
 
 ```
-.venv/Scripts/ttr-sim --games 20 --record runs/records
+ttr-sim --games 20 --record runs/records
 ```
 
 A record is the seed plus the list of actions, so it replays the game exactly
@@ -126,9 +136,9 @@ A record is the seed plus the list of actions, so it replays the game exactly
 ## Tests
 
 ```
-.venv/Scripts/python -m pytest                     # the whole suite
-.venv/Scripts/python -m pytest tests/test_game.py  # one file
-.venv/Scripts/python scripts/stress.py             # long random-play invariant run (~1 min)
+python -m pytest                     # the whole suite
+python -m pytest tests/test_game.py  # one file
+python scripts/stress.py             # long random-play invariant run (~1 min)
 ```
 
 The viz tests render headlessly (SDL dummy driver) and skip themselves if pygame is
@@ -139,9 +149,10 @@ editable install points at this working tree, so a worktree needs `PYTHONPATH`.
 
 ```
 py -3.11 -m venv .venv
-.venv/Scripts/python -m pip install -e ".[dev]"     # engine + pytest
-.venv/Scripts/python -m pip install -e ".[viz]"     # pygame-ce, for the viewer
-.venv/Scripts/python -m pip install -e ".[photo]"   # numpy + OpenCV, board-data tools only
+.venv\Scripts\Activate.ps1            # activate, then the rest is unprefixed
+python -m pip install -e ".[dev]"     # engine + pytest
+python -m pip install -e ".[viz]"     # pygame-ce, for the viewer
+python -m pip install -e ".[photo]"   # numpy + OpenCV, board-data tools only
 ```
 
 Any of these installs the three commands. Re-run one after changing
@@ -154,12 +165,12 @@ Only needed when the map data changes. The first two need the board photo at
 rather than installed commands: they are development tools, not part of the package.
 
 ```
-.venv/Scripts/python scripts/fit_tiles.py fit             # re-fit every tile to the photo
-.venv/Scripts/python scripts/fit_tiles.py size            # measure the tile size
-.venv/Scripts/python scripts/fit_tiles.py check           # list the weakest fits
-.venv/Scripts/python scripts/fit_tiles.py overlay out.png --zoom 4
-.venv/Scripts/python scripts/build_backdrop.py NE_DIR     # rebuild the map backdrop
-.venv/Scripts/python scripts/board_checklist.py usa > docs/usa_map_checklist.md
+python scripts/fit_tiles.py fit             # re-fit every tile to the photo
+python scripts/fit_tiles.py size            # measure the tile size
+python scripts/fit_tiles.py check           # list the weakest fits
+python scripts/fit_tiles.py overlay out.png --zoom 4
+python scripts/build_backdrop.py NE_DIR     # rebuild the map backdrop
+python scripts/board_checklist.py usa > docs/usa_map_checklist.md
 ```
 
 `usa.json` is hand-verified against the physical board (`"verified": true`). Check the
