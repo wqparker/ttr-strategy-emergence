@@ -85,7 +85,8 @@ development or tuning.
     `simulate.py --record DIR`).
   - Done: milestone 2, the card-memory tracker (`memory.py`, Levels 0–2).
   - Done: milestone 3, the board renderer (`viz/geometry.py`, `viz/board_view.py`,
-    `viz/screenshot.py`, display data in `data/usa_display.json`). Checked against the
+    `viz/screenshot.py`, display data in `data/usa_display.json`, traced from the board
+    photo). Checked against the
     board photo with `--compare`; routes are within about one car width.
   - Next: milestone 4, side panels and the perspective toggle.
 - **Next: Phase 4, the PettingZoo environment.**
@@ -148,14 +149,29 @@ viewer and the overlays, and later let us review any trained agent's game move b
      (scores go in the side panels); a map backdrop of state, province and country
      borders (Natural Earth, public domain) warped so real city locations land on the
      board's cities (`scripts/build_backdrop.py`); supersampled drawing for smooth
-     edges; no two cars of different routes may overlap (enforced by a test). Crowded
-     routes use car centers measured from the photo; other route ends are trimmed back
-     slightly at busy cities.
-4. **Side panels and perspective toggle:** players (score, trains, hand size, tickets; the
-   board has no score track, so scores live here),
-   market, pile sizes, current sub-step, recent events. All-seeing view shows every
-   hand and ticket; player view shows only that player's information plus their
-   card-memory estimates.
+     edges; no two cars of different routes may overlap (enforced by a test).
+   - **Traced from the photo (final):** every city center and every one of the 309
+     tiles comes from the photo, not from estimates. City dots were detected by color.
+     Tiles were detected where their outlines are clear, and the rest found by
+     searching the photo for the best-matching outline, color and even spacing along
+     each route. Double-route lanes use the photo's measured lane spacing, and a few
+     faint gray routes were hand-traced on zoomed crops. All tiles are the same size
+     (36 x 11 px on the 1151 x 764 canvas), stored as `tiles` in `usa_display.json`.
+     The tracing scripts needed OpenCV and the local photo, so only the resulting
+     coordinates are committed.
+4. **Side panels and perspective toggle** (layout decided):
+   - **Bottom, full width: player 0**, the seat a human plays against bots. Their hand
+     of train cards by color, destination tickets, trains left, and score.
+   - **Left and right sides: the other players**, two per side, shown only for seats
+     in play. Each shows trains left, ticket count, train-card count, card counts by
+     color where known (exact in the all-seeing view; card-memory estimates in a
+     player's view), and score from routes claimed. The board has no score track, so
+     scores live here.
+   - **Top: the table.** The 5 face-up cards and the draw-deck, discard-pile and
+     ticket-deck counts.
+   - Current sub-step and recent events also need a place (to decide when building).
+   - All-seeing view shows every hand and ticket; player view shows only that
+     player's information plus their card-memory estimates.
 5. **Live and replay viewers:** play, pause, step, speed; replay scrubs forward and back
    through every sub-step. Keyboard shortcuts plus on-screen buttons.
 6. **Human play:** click a route, then choose a payment; click market cards or the deck
