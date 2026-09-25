@@ -247,6 +247,10 @@ Noticed while using the viewer; none of them blocks Phase 4.
   distribution, blocking frequency, how the methods differ on each. These belong with the
   analysis work (matplotlib/pandas out of a folder of records), not in the Pygame viewer,
   but the records already hold everything they need.
+- **In-place Replacement of Face-up pile.** When a face-up card is taken, any remaining face-up 
+  cards to the right of it are 'slid' down to the left, and new card from deck is always on the 
+  right most spot. Behavior should be taking a card from face up and that position is
+  then replaced by newly drawn card.
 
 **Library:** `pygame-ce` (decided), the actively maintained drop-in fork of Pygame
 (same `import pygame`), with Python 3.11 wheels.

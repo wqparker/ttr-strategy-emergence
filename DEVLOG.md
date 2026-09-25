@@ -16,4 +16,4 @@ fucking didnt save, need to grab and merge and not roll over
 
 # 9/25/26
 
-Testing putting in behavior input changes for Claude itself. Going for tersness, short, and clarity with brevity. Continuing work to expand render view with border tiles to display player positions and fields (caards etc) and other relevant info to game and analysis. Fairly happy with how board is for now, very serviceable, though there is a bit too much blank space and I'd want to fill and/or scale other parts up. 
+Testing putting in behavior input changes for Claude itself. Going for tersness, short, and clarity with brevity. Continuing work to expand render view with border tiles to display player positions and fields (caards etc) and other relevant info to game and analysis. Fairly happy with how board is for now, very serviceable, though there is a bit too much blank space and I'd want to fill and/or scale other parts up. Added notes as 'viewer backlog' for smaller tweaks and things, such easy to remedy further in development rather than requireing immediate attention in the moment. Rebasing some parts where I can. 
