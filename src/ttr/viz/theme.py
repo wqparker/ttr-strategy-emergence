@@ -31,6 +31,10 @@ PLAYER: Tuple[RGB, ...] = (
     (35, 35, 40),     # black
 )
 
+# Pattern drawn on a claimed space: "track", "bars", "diagonal", "cross" or
+# "plain" (the old single stripe). See board_view._train.
+TRAIN_PATTERN = "track"
+
 MAP_BG = (224, 228, 226)  # boards without a backdrop
 FRAME = (122, 30, 24)  # the board's red border
 FRAME_LINE = (196, 150, 70)  # thin gold line inside the frame

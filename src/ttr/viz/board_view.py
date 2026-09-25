@@ -9,6 +9,7 @@ drawn at the display scale (text is already anti-aliased).
 
 from __future__ import annotations
 
+import math
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import pygame
@@ -18,7 +19,7 @@ from ttr.game import Game
 from ttr.viz import theme
 from ttr.viz.geometry import BoardLayout, Car, Point, load_layout
 
-SUPERSAMPLE = 2
+SUPERSAMPLE = 3
 SERIF = "georgia,palatinolinotype,timesnewroman,serif"
 SANS = "segoeui,arial,helvetica,sans"
 
@@ -216,15 +217,93 @@ def _car(s: pygame.Surface, car: Car, k: float, fill: theme.RGB, edge: theme.RGB
     pygame.draw.polygon(s, theme.lighter(fill, 0.25), _pts(car.corners(inset=3), k), max(1, round(0.8 * k)))
 
 
-def _train(s: pygame.Surface, car: Car, k: float, color: theme.RGB) -> None:
-    """A plastic train piece: covers the space, with a dark rim and a light
-    center stripe so it stands out even on a route of the same color."""
+def _train(s: pygame.Surface, car: Car, k: float, color: theme.RGB,
+           pattern: Optional[str] = None) -> None:
+    """A claimed space: the seat's color under a contrasting pattern, so a train
+    never reads as an unclaimed tile of the same color. The pattern is drawn in
+    black or white, whichever the seat color carries (theme.TRAIN_PATTERN picks
+    the shape)."""
+    pattern = pattern or theme.TRAIN_PATTERN
     pygame.draw.polygon(s, theme.TRAIN_RIM, _pts(car.corners(inset=-1), k))
     pygame.draw.polygon(s, color, _pts(car.corners(inset=1), k))
-    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = car.corners(inset=3)
-    a = ((x0 + x3) / 2 * k, (y0 + y3) / 2 * k)
-    b = ((x1 + x2) / 2 * k, (y1 + y2) / 2 * k)
-    pygame.draw.line(s, theme.lighter(color, 0.55), a, b, max(1, round(2 * k)))
+    ink = theme.chip_text(color)
+    thin, thick = 0.8, 1.3  # canvas units, not pixels: see _local_line
+    hl, hw = car.length / 2 - 2.5, car.width / 2 - 2.0
+
+    if pattern == "plain":  # the old look: one light stripe down the middle
+        _local_line(s, car, k, theme.lighter(color, 0.55), (-hl, 0), (hl, 0), 2.0)
+        return
+    if pattern in ("track", "bars"):
+        if pattern == "track":  # two rails down the length
+            for across in (-hw * 0.62, hw * 0.62):
+                _local_line(s, car, k, ink, (-hl, across), (hl, across), thin)
+        ties = max(2, round(car.length / 5.5))
+        for i in range(ties):  # crossties between the rails
+            along = -hl + (i + 0.5) * (2 * hl / ties)
+            _local_line(s, car, k, ink, (along, -hw), (along, hw), thick)
+        return
+    if pattern == "diagonal":
+        step = 4.0
+        n = int((2 * hl + 2 * hw) / step)
+        for i in range(n + 1):  # parallel slashes, clipped to the car
+            a = -hl - hw + i * step
+            _local_line(s, car, k, ink, (a, -hw), (a + 2 * hw, hw), thick)
+        return
+    if pattern == "cross":  # a zig-zag lattice, like rails seen from above
+        step = 5.0
+        n = max(1, round(2 * hl / step))
+        for i in range(n):
+            a, b = -hl + i * (2 * hl / n), -hl + (i + 1) * (2 * hl / n)
+            _local_line(s, car, k, ink, (a, -hw), (b, hw), thick)
+            _local_line(s, car, k, ink, (a, hw), (b, -hw), thick)
+        return
+    raise ValueError(f"unknown train pattern {pattern!r}")
+
+
+def _local_line(s: pygame.Surface, car: Car, k: float, color: theme.RGB,
+                p0: Point, p1: Point, width: float) -> None:
+    """Draw a stroke given in car-local coordinates (along, across), clipped to
+    the car's rectangle and rotated into place. `width` is in canvas units, and
+    the stroke is filled as a quad rather than stroked as a line: a line's width
+    rounds to whole pixels, which made the same pattern come out heavier or
+    lighter from car to car depending on its angle and sub-pixel position."""
+    hl, hw = car.length / 2 - 1.5, car.width / 2 - 1.5
+    seg = _clip_to_box(p0, p1, hl, hw)
+    if seg is None:
+        return
+    (ax, ay), (bx, by) = seg
+    dx, dy = bx - ax, by - ay
+    span = math.hypot(dx, dy)
+    if span < 1e-9:
+        return
+    px, py = -dy / span * width / 2, dx / span * width / 2  # half-width, perpendicular
+    local = ((ax + px, ay + py), (bx + px, by + py), (bx - px, by - py), (ax - px, ay - py))
+    ux, uy = math.cos(car.angle), math.sin(car.angle)
+    cx, cy = car.center
+    pygame.draw.polygon(
+        s, color,
+        [((cx + a * ux - c * uy) * k, (cy + a * uy + c * ux) * k) for a, c in local],
+    )
+
+
+def _clip_to_box(p0: Point, p1: Point, hl: float, hw: float):
+    """Liang-Barsky clip of a segment to [-hl, hl] x [-hw, hw]. None if it misses."""
+    x0, y0 = p0
+    dx, dy = p1[0] - x0, p1[1] - y0
+    t0, t1 = 0.0, 1.0
+    for p, q in ((-dx, x0 + hl), (dx, hl - x0), (-dy, y0 + hw), (dy, hw - y0)):
+        if abs(p) < 1e-9:
+            if q < 0:
+                return None  # parallel to this edge and outside it
+            continue
+        t = q / p
+        if p < 0:
+            t0 = max(t0, t)
+        else:
+            t1 = min(t1, t)
+        if t0 > t1:
+            return None
+    return ((x0 + t0 * dx, y0 + t0 * dy), (x0 + t1 * dx, y0 + t1 * dy))
 
 
 def _label(s: pygame.Surface, text: str, center: Point, f: pygame.font.Font) -> None:

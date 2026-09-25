@@ -154,7 +154,10 @@ viewer and the overlays, and later let us review any trained agent's game move b
      (scores go in the side panels); a map backdrop of state, province and country
      borders (Natural Earth, public domain) warped so real city locations land on the
      board's cities (`scripts/build_backdrop.py`); supersampled drawing for smooth
-     edges.
+     edges; claimed spaces carry a rail-and-crosstie pattern in black or white
+     (whichever the seat color carries), so a train never reads as an unclaimed
+     tile of the same color. The shape is `theme.TRAIN_PATTERN`; `track` (chosen),
+     `bars`, `diagonal`, `cross` and `plain` (the old center stripe) all draw.
    - **Measured from the photo (final):** every city center and every one of the 309
      tiles comes from the photo, not from estimates. City dots were detected by color.
      Each tile was then fitted as a rotated rectangle (position and angle) by searching

@@ -2,6 +2,7 @@
 
 import math
 import os
+from collections import Counter
 
 import pytest
 
@@ -29,10 +30,29 @@ def pixel_near(surface, p, color, tol=40):
 
 
 def body_point(view, car):
-    """A point on the car body: off a claimed train's center stripe (±1 px) and
-    inside an unclaimed car's inner highlight line (3.5 px out)."""
+    """A point on the car body, off the center line (an unclaimed car's inner
+    highlight sits 3.5 px out, so stay inside that)."""
     dx, dy = -math.sin(car.angle) * 2.2, math.cos(car.angle) * 2.2
     return view.to_screen((car.center[0] + dx, car.center[1] + dy))
+
+
+def car_colors(surface, view, car, inset=3.0):
+    """Colors sampled on a grid inside the car. A claimed car is patterned, so
+    single points are unreliable; counts are not."""
+    ux, uy = math.cos(car.angle), math.sin(car.angle)
+    hl, hw = car.length / 2 - inset, car.width / 2 - inset
+    seen = Counter()
+    for i in range(21):
+        for j in range(7):
+            a = -hl + 2 * hl * i / 20
+            c = -hw + 2 * hw * j / 6
+            x, y = view.to_screen((car.center[0] + a * ux - c * uy, car.center[1] + a * uy + c * ux))
+            seen[surface.get_at((round(x), round(y)))[:3]] += 1
+    return seen
+
+
+def close(a, b, tol=40):
+    return all(abs(x - y) <= tol for x, y in zip(a, b))
 
 
 def test_unclaimed_and_claimed_routes_drawn():
@@ -49,8 +69,43 @@ def test_unclaimed_and_claimed_routes_drawn():
     game.step(ClaimRoute(rid))
     game.step(Pay(Color.YELLOW, 0))
     view.draw(surface, game)
-    ok, got = pixel_near(surface, body_point(view, car), theme.PLAYER[0])
-    assert ok, got
+    seen = car_colors(surface, view, car)
+    assert close(seen.most_common(1)[0][0], theme.PLAYER[0]), seen.most_common(3)
+
+
+@pytest.mark.parametrize("pattern", ["plain", "track", "bars", "diagonal", "cross"])
+def test_claimed_cars_are_patterned(pattern, monkeypatch):
+    """A claimed space carries a contrasting pattern, so it never reads as an
+    unclaimed tile of the same color (theme.TRAIN_PATTERN picks the shape)."""
+    monkeypatch.setattr(theme, "TRAIN_PATTERN", pattern)
+    game = started_game(seed=4)
+    rid = route_id(game, "Seattle", "Helena")
+    set_hand(game, 0, yellow=6)
+    game.step(ClaimRoute(rid))
+    game.step(Pay(Color.YELLOW, 0))
+    view = BoardView(game.board, scale=2.0)
+    surface = pygame.Surface(view.size)
+    view.draw(surface, game)
+
+    seen = car_colors(surface, view, view.layout.routes[rid].cars[2])
+    total = sum(seen.values())
+    seat = theme.PLAYER[0]
+    ink = theme.chip_text(seat) if pattern != "plain" else theme.lighter(seat, 0.55)
+    # Both must show: the seat color says whose it is, the ink says it is claimed.
+    # Shares, not the top color: "cross" covers about half the car.
+    assert sum(n for c, n in seen.items() if close(c, seat)) / total > 0.3, seen.most_common(3)
+    assert sum(n for c, n in seen.items() if close(c, ink, tol=30)) / total > 0.1, seen.most_common(3)
+
+
+def test_unknown_pattern_is_rejected(monkeypatch):
+    monkeypatch.setattr(theme, "TRAIN_PATTERN", "spots")
+    game = started_game(seed=4)
+    set_hand(game, 0, yellow=6)
+    game.step(ClaimRoute(route_id(game, "Seattle", "Helena")))
+    game.step(Pay(Color.YELLOW, 0))
+    view = BoardView(game.board)
+    with pytest.raises(ValueError, match="spots"):
+        view.draw(pygame.Surface(view.size), game)
 
 
 @pytest.mark.parametrize("scale", [0.6, 1.0, 1.5])
