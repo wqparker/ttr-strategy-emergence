@@ -149,7 +149,8 @@ viewer and the overlays, and later let us review any trained agent's game move b
      (scores go in the side panels); a map backdrop of state, province and country
      borders (Natural Earth, public domain) warped so real city locations land on the
      board's cities (`scripts/build_backdrop.py`); supersampled drawing for smooth
-     edges;    - **Measured from the photo (final):** every city center and every one of the 309
+     edges.
+   - **Measured from the photo (final):** every city center and every one of the 309
      tiles comes from the photo, not from estimates. City dots were detected by color.
      Each tile was then fitted as a rotated rectangle (position and angle) by searching
      around a rough first trace for the best score: route color inside the rectangle vs.
@@ -162,9 +163,9 @@ viewer and the overlays, and later let us review any trained agent's game move b
      pixels and degrees per tile, which showed as gaps and odd angles. The fit is
      `scripts/fit_tiles.py` (`fit`, `size`, `check`, `overlay`); it needs the local photo
      and the optional `[photo]` extra (numpy, OpenCV). Re-running `fit` on the committed
-     data moves no tile more than about 1 px.
-ocal photo, so only the resulting
-     coordinates are committed.
+     data moves no tile more than about 1 px. The photo itself stays out of the
+     repo (gitignored as publisher artwork), so only the resulting coordinates
+     are committed.
 4. **Side panels and perspective toggle** (layout decided):
    - **Bottom, full width: player 0**, the seat a human plays against bots. Their hand
      of train cards by color, destination tickets, trains left, and score.
