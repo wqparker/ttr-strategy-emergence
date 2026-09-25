@@ -9,7 +9,7 @@ they need no supersampling (unlike the board).
 from __future__ import annotations
 
 from collections import Counter
-from typing import Dict, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import pygame
 
@@ -132,11 +132,14 @@ def _chips_w(counts: Counter, chip_w: float, gap: float, per_row: int) -> float:
 
 
 def draw_table(s: pygame.Surface, rect: pygame.Rect, vm: ViewModel, k: float = 1.0,
-               left_bound: Optional[float] = None) -> None:
+               left_bound: Optional[float] = None) -> Dict[str, object]:
     """Top strip: the 5 face-up cards, the pile counts, the unseen pool in a
     player view, and the current sub-step. The table blocks are centered in the
     strip; the sub-step stays anchored to the right end, and `left_bound` keeps
-    the blocks clear of the key legend."""
+    the blocks clear of the key legend.
+
+    Returns where the face-up cards, the draw deck and the ticket deck landed, so
+    a human player can click them."""
     _box(s, rect, theme.PANEL_BG)
     pad = 10 * k
     cw, ch = 30 * k, 42 * k
@@ -161,14 +164,19 @@ def draw_table(s: pygame.Surface, rect: pygame.Rect, vm: ViewModel, k: float = 1
             min(x, rect.right - _substep_w(vm, k) - 12 * k - total))
 
     text(s, "FACE UP", (x, rect.top + pad), 9 * k, theme.PANEL_LABEL, bold=True)
+    market: List[pygame.Rect] = []
     for i, color in enumerate(vm.table.market):
-        card_chip(s, pygame.Rect(round(x + i * (cw + 5 * k)), round(top), round(cw), round(ch)), color)
+        slot = pygame.Rect(round(x + i * (cw + 5 * k)), round(top), round(cw), round(ch))
+        card_chip(s, slot, color)
+        market.append(slot)
     x += cards_w + gap
 
+    piles_at: Dict[str, pygame.Rect] = {}
     for i, (name, n) in enumerate(piles):
         cx = x + i * 52 * k
         text(s, name.upper(), (cx, rect.top + pad), 9 * k, theme.PANEL_LABEL, bold=True)
-        text(s, str(n), (cx, top + 4 * k), 20 * k, theme.PANEL_TEXT, bold=True)
+        box = text(s, str(n), (cx, top + 4 * k), 20 * k, theme.PANEL_TEXT, bold=True)
+        piles_at[name] = box.inflate(round(10 * k), round(10 * k))
     x += piles_w + gap
 
     if vm.table.unseen is not None:
@@ -176,6 +184,7 @@ def draw_table(s: pygame.Surface, rect: pygame.Rect, vm: ViewModel, k: float = 1
         _count_row(s, (x, top + 6 * k), vm.table.unseen, k, 28 * k, 17 * k, 3 * k)
 
     _substep(s, rect, vm, k)
+    return {"market": market, "deck": piles_at["deck"], "tickets": piles_at["tickets"]}
 
 
 def _substep_w(vm: ViewModel, k: float) -> float:
@@ -430,6 +439,65 @@ def _narrow_body(s, facts: SeatFacts, pos, k: float, codes) -> None:
         return
     for i, t in enumerate(facts.tickets or ()):
         _ticket_line(s, t, (x, y + 14 * k + i * 15 * k), k, codes, 11 * k, 84 * k)
+
+
+# ------------------------------------------------------------------ choices
+
+
+def draw_choices(s: pygame.Surface, rect: pygame.Rect, title: str, entries, k: float = 1.0):
+    """The moves a human seat may make right now, as clickable chips. `entries`
+    are (label, selected, enabled) triples; returns a rect per entry."""
+    text(s, title, (rect.left, rect.top), 9 * k, theme.PANEL_LABEL, bold=True)
+    out: List[pygame.Rect] = []
+    w, h, gap = 118 * k, 20 * k, 4 * k
+    per_col = max(1, int((rect.height - 14 * k) // (h + gap)))
+    for i, (label, selected, enabled) in enumerate(entries):
+        col, row = i // per_col, i % per_col
+        box = pygame.Rect(round(rect.left + col * (w + gap)), round(rect.top + 14 * k + row * (h + gap)),
+                          round(w), round(h))
+        edge = theme.HIGHLIGHT if selected else (theme.PANEL_EDGE if enabled else theme.PANEL_SLOT)
+        body = theme.PANEL_BG if selected else theme.PANEL_SLOT
+        pygame.draw.rect(s, body, box, border_radius=max(2, round(3 * k)))
+        pygame.draw.rect(s, edge, box, max(1, round(k)), border_radius=max(2, round(3 * k)))
+        color = theme.PANEL_TEXT if enabled else theme.PANEL_LABEL
+        img = font(11 * k, bold=selected).render(label, True, theme.HIGHLIGHT if selected else color)
+        s.blit(img, img.get_rect(midleft=(box.left + round(7 * k), box.centery)))
+        out.append(box)
+    return out
+
+
+def draw_result(s: pygame.Surface, area: pygame.Rect, result, names=None, k: float = 1.0) -> None:
+    """The final scoreboard, over the board: winner first, then every seat's
+    points. Same columns as render.render_result in the terminal."""
+    cols = ("routes", "tickets", "done/fail", "longest", "bonus", "total")
+    rows = len(result.players)
+    w, h = 500 * k, (74 + 26 * rows) * k
+    box = pygame.Rect(round(area.centerx - w / 2), round(area.centery - h / 2), round(w), round(h))
+    pygame.draw.rect(s, theme.PANEL_BG, box, border_radius=round(8 * k))
+    pygame.draw.rect(s, theme.HIGHLIGHT, box, max(2, round(2 * k)), border_radius=round(8 * k))
+
+    won = ", ".join(f"P{w_}" for w_ in result.winners)
+    title = f"{won} wins" if len(result.winners) == 1 else f"shared win: {won}"
+    text(s, title + (" (turn limit)" if result.truncated else ""),
+         (box.left + 16 * k, box.top + 12 * k), 17 * k, theme.HIGHLIGHT, bold=True)
+
+    left, top = box.left + 16 * k, box.top + 44 * k
+    for i, name in enumerate(cols):
+        text(s, name.upper(), (left + 96 * k + i * 64 * k, top), 9 * k, theme.PANEL_LABEL, bold=True)
+    for seat, r in enumerate(result.players):
+        y = top + 16 * k + seat * 26 * k
+        swatch = pygame.Rect(round(left), round(y + 3 * k), round(10 * k), round(10 * k))
+        pygame.draw.rect(s, theme.seat_color(seat), swatch, border_radius=max(1, round(2 * k)))
+        pygame.draw.rect(s, theme.PANEL_DIM, swatch, max(1, round(k)), border_radius=max(1, round(2 * k)))
+        label = f"P{seat}" + (f" {names[seat]}" if names and names[seat] else "")
+        text(s, label, (left + 15 * k, y), 12 * k, theme.PANEL_TEXT, bold=seat in result.winners)
+        values = (str(r.route_points), f"{r.ticket_points:+d}",
+                  f"{r.tickets_completed}/{r.tickets_failed}", str(r.longest_path),
+                  "+10" if r.longest_path_bonus else "–", str(r.total))
+        for i, v in enumerate(values):
+            text(s, v, (left + 96 * k + i * 64 * k, y), 12 * k,
+                 theme.HIGHLIGHT if i == len(values) - 1 else theme.PANEL_TEXT,
+                 bold=(i == len(values) - 1))
 
 
 # -------------------------------------------------------------------- ticker

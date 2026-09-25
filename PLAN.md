@@ -98,7 +98,13 @@ development or tuning.
     than a re-simulation; a live game produces the next state on demand by cloning
     the last one. Keys and on-screen buttons for play/pause, step, speed, perspective
     and jumping to either end, with the key legend in the table strip's top-left.
-  - Next: milestone 6, human play (click a route, then choose the payment).
+  - Done: milestone 6, human play (`HumanControl` in `viz/app.py`, `--human SEAT`).
+    Click a route then a payment chip, click a face-up card or either deck, tick
+    tickets and confirm. Every chip comes from `game.legal_actions()`, so the UI
+    cannot offer an illegal move; a click on anything else does nothing. Acting
+    after stepping back forks the timeline, dropping the states that followed.
+    The end-of-game scoreboard (viewer backlog) draws over the board.
+  - Next: milestone 7, analysis overlays over a folder of records.
 - **Next: Phase 4, the PettingZoo environment.**
 
 ## Roadmap
@@ -210,6 +216,17 @@ viewer and the overlays, and later let us review any trained agent's game move b
      here has no geometric shapes, and a missing glyph draws a box.
 6. **Human play:** click a route, then choose a payment; click market cards or the deck
    to draw; tick tickets to keep. The UI only offers `game.legal_actions()`.
+   - **Built as:** `HumanControl` in `viz/app.py`, given the seats a person plays
+     (`--human 0`). A live timeline produces nothing when a human seat is to act, so it
+     stalls there until a click supplies the move; bots play themselves as before.
+   - Moves with no board target (payments, ticket keeps, draw tickets, pass) are chips in
+     the bottom panel's right side, which also answers what to do with that empty space.
+     Keeping tickets is the one sub-step with no single click: chips toggle a selection
+     and the last chip confirms it, enabled only when the selection is legal.
+   - **Decided:** acting after stepping back forks. The states after the current one are
+     dropped, as an undo would, rather than refusing the move.
+   - Backing out of a claim is step-back (`,`), not a cancel button: the engine has no
+     action for it, since `CHOOSE_PAYMENT` only offers payments.
 7. **Analysis overlays:** from a folder of records, color routes by a statistic (claim
    rate, claim rate per agent, average turn claimed, how often contested).
 8. **Retire the ASCII board view** once the viewer covers it. The `rich` text log stays
@@ -229,19 +246,17 @@ Noticed while using the viewer; none of them blocks Phase 4.
   as fully outlined, while blue, green and black nearly lose their edge against the dark
   panel. Give every chip the same edge treatment (one fixed outline color, or a light rim
   like the seat swatches) so the five face-up cards look like one set.
-- **The bottom panel's empty space.** Centering seat 0's fields left a wide gap on the
-  right (the left side now holds the viewer's buttons). Candidates: the current legal
-  moves for a human player (Phase 3 milestone 6), a longest-path / ticket-progress
-  summary, the last few actions in full rather than the one-line ticker, or simply a
-  larger hand and ticket display.
+- **The bottom panel's empty space.** *(Partly done, milestone 6:* the right side now
+  holds a human seat's move chips.*)* It is still empty while a bot is to act. Candidates
+  for that case: a longest-path / ticket-progress summary, the last few actions in full
+  rather than the one-line ticker, or a larger hand and ticket display.
 - **Better ticket display.** Tickets are city codes plus points (`MTL–ATL 9`). Either
   write the full city names, or draw them as small ticket cards with the route drawn on
   them — closer to the physical card, and easier to read at a glance. Points are the
   weakest part of the current row: they look like a card count.
-- **End-of-game results popup.** When the game ends the viewer just stops. It should
-  overlay the scoreboard: the winner, and for every seat the route points, ticket points
-  with completed/failed counts, the longest-path bonus and the total. `GameResult` already
-  carries all of it, and `render.render_result` is the same table in text.
+- **End-of-game results popup.** *(Done, milestone 6.)* `panels.draw_result` overlays the
+  scoreboard on the board: winner, then every seat's route points, ticket points with
+  completed/failed counts, longest path, bonus and total.
 - **Charts for the strategy analysis (Phase 6).** Beyond the per-route overlays in
   milestone 7: claim rate over time, which tickets get completed and when, route length
   distribution, blocking frequency, how the methods differ on each. These belong with the

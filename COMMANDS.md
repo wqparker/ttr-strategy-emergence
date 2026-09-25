@@ -13,9 +13,16 @@ Roadmap and reasoning live in [PLAN.md](PLAN.md).
 ```
 .venv/Scripts/ttr-view                              # live: greedy vs random
 .venv/Scripts/ttr-view --agents greedy greedy greedy random
+.venv/Scripts/ttr-view --human 0                    # play seat 0 yourself
 .venv/Scripts/ttr-view --record runs/records/g.json # replay a saved game
 .venv/Scripts/ttr-view --record g.json --perspective 0 --paused
 ```
+
+**Playing a seat** (`--human SEAT`): the bots play until it is your turn, then the
+viewer waits. Click a route to claim it and a payment chip to pay; click a face-up
+card or the deck to draw; click the ticket count to draw tickets, then tick the ones
+to keep and confirm. Only legal moves are offered, so a click that would break a rule
+does nothing. To back out of a claim, step back with `,`.
 
 | Key | Does |
 | --- | --- |

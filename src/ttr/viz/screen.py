@@ -74,6 +74,8 @@ class Screen:
         self.board_view = BoardView(board, scale=scale, layout=layout)
         self.codes = code_map(board)
         self._num_players = 2
+        # Where the last draw put the things a human can click.
+        self.hits: Dict[str, object] = {}
 
     # -------------------------------------------------------------- geometry
 
@@ -140,6 +142,29 @@ class Screen:
                                   top + row * (BUTTON_H + BUTTON_GAP), BUTTON_W, BUTTON_H))
         return out
 
+    @property
+    def choices_rect(self) -> pygame.Rect:
+        """The bottom panel's right side, where a human seat's moves are offered."""
+        r = self.bottom_rect
+        left = r.left + r.width * 0.62
+        return pygame.Rect(round(left), round(r.top + 12 * self.scale),
+                           round(r.right - left - 12 * self.scale), round(r.height - 20 * self.scale))
+
+    def hit(self, pos: Tuple[float, float]) -> Optional[Tuple[str, int]]:
+        """What a click landed on in the panels: ("market", slot), ("deck", 0),
+        ("tickets", 0) or ("choice", index). None if it hit nothing clickable."""
+        for i, rect in enumerate(self.hits.get("market") or ()):
+            if rect.collidepoint(pos):
+                return ("market", i)
+        for name in ("deck", "tickets"):
+            rect = self.hits.get(name)
+            if rect is not None and rect.collidepoint(pos):
+                return (name, 0)
+        for i, rect in enumerate(self.hits.get("choices") or ()):
+            if rect.collidepoint(pos):
+                return ("choice", i)
+        return None
+
     def button_at(self, pos: Tuple[float, float], buttons) -> Optional[str]:
         """Which on-screen control a click landed on, if any."""
         for name, _, rect in buttons:
@@ -183,6 +208,9 @@ class Screen:
         controls: Optional[Sequence[Tuple[str, str]]] = None,
         buttons: Sequence[Tuple[str, str, pygame.Rect]] = (),
         active: Sequence[str] = (),
+        choices: Sequence[Tuple[str, bool, bool]] = (),
+        choices_title: str = "",
+        result: object = None,
     ) -> ViewModel:
         """Draw everything and return the view model that was drawn."""
         self._num_players = game.num_players
@@ -199,8 +227,8 @@ class Screen:
         )
         r = self.table_rect
         legend = panels.controls_layout(controls or (), r, k=k)[3]
-        panels.draw_table(target, r, vm, k=k,
-                          left_bound=r.left + 8 * k + legend + (24 * k if legend else 2 * k))
+        self.hits = panels.draw_table(target, r, vm, k=k,
+                                      left_bound=r.left + 8 * k + legend + (24 * k if legend else 2 * k))
         if controls:
             panels.draw_controls(target, r, controls, k=k)
         panels.draw_ticker(target, self.ticker_rect, vm.events, k=k)
@@ -209,6 +237,12 @@ class Screen:
             panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0), codes=self.codes)
         if buttons:
             panels.draw_buttons(target, buttons, k=k, active=active)
+        self.hits["choices"] = (
+            panels.draw_choices(target, self.choices_rect, choices_title, choices, k=k) if choices else []
+        )
+        if result is not None:
+            panels.draw_result(target, pygame.Rect(self.board_origin, self.board_view.size),
+                               result, self.names, k=k)
         return vm
 
     def render(self, game: Game, **kw) -> Tuple[pygame.Surface, ViewModel]:
