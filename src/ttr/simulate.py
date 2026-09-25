@@ -15,7 +15,6 @@ import random
 import statistics
 import sys
 import time
-from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence

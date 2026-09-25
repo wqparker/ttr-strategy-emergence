@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Tuple
 
+import pygame
+
 from ttr.cards import Color
 
 RGB = Tuple[int, int, int]
@@ -74,6 +76,33 @@ def chip_text(c: RGB) -> RGB:
     """Black or white text, whichever reads on a chip of this color."""
     luma = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
     return (20, 20, 24) if luma > 140 else (250, 250, 250)
+
+
+def seat_color(seat: int) -> RGB:
+    """The seat's train color, wrapping if a board ever seats more than five."""
+    return PLAYER[seat % len(PLAYER)]
+
+
+# ------------------------------------------------------------------- fonts
+
+SERIF = "georgia,palatinolinotype,timesnewroman,serif"
+SANS = "segoeui,arial,helvetica,sans"
+_FONTS: Dict[Tuple[int, bool, bool], pygame.font.Font] = {}
+
+
+def font(size: float, bold: bool = False, serif: bool = False) -> pygame.font.Font:
+    """A cached system font. Fonts made before a `pygame.quit()` are dead, so a
+    cache hit is probed and the whole cache dropped if pygame was restarted."""
+    key = (max(6, round(size)), bold, serif)
+    cached = _FONTS.get(key)
+    if cached is not None:
+        try:
+            cached.get_height()
+            return cached
+        except pygame.error:
+            _FONTS.clear()
+    _FONTS[key] = pygame.font.SysFont(SERIF if serif else SANS, key[0], bold=bold)
+    return _FONTS[key]
 
 
 def darker(c: RGB, f: float = 0.6) -> RGB:

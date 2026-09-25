@@ -28,7 +28,7 @@ from ttr.board import load_board  # noqa: E402
 from ttr.game import Game  # noqa: E402
 from ttr.record import GameRecord  # noqa: E402
 from ttr.viz.board_view import BoardView  # noqa: E402
-from ttr.viz.perspective import Perspective  # noqa: E402
+from ttr.viz.perspective import Perspective, parse_viewer  # noqa: E402
 from ttr.viz.screen import Screen  # noqa: E402
 
 PHOTO = Path(__file__).resolve().parents[3] / "docs" / "ticket-to-ride_usa_map.jpg"
@@ -48,20 +48,12 @@ def demo_game(board_name: str, num_players: int, seed: int, turns: int,
 
 
 def render_board(game: Game, scale: float) -> pygame.Surface:
-    view = BoardView(game.board, scale=scale)
-    surface = pygame.Surface(view.size)
-    view.draw(surface, game)
-    return surface
+    return BoardView(game.board, scale=scale).render(game)
 
 
 def render_screen(game: Game, scale: float, viewer: Optional[int], level: int) -> pygame.Surface:
     screen = Screen(game.board, scale=scale, perspective=Perspective(viewer, level))
-    surface, _ = screen.render(game)
-    return surface
-
-
-def _viewer(raw: str) -> Optional[int]:
-    return None if raw in ("all", "none") else int(raw)
+    return screen.render(game)[0]
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -93,7 +85,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.compare or args.board_only:
         surface = render_board(game, 1.0 if args.compare else args.scale)
     else:
-        surface = render_screen(game, args.scale, _viewer(args.perspective), args.memory_level)
+        surface = render_screen(game, args.scale, parse_viewer(args.perspective), args.memory_level)
 
     if args.compare:
         if not PHOTO.exists():

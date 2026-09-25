@@ -78,8 +78,7 @@ class CardMemory:
             return result
         for p, known in self._known.items():
             result.known[p] = Counter(known)
-            hand_size = sum(game.players[p].hand.values())  # public (§9 #13)
-            result.unknown[p] = hand_size - sum(known.values())
+            result.unknown[p] = game.players[p].hand_size - sum(known.values())
         if self.level >= 2:
             unseen = Counter(FULL_DECK)
             unseen.subtract(game.players[self.viewer].hand)

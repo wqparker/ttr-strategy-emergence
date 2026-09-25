@@ -51,6 +51,11 @@ CONTROLS = (
 BUTTON_W, BUTTON_H, BUTTON_GAP = 46.0, 22.0, 5.0
 
 
+def seats_in_play(num_players: int) -> List[int]:
+    """Seat order as the panels lay them out: bottom, then left, then right."""
+    return [0] + [s for s in LEFT_SEATS + RIGHT_SEATS if s < num_players]
+
+
 class Screen:
     """Composes a `BoardView` with the panels. Holds the perspective; the live
     and replay viewers (milestone 5) drive it."""
@@ -112,14 +117,12 @@ class Screen:
     def seat_rects(self, num_players: int) -> Dict[int, pygame.Rect]:
         """Seat 0's bottom panel plus a slot for every other seat in play."""
         rects = {0: self.bottom_rect}
-        bh = self.board_view.size[1] / self.scale
-        slot_h = (bh - GAP) / 2 - GAP
-        w, _ = (v / self.scale for v in self.size)
-        for seats, x in ((LEFT_SEATS, GAP), (RIGHT_SEATS, w - SIDE_W + GAP)):
-            for row, seat in enumerate(seats):
-                if seat < num_players:
-                    y = TOP_H + GAP + row * (slot_h + GAP)
-                    rects[seat] = self._rect(x, y, SIDE_W - 2 * GAP, slot_h)
+        slot_h = (self.board_view.size[1] / self.scale - GAP) / 2 - GAP
+        w = self.size[0] / self.scale
+        for seat in seats_in_play(num_players)[1:]:
+            x = GAP if seat in LEFT_SEATS else w - SIDE_W + GAP
+            row = (LEFT_SEATS if seat in LEFT_SEATS else RIGHT_SEATS).index(seat)
+            rects[seat] = self._rect(x, TOP_H + GAP + row * (slot_h + GAP), SIDE_W - 2 * GAP, slot_h)
         return rects
 
     def button_rects(self, names: Sequence[str]) -> List[pygame.Rect]:
@@ -213,8 +216,3 @@ class Screen:
         surface = pygame.Surface(self.size)
         vm = self.draw(surface, game, **kw)
         return surface, vm
-
-
-def seats_in_play(num_players: int) -> List[int]:
-    """Seat order as the panels lay them out: bottom, then left, then right."""
-    return [0] + [s for s in LEFT_SEATS + RIGHT_SEATS if s < num_players]

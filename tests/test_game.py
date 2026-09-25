@@ -2,7 +2,7 @@ import random
 
 import pytest
 
-from helpers import play_random, route_id, set_hand, set_market, started_game, total_cards
+from helpers import empty_the_piles, play_random, route_id, set_hand, set_market, started_game, total_cards
 from ttr.actions import ClaimRoute, DrawBlind, DrawFaceUp, DrawTickets, KeepTickets, Pass, Pay
 from ttr.board import load_board
 from ttr.cards import Color
@@ -129,20 +129,14 @@ def test_market_reset_guard_when_legal_market_impossible():  # §9 #2 hard guard
     game = started_game()
     # Put every card in player 1's hand except 3 Locos + 2 others in the market.
     set_market(game, L, L, L, Color.RED, Color.BLUE)
-    hand = game.players[1].hand
-    for card in game.deck + game.discard:
-        hand[card] += 1
-    game.deck, game.discard = [], []
+    empty_the_piles(game)
     game._check_market_reset()  # must return, not loop forever
     assert game.market.count(L) == 3
 
 
 def test_empty_deck_and_discard_disables_blind_draw():  # §4
     game = started_game()
-    hand = game.players[1].hand
-    for card in game.deck + game.discard:
-        hand[card] += 1
-    game.deck, game.discard = [], []
+    empty_the_piles(game)
     actions = game.legal_actions()
     assert DrawBlind() not in actions
     assert any(isinstance(a, DrawFaceUp) for a in actions)
@@ -151,10 +145,7 @@ def test_empty_deck_and_discard_disables_blind_draw():  # §4
 def test_turn_ends_after_one_card_if_nothing_left():  # §9 #4
     game = started_game()
     set_market(game, Color.RED)
-    hand = game.players[1].hand
-    for card in game.deck + game.discard:
-        hand[card] += 1
-    game.deck, game.discard = [], []
+    empty_the_piles(game)
     game.step(DrawFaceUp(Color.RED))
     assert game.current_player == 1
 
@@ -283,10 +274,7 @@ def test_stuck_market_resets_once_claim_payment_adds_discards():  # §9 #2 guard
     set_market(game, L, L, L, Color.RED, Color.BLUE)
     rid = route_id(game, "Montreal", "New York")  # blue, 3
     set_hand(game, 0, blue=3)
-    hand1 = game.players[1].hand
-    for card in game.deck + game.discard:
-        hand1[card] += 1
-    game.deck, game.discard = [], []
+    empty_the_piles(game)
     game._check_market_reset()
     assert game.market.count(L) == 3
     game.step(ClaimRoute(rid))
@@ -299,10 +287,7 @@ def test_short_market_refills_after_claim_payment():  # §9 #3, regression
     game = started_game()
     set_market(game, Color.RED, Color.GREEN)
     set_hand(game, 0, blue=3)
-    hand1 = game.players[1].hand
-    for card in game.deck + game.discard:
-        hand1[card] += 1
-    game.deck, game.discard = [], []
+    empty_the_piles(game)
     game.step(ClaimRoute(route_id(game, "Montreal", "New York")))
     game.step(Pay(Color.BLUE, 0))
     assert len(game.market) == 5

@@ -17,15 +17,10 @@ import pygame
 from ttr.board import ROUTE_POINTS, Board
 from ttr.game import Game
 from ttr.viz import theme
+from ttr.viz.theme import font
 from ttr.viz.geometry import BoardLayout, Car, Point, load_layout
 
 SUPERSAMPLE = 3
-SERIF = "georgia,palatinolinotype,timesnewroman,serif"
-SANS = "segoeui,arial,helvetica,sans"
-
-
-def font(size: int, bold: bool = False, serif: bool = False) -> pygame.font.Font:
-    return pygame.font.SysFont(SERIF if serif else SANS, max(6, size), bold=bold)
 
 
 class BoardView:
@@ -90,6 +85,12 @@ class BoardView:
         if self._overlay is not None:
             target.blit(self._overlay, origin)
         target.blit(self._labels, origin)
+
+    def render(self, game: Optional[Game] = None, **kw) -> pygame.Surface:
+        """A fresh surface with the board drawn on it (screenshots, tests)."""
+        surface = pygame.Surface(self.size)
+        self.draw(surface, game, **kw)
+        return surface
 
     def _supersampled(self, paint, alpha: bool) -> pygame.Surface:
         k = self.scale * SUPERSAMPLE
@@ -172,7 +173,7 @@ class BoardView:
             for car in self.layout.routes[rid].cars:
                 _car(s, car, k, color, theme.darker(color, 0.5))
         for rid, owner in owners:
-            color = theme.PLAYER[owner % len(theme.PLAYER)]
+            color = theme.seat_color(owner)
             for car in self.layout.routes[rid].cars:
                 _train(s, car, k, color)
         for rid in highlight_routes:

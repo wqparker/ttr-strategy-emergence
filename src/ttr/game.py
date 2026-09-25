@@ -60,6 +60,11 @@ class PlayerState:
     route_points: int = 0  # scored immediately on claiming (§5)
     pending_tickets: List[int] = field(default_factory=list)  # drawn, not yet kept/returned
 
+    @property
+    def hand_size(self) -> int:
+        """Cards held. Public information (RULES.md §9 #13), unlike the cards."""
+        return sum(self.hand.values())
+
 
 @dataclass
 class Event:

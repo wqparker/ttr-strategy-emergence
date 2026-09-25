@@ -3,7 +3,7 @@ checking invariants after every step. Slower than the unit tests (~1 min).
 
     .venv/Scripts/python scripts/stress.py
 """
-import random, sys, time
+import time
 from ttr import Game, load_board, Color
 from ttr.agents import GreedyAgent, RandomAgent
 L = Color.LOCOMOTIVE

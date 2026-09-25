@@ -5,7 +5,6 @@ from importlib import resources
 import pytest
 
 from ttr.board import load_board
-from ttr.cards import Color
 from ttr.viz.geometry import load_layout
 
 from helpers import route_id, started_game

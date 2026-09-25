@@ -10,7 +10,7 @@ from rich.table import Table
 from rich.text import Text
 
 from ttr.ascii_map import render_map
-from ttr.cards import TRAIN_COLORS, Color
+from ttr.cards import ALL_COLORS, Color
 from ttr.game import Event, Game, GameResult
 from ttr.scoring import connected
 
@@ -51,7 +51,7 @@ def card_text(color: Optional[Color], count: int = 1) -> Text:
 
 def hand_text(hand) -> Text:
     out = Text()
-    for color in TRAIN_COLORS + [Color.LOCOMOTIVE]:
+    for color in ALL_COLORS:
         if hand[color]:
             out.append_text(card_text(color, hand[color]))
             out.append(" ")
@@ -81,7 +81,7 @@ def render_game(game: Game, reveal: bool = True) -> Group:
             Text(f"P{i}", style=SEAT_STYLE[i]),
             str(p.trains),
             str(p.route_points),
-            str(sum(p.hand.values())),
+            str(p.hand_size),
             str(len(p.tickets)),
             hand_text(p.hand) if reveal else Text("hidden", style="dim"),
         )
@@ -183,7 +183,7 @@ def _player_panel(game: Game, i: int, name: str, reveal: bool) -> Panel:
     body.append(f"trains {p.trains:>2}   points {p.route_points}\n")
     body.append(f"cards {sum(p.hand.values())}   tickets {len(p.tickets)}\n\n")
     if reveal:
-        for color in TRAIN_COLORS + [Color.LOCOMOTIVE]:
+        for color in ALL_COLORS:
             if p.hand[color]:
                 body.append_text(chip(color, p.hand[color]))
                 body.append("\n")

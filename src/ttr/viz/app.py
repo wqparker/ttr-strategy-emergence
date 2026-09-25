@@ -27,7 +27,7 @@ from ttr.agents import Agent
 from ttr.board import Board, load_board
 from ttr.game import Game
 from ttr.record import GameRecord
-from ttr.viz.perspective import Perspective
+from ttr.viz.perspective import Perspective, parse_viewer
 from ttr.viz.screen import CONTROLS, Screen
 
 # Seconds between sub-steps, slowest first. Index 2 is the default pace.
@@ -228,7 +228,7 @@ def fit_scale(size: Tuple[int, int], want: Optional[float] = None) -> float:
     return max(0.5, min(1.6, room[0] / size[0], room[1] / size[1]))
 
 
-def build(args: argparse.Namespace) -> Tuple[Timeline, Screen, Optional[Sequence[str]]]:
+def build(args: argparse.Namespace) -> Tuple[Timeline, Screen]:
     from ttr.simulate import AGENTS  # local: keeps the viewer out of the engine's import path
 
     if args.record:
@@ -242,9 +242,9 @@ def build(args: argparse.Namespace) -> Tuple[Timeline, Screen, Optional[Sequence
         game = Game(board, num_players=len(args.agents), seed=args.seed, max_turns=args.max_turns)
         timeline = live_timeline(game, agents)
         names = list(args.agents)
-    viewer = None if args.perspective in ("all", "none") else int(args.perspective)
-    screen = Screen(board, names=names, perspective=Perspective(viewer, args.memory_level))
-    return timeline, screen, names
+    screen = Screen(board, names=names,
+                    perspective=Perspective(parse_viewer(args.perspective), args.memory_level))
+    return timeline, screen
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -263,7 +263,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     pygame.init()
     pygame.display.set_caption("Ticket to Ride" + (" — replay" if args.record else " — live"))
-    timeline, screen, _ = build(args)
+    timeline, screen = build(args)
     screen.set_scale(fit_scale(screen.size, args.scale))
     surface = pygame.display.set_mode(screen.size)
     viewer = Viewer(timeline, screen, playing=not args.paused)

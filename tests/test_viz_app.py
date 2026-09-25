@@ -1,10 +1,7 @@
 """The live and replay viewers (ttr.viz.app), driven without a window."""
 
-import os
-
 import pytest
 
-os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 pygame = pytest.importorskip("pygame")
 
 from ttr.agents import GreedyAgent, RandomAgent  # noqa: E402
@@ -17,13 +14,6 @@ from ttr.viz.app import (  # noqa: E402
 )
 from ttr.viz.perspective import Perspective  # noqa: E402
 from ttr.viz.screen import Screen  # noqa: E402
-
-
-@pytest.fixture(scope="module", autouse=True)
-def pg():
-    pygame.init()
-    yield
-    pygame.quit()
 
 
 @pytest.fixture(scope="module")

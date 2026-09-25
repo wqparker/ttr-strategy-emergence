@@ -1,10 +1,7 @@
 """Headless checks of the composed viewer: board plus panels (SDL dummy driver)."""
 
-import os
-
 import pytest
 
-os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 pygame = pytest.importorskip("pygame")
 
 from ttr.viz import theme  # noqa: E402
@@ -12,13 +9,6 @@ from ttr.viz.perspective import Perspective  # noqa: E402
 from ttr.viz.screen import BOTTOM_H, SIDE_W, TICKER_H, TOP_H, Screen, seats_in_play  # noqa: E402
 
 from helpers import started_game  # noqa: E402
-
-
-@pytest.fixture(scope="module", autouse=True)
-def pg():
-    pygame.init()
-    yield
-    pygame.quit()
 
 
 def test_size_is_board_plus_panels():

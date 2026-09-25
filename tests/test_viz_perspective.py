@@ -15,6 +15,15 @@ from ttr.viz.perspective import Perspective, code_map
 from helpers import play_random, route_id, set_hand, set_market, started_game
 
 
+def two_reds_taken(seed: int = 5):
+    """P0 takes two face-up reds, which P1 may count (RULES.md §9 #17)."""
+    game = started_game(seed=seed)
+    set_market(game, Color.RED, Color.RED, Color.BLUE, Color.GREEN, Color.WHITE)
+    game.step(DrawFaceUp(Color.RED))
+    game.step(DrawFaceUp(Color.RED))
+    return game
+
+
 def test_all_seeing_reveals_every_hand_and_ticket():
     game = started_game(seed=3)
     vm = Perspective().view(game)
@@ -42,11 +51,7 @@ def test_player_view_hides_opponents_but_keeps_public_facts():
 
 
 def test_player_view_matches_card_memory():
-    game = started_game(seed=5)
-    set_market(game, Color.RED, Color.RED, Color.BLUE, Color.GREEN, Color.WHITE)
-    game.step(DrawFaceUp(Color.RED))  # P0 takes two reds, seen by P1
-    game.step(DrawFaceUp(Color.RED))
-
+    game = two_reds_taken()
     vm = Perspective(1).view(game)
     truth = CardMemory.at(game, 1, 2).view(game)
     assert vm.seats[0].known == Counter({Color.RED: 2}) == truth.known[0]
@@ -59,10 +64,7 @@ def test_player_view_matches_card_memory():
 
 @pytest.mark.parametrize("level", [0, 1, 2])
 def test_memory_levels(level):
-    game = started_game(seed=5)
-    set_market(game, Color.RED, Color.RED, Color.BLUE, Color.GREEN, Color.WHITE)
-    game.step(DrawFaceUp(Color.RED))
-    game.step(DrawFaceUp(Color.RED))
+    game = two_reds_taken()
     vm = Perspective(1, level).view(game)
     them = vm.seats[0]
     assert them.hand is None  # hidden at every level
@@ -74,10 +76,7 @@ def test_memory_levels(level):
 
 
 def test_known_cards_drop_when_spent():
-    game = started_game(seed=5)
-    set_market(game, Color.RED, Color.RED, Color.BLUE, Color.GREEN, Color.WHITE)
-    game.step(DrawFaceUp(Color.RED))
-    game.step(DrawFaceUp(Color.RED))
+    game = two_reds_taken()
     perspective = Perspective(1)
     assert perspective.view(game).seats[0].known == Counter({Color.RED: 2})
 

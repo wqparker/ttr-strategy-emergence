@@ -13,29 +13,10 @@ from typing import Dict, Optional, Sequence, Tuple
 
 import pygame
 
-from ttr.cards import TRAIN_COLORS, Color
+from ttr.cards import ALL_COLORS, Color
 from ttr.viz import theme
 from ttr.viz.perspective import SeatFacts, TicketFact, ViewModel
-
-HAND_ORDER: Tuple[Color, ...] = tuple(TRAIN_COLORS) + (Color.LOCOMOTIVE,)
-SANS = "segoeui,arial,helvetica,sans"
-
-_FONTS: Dict[Tuple[int, bool], pygame.font.Font] = {}
-
-
-def font(size: float, bold: bool = False) -> pygame.font.Font:
-    """Cached system font. Fonts made before a `pygame.quit()` are dead, so a
-    cache hit is probed and the whole cache dropped if pygame was restarted."""
-    key = (max(6, round(size)), bold)
-    cached = _FONTS.get(key)
-    if cached is not None:
-        try:
-            cached.get_height()
-            return cached
-        except pygame.error:
-            _FONTS.clear()
-    _FONTS[key] = pygame.font.SysFont(SANS, key[0], bold=bold)
-    return _FONTS[key]
+from ttr.viz.theme import font
 
 
 # --------------------------------------------------------------- primitives
@@ -121,7 +102,7 @@ def _count_row(
     """Chips for every color with a nonzero count. Returns the bottom y."""
     x, y = pos
     i = 0
-    for color in HAND_ORDER:
+    for color in ALL_COLORS:
         n = counts.get(color, 0)
         if not n:
             continue
@@ -143,7 +124,7 @@ def _text_w(body: str, size: float, bold: bool = False) -> float:
 
 
 def _chips_w(counts: Counter, chip_w: float, gap: float, per_row: int) -> float:
-    n = min(per_row, sum(1 for c in HAND_ORDER if counts.get(c, 0)))
+    n = min(per_row, sum(1 for c in ALL_COLORS if counts.get(c, 0)))
     return n * chip_w + max(0, n - 1) * gap if n else 0.0
 
 
@@ -292,7 +273,7 @@ def draw_seat(
 ) -> None:
     """One seat's box. `wide` is the full-width bottom panel; otherwise a side
     panel column."""
-    accent = theme.PLAYER[facts.seat % len(theme.PLAYER)]
+    accent = theme.seat_color(facts.seat)
     _box(s, rect, theme.PANEL_SLOT, theme.HIGHLIGHT if facts.to_act else theme.PANEL_EDGE)
     pad = 9 * k
     x, y = rect.left + pad, rect.top + pad

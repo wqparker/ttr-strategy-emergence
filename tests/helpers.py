@@ -41,6 +41,15 @@ def set_market(game: Game, *colors: Color) -> None:
         game.market.append(c)
 
 
+def empty_the_piles(game: Game, into: int = 1) -> None:
+    """Move the deck and discard into a player's hand, so nothing can be drawn
+    blind and the market cannot refill. Used to test the empty-pile rules."""
+    hand = game.players[into].hand
+    for card in game.deck + game.discard:
+        hand[card] += 1
+    game.deck, game.discard = [], []
+
+
 def total_cards(game: Game) -> int:
     return (
         len(game.deck)

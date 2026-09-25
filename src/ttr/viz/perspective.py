@@ -85,6 +85,11 @@ class ViewModel:
         return self.viewer is None
 
 
+def parse_viewer(raw: str) -> Optional[int]:
+    """A command line's --perspective: 'all' (or 'none') for all-seeing, else a seat."""
+    return None if raw in ("all", "none") else int(raw)
+
+
 class Perspective:
     """Builds view models for one viewer. Keeps a card-memory tracker between
     calls and rebuilds it when the log shrinks, so replay scrubbing backwards is
@@ -149,7 +154,7 @@ class Perspective:
             name=(names[i] if names and i < len(names) else ""),
             trains=p.trains,
             route_points=p.route_points,
-            hand_size=sum(p.hand.values()),
+            hand_size=p.hand_size,
             ticket_count=len(p.tickets),
             to_act=(game.current_player == i and not game.game_over),
             is_viewer=(i == self.viewer),
@@ -196,12 +201,7 @@ def recent_events(game: Game, count: int = RECENT_EVENTS) -> List[str]:
     return list(reversed(lines))
 
 
-def city_code(board: Board, city: str) -> str:
-    """Short city code from the board layout, for cramped panels."""
-    pos = board.layout.get(city)
-    return pos.code if pos else city[:3].upper()
-
-
 def code_map(board: Board) -> Dict[str, str]:
-    """City -> short code, for panels that have no room for full names."""
-    return {c: city_code(board, c) for c in board.cities}
+    """City -> short code from the board layout, for panels with no room for
+    full names. Cities without a layout entry fall back to three letters."""
+    return {c: (board.layout[c].code if c in board.layout else c[:3].upper()) for c in board.cities}

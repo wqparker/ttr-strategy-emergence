@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List
+from typing import List, Tuple
 
 
 class Color(str, Enum):
@@ -20,6 +20,8 @@ class Color(str, Enum):
 
 # The 8 regular colors, in a fixed order (used for indexing/encoding later).
 TRAIN_COLORS: List[Color] = [c for c in Color if c is not Color.LOCOMOTIVE]
+# Every card color, locomotives last: the order hands and card counts are shown in.
+ALL_COLORS: Tuple[Color, ...] = tuple(TRAIN_COLORS) + (Color.LOCOMOTIVE,)
 
 CARDS_PER_COLOR = 12
 LOCOMOTIVE_COUNT = 14
