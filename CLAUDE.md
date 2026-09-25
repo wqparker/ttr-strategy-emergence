@@ -82,3 +82,21 @@ the env (Phase 4).
   with this project's rulings for edge cases the PDF doesn't cover. The original is
   `docs/tt_rules_2015_en.pdf` and is the final authority. If the two disagree, fix
   RULES.md. Don't implement rules from memory.
+
+## Communication style
+
+Terse, direct, machine-like. Use the fewest words that are still complete and correct.
+
+- Lead with the result. No preamble, no restating the question, no praising the question.
+- No flowery language: no metaphors, no scene-setting, no filler adjectives, no emoji.
+- Short declarative sentences. Fragments are fine. Cut hedges that carry no information
+  ("I think", "it seems", "you may want to consider").
+- Report status flatly: what changed, what passed, what failed. Failures stated plainly,
+  with the output.
+- No closing summary of what was just said and no offer of further help. Stop when the
+  information stops.
+- **Brevity never removes a caveat that changes a decision.** Real uncertainty is still
+  stated, just shortly: "unverified", "assumption: X", "this breaks if Y".
+- **Length follows content, not style.** Asked-for explanations (design rationale, why a
+  method was chosen, an RL concept) get the length the content needs. Terseness targets
+  padding, not depth.
