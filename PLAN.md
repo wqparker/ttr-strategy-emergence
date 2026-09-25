@@ -85,9 +85,9 @@ development or tuning.
     `simulate.py --record DIR`).
   - Done: milestone 2, the card-memory tracker (`memory.py`, Levels 0–2).
   - Done: milestone 3, the board renderer (`viz/geometry.py`, `viz/board_view.py`,
-    `viz/screenshot.py`, display data in `data/usa_display.json`, traced from the board
-    photo). Checked against the
-    board photo with `--compare`; routes are within about one car width.
+    `viz/screenshot.py`, display data in `data/usa_display.json`, measured from the
+    board photo). Every tile is fitted to the photo; outlines drawn over the photo match
+    the printed tiles to about a pixel, double-route pairs sit flush as on the board.
   - Next: milestone 4, side panels and the perspective toggle.
 - **Next: Phase 4, the PettingZoo environment.**
 
@@ -149,15 +149,20 @@ viewer and the overlays, and later let us review any trained agent's game move b
      (scores go in the side panels); a map backdrop of state, province and country
      borders (Natural Earth, public domain) warped so real city locations land on the
      board's cities (`scripts/build_backdrop.py`); supersampled drawing for smooth
-     edges; no two cars of different routes may overlap (enforced by a test).
-   - **Traced from the photo (final):** every city center and every one of the 309
+     edges;    - **Measured from the photo (final):** every city center and every one of the 309
      tiles comes from the photo, not from estimates. City dots were detected by color.
-     Tiles were detected where their outlines are clear, and the rest found by
-     searching the photo for the best-matching outline, color and even spacing along
-     each route. Double-route lanes use the photo's measured lane spacing, and a few
-     faint gray routes were hand-traced on zoomed crops. All tiles are the same size
-     (36 x 11 px on the 1151 x 764 canvas), stored as `tiles` in `usa_display.json`.
-     The tracing scripts needed OpenCV and the local photo, so only the resulting
+     Each tile was then fitted as a rotated rectangle (position and angle) by searching
+     around a rough first trace for the best score: route color inside the rectangle vs.
+     a thin ring outside, the tile's dark outline, and an even fill. Brightness profiles
+     across and along the fitted tiles gave one tile size for the whole board: a 35.5 x
+     10.5 px colored fill with a ~1.5 px dark outline, stored as a 38 x 13 px car (the
+     renderer strokes the outline on the car's edge) on the 1151 x 764 canvas. Double-
+     route pairs came out ~14 px apart center to center, so they touch without overlapping,
+     as on the board. The first trace (36 x 11, angles set by eye) was off by a few
+     pixels and degrees per tile, which showed as gaps and odd angles. The fitting
+     scripts need OpenCV and the local photo, so only the resulting coordinates are
+     committed.
+ocal photo, so only the resulting
      coordinates are committed.
 4. **Side panels and perspective toggle** (layout decided):
    - **Bottom, full width: player 0**, the seat a human plays against bots. Their hand
