@@ -18,24 +18,62 @@ Roadmap and reasoning live in [PLAN.md](PLAN.md).
 .venv/Scripts/ttr-view --record g.json --perspective 0 --paused
 ```
 
-**Playing a seat** (`--human SEAT`): the bots play until it is your turn, then the
-viewer waits. Click a route to claim it and a payment chip to pay; click a face-up
-card or the deck to draw; click the ticket count to draw tickets, then tick the ones
-to keep and confirm. Only legal moves are offered, so a click that would break a rule
-does nothing. To back out of a claim, step back with `,`.
-
 | Key | Does |
 | --- | --- |
 | `space` | play / pause |
 | `.` `,` | step forward / back one sub-step |
-| `]` `[` | faster / slower |
+| `]` `[` | faster / slower (six speeds, 1s to 0.02s per sub-step) |
 | `v` | cycle perspective: all-seeing, then each seat |
 | `end` `home` | jump to the end / back to the start |
 | `esc` | quit |
 
-The same actions are buttons in the bottom-left of the panel, and the legend is
-in the top-left of the window. Other flags: `--seed`, `--board toy`,
-`--memory-level 0|1|2`, `--scale` (default: fit the display), `--max-turns`.
+The same six are buttons in the bottom-left of the panel, and the key legend is
+down the left of the top strip, with the step count and speed beside it. In a live
+game `end` plays the rest of it out; with `--human` it stops when it is your turn.
+Stepping back never re-simulates — every state is kept — so scrubbing is instant
+either way.
+
+Flags: `--agents` (one per seat, `greedy` or `random`, two to five), `--seed`,
+`--board toy`, `--perspective all|SEAT`, `--memory-level 0|1|2`, `--scale`
+(default: fit the display), `--max-turns`, `--paused` to start stopped.
+
+### What is on screen
+
+- **Top strip:** the key legend and step count on the left, the five face-up cards and
+  the deck / discard / ticket counts in the middle, and on the right whose view this is,
+  the turn, and the current sub-step. In a seat's view the unseen pool sits beside the
+  pile counts.
+- **Board:** claimed spaces carry the owner's color under a rail-and-crosstie pattern,
+  so a claim never reads as an unclaimed tile of the same color.
+- **Sides:** the other seats, two per side, with trains, cards, tickets and score. In a
+  seat's view opponents show card-memory bounds (`≥2 red`, `+3 unknown`) instead of hands.
+- **Bottom:** seat 0 in full, with the transport buttons on the left and, when you are
+  playing, your move chips on the right.
+- **Between them:** a ticker of the last three public events.
+
+### Playing a seat yourself
+
+`--human SEAT` in a live game. The bots play until it is your turn, then the viewer
+waits for a click:
+
+| Click | Move |
+| --- | --- |
+| A route on the board | Claims it; the payment options then appear as chips |
+| A payment chip | Pays for the pending route (`2 red`, `1 red + 1 loco`, …) |
+| A face-up card, or the deck count | Draws that card; a second draw follows if the rules allow one |
+| The ticket count | Draws tickets; chips then tick each one, and the last chip confirms |
+
+Only legal moves are offered: a route you cannot pay for, a click during a bot's
+turn, or confirming fewer tickets than the minimum all do nothing. Claimable routes
+light up under the cursor. To back out of a claim, step back with `,` — there is no
+cancel, because the rules have no such move once a route is chosen. Acting after
+stepping back forks: the states that followed are dropped.
+
+`--human` is ignored with `--record`; a replay is a fixed list of moves.
+
+When the game ends, the final scoreboard is drawn over the board: the winner, then
+every seat's route points, ticket points with completed/failed counts, longest path,
+bonus and total.
 
 ## See the board (PNG, no window)
 
@@ -44,7 +82,8 @@ in the top-left of the window. Other flags: `--seed`, `--board toy`,
 ```
 
 Greedy agents play `--turns` turns of a seeded game first, so the panels and the
-claimed routes have something to show. Add `--players 4` for four seats.
+claimed routes have something to show. Add `--players 4` for four seats. This is the
+same screen as the viewer without its controls: no key legend, no buttons.
 
 | Want | Command |
 | --- | --- |
