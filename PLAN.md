@@ -356,3 +356,14 @@ not just to find the strongest one. Each tier teaches something different:
 - **Engine speed**: about 10k steps/s now, and `step()` recomputes the legal-move list to
   validate each action. Revisit when legal moves become action masks in Phase 4,
   probably with a cached mask per state.
+
+## Notes
+
+- **Testing an old commit needs `PYTHONPATH`.** The venv installs `ttr` editable, so its
+  `.pth` entry points at this working tree's `src/` whatever is checked out elsewhere. A
+  `git worktree` or a bisected checkout therefore runs its own tests against the *current*
+  renderer and engine, which fails or passes for the wrong reason. Run those with
+  `PYTHONPATH=<worktree>/src` so the checkout's own source wins:
+
+      git worktree add /tmp/wt <commit>
+      cd /tmp/wt && PYTHONPATH=/tmp/wt/src <repo>/.venv/Scripts/python -m pytest -q
