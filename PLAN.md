@@ -68,10 +68,10 @@ development or tuning.
 
 ## Current progress
 
-*Updated at the end of each session. Last updated: 2026-09-25.*
+*Updated at the end of each session. Last updated: 2026-09-26.*
 
-- **Just completed: engine ready, and every RL design question settled.**
-  - Phases 0–2 (engine, random/greedy bots, `rich` log, temporary ASCII board view,
+- **Earlier: engine ready, and every RL design question settled.**
+  - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view,
     seat-rotated match runner, stress test) merged into `main`.
   - USA map data hand-verified against the physical board (`"verified": true`).
   - Moved to Python 3.11.
@@ -79,8 +79,8 @@ development or tuning.
     space (flat 168 with sub-step masks), no final-turn guard for trained agents, the
     observation (flat vector, about 760 numbers), and reward (a setting, default dense
     score margin).
-- **Current: Phase 3, visualization.** A proper Pygame viewer comes before any training
-  (see "Visualization").
+- **Just completed: Phase 3, visualization.** A proper Pygame viewer before any training
+  (see "Visualization"). All seven milestones done; the viewer backlog stays open.
   - Done: milestone 1, game records and replay (`record.py`, `Game.clone()`,
     `simulate.py --record DIR`).
   - Done: milestone 2, the card-memory tracker (`memory.py`, Levels 0–2).
@@ -104,8 +104,12 @@ development or tuning.
     cannot offer an illegal move; a click on anything else does nothing. Acting
     after stepping back forks the timeline, dropping the states that followed.
     The end-of-game scoreboard (viewer backlog) draws over the board.
-  - Next: milestone 7, analysis overlays over a folder of records.
-- **Next: Phase 4, the PettingZoo environment.**
+  - Done: milestone 7, analysis overlays (`analysis.py`, `viz/overlay.py`). Per-route
+    claim rate, average turn claimed and contested rate over a folder of records,
+    overall, per agent or per seat; `ttr-view --overlay DIR` (`o`/`a` keys, hover for
+    a value) and `ttr-shot --overlay DIR --stat S [--agent A] [--seat N]`. pandas is
+    in a new `[analysis]` extra. The ASCII board view is kept.
+- **Current: Phase 4, the PettingZoo environment.** Not started.
 
 ## Roadmap
 
@@ -124,7 +128,8 @@ development or tuning.
 5. **Training and search agents**: the method roster (see "Methods to compare"), each
    plugged into the same agent interface and evaluated the same way. Smoke-test each on
    the toy map first, then train on the full map.
-6. **Strategy analysis**: metrics that capture play style (blocking rate, route-length
+6. **Strategy analysis**: metrics that capture play style (blocking rate — a route claimed
+   by an opponent while on a player's ticket path — route-length
    distribution, ticket draw/keep behavior, tempo), compared across methods, plus
    pandas/matplotlib notebooks and the viewer's overlays.
 7. **Later / optional**: 3–5 players, the AlphaZero-style stretch agent, and Unity +
@@ -132,7 +137,7 @@ development or tuning.
 
 ## Visualization (Phase 3)
 
-A robust viewer before any training, replacing the temporary ASCII board view. The
+A robust viewer before any training, alongside the ASCII board view (kept). The
 engine stays free of Pygame: the viewer lives in `src/ttr/viz/` and Pygame is an
 optional `[viz]` dependency.
 
@@ -229,12 +234,39 @@ viewer and the overlays, and later let us review any trained agent's game move b
      action for it, since `CHOOSE_PAYMENT` only offers payments.
 7. **Analysis overlays:** from a folder of records, color routes by a statistic (claim
    rate, claim rate per agent, average turn claimed, how often contested).
-8. **Retire the ASCII board view** once the viewer covers it. The `rich` text log stays
-   for terminal debugging.
+   - The statistics live in `src/ttr/analysis.py` (no Pygame), one `replay()` per record,
+     read from the `claim_route` events in `game.log`. They return plain data so Phase 6
+     can reuse them from pandas; the viewer maps them to colors.
+   - **"Contested" means a blocked double** (decided 2026-09-26): one side of a double
+     route was claimed and the other side was closed by it (2–3 players, §6). It is read
+     straight off the log. The richer meaning, "claimed by an opponent while on a player's
+     ticket path", needs ticket-path computation and is Phase 6's blocking-rate metric.
+   - *(Done.)* Colors run dark blue → light blue → light yellow → light red → dark red,
+     least to most significant (ColorBrewer RdYlBu/RdBu stops). The average turn is
+     reversed: an early claim marks a route in demand, so early is red. Rates start at 0, so 0% reads as measured (blue), not as no
+     data. The average turn spans its observed range. Each statistic shares one scale
+     across everyone, each agent and each seat, so switching compares like with like.
+     Routes with nothing to measure are dark gray. Filters: agent, seat, or both.
+   - While an overlay is on, the seat panels show each seat's averages over the records
+     (`Summary.player`: win %, score breakdown, ticket completion %, longest bonus,
+     claims, trains)
+     and its top routes for the statistic, in place of the replayed game's hands and
+     tickets. `Summary.player_rows()` has the same results per player per game. The overlay hides claimed trains and the scoreboard; the panels still show
+     the replayed game (the folder's first record unless `--record` names one).
+
+**The ASCII board view stays** (decided 2026-09-26; this was once milestone 8, "retire
+it"). It costs nothing to keep and runs without Pygame, e.g. `ttr-sim --show board`.
+The `rich` text log stays too.
 
 ### Viewer backlog (tweaks and fixes, in no fixed order)
 
 Noticed while using the viewer; none of them blocks Phase 4.
+
+- **Full screen.** *(Done.)* `F11` / `--fullscreen`: `Screen.fit` scales to the display's
+  height and widens the side panels to fill the width (no bars on 16:9); the window loop
+  centers the screen and shifts mouse positions by the offset. `ttr-shot --fit WxH`
+  renders the same layout headlessly. Not handled: Windows display scaling above 100%
+  (SDL is not made DPI-aware, so a scaled display shows a blurred upscale).
 
 - **Exact deck composition in the all-seeing view.** The player view already shows the
   unseen pool by color (memory Level 2). The all-seeing view should show the real thing:
