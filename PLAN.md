@@ -468,3 +468,9 @@ not just to find the strongest one. Each tier teaches something different:
 
       git worktree add /tmp/wt <commit>
       cd /tmp/wt && PYTHONPATH=/tmp/wt/src <repo>/.venv/Scripts/python -m pytest -q
+
+- **Leftover branch `phase3-analysis-overlays`** (local and on `origin`). Work happens on
+  `main` (see CLAUDE.md); this branch was made by mistake for Phase 3 milestone 7 and was
+  fast-forwarded into `main` on 2026-09-26, so it holds nothing `main` lacks. Safe to
+  delete: `git branch -d phase3-analysis-overlays` and
+  `git push origin --delete phase3-analysis-overlays`.
