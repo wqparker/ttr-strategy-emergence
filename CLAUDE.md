@@ -78,6 +78,8 @@ the env (Phase 4).
   when a decision is made or the roadmap changes. At the end of each session, update
   its **Current progress** section (just completed / current / next) and its date.
 - `DEVLOG.md` is the user's own handwritten session notes. **Do not edit it.**
+- **Git: work directly on `main`.** Don't create branches; commit on `main` and push
+  to `origin/main`.
 - **Game rules:** use `docs/RULES.md`, a Markdown transcription of the official rules
   with this project's rulings for edge cases the PDF doesn't cover. The original is
   `docs/tt_rules_2015_en.pdf` and is the final authority. If the two disagree, fix
