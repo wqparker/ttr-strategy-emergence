@@ -17,6 +17,7 @@ from ttr.cards import ALL_COLORS, Color
 from ttr.viz import theme
 from ttr.viz.perspective import SeatFacts, TicketFact, ViewModel
 from ttr.viz.theme import font
+from ttr.viz.tickets import icon, marker as ticket_marker
 
 
 # --------------------------------------------------------------- primitives
@@ -279,9 +280,11 @@ def draw_seat(
     k: float = 1.0,
     wide: bool = False,
     codes: Optional[Dict[str, str]] = None,
+    markers: bool = False,
 ) -> None:
     """One seat's box. `wide` is the full-width bottom panel; otherwise a side
-    panel column."""
+    panel column. `markers` leads each ticket with its map marker (the seat
+    whose tickets are marked on the board)."""
     accent = theme.seat_color(facts.seat)
     _box(s, rect, theme.PANEL_SLOT, theme.HIGHLIGHT if facts.to_act else theme.PANEL_EDGE)
     pad = 9 * k
@@ -301,10 +304,10 @@ def draw_seat(
     y += 20 * k
 
     if wide:
-        _wide_body(s, rect, facts, y, k, codes)
+        _wide_body(s, rect, facts, y, k, codes, markers)
     else:
         y = _stats(s, facts, (x, y), k, wide=False)
-        _narrow_body(s, facts, (x, y), k, codes)
+        _narrow_body(s, facts, (x, y), k, codes, markers)
 
 
 def _stats(s, facts: SeatFacts, pos, k: float, wide: bool) -> float:
@@ -389,11 +392,22 @@ def _tickets_w(facts: SeatFacts, k: float, label: str, per_col: int, col_w: floa
     return max(label_w, cols * col_w - 12 * k)
 
 
-def _ticket_line(s, t: TicketFact, pos, k: float, codes, size: float, width: float) -> None:
+def _ticket_line(s, t: TicketFact, pos, k: float, codes, size: float, width: float,
+                 marker: Optional[int] = None) -> None:
+    """One ticket. With `marker` (its index in the seat's list), the ticket's map
+    marker leads the line in place of the status mark; color still shows done
+    (green) and on offer (dim)."""
     x, y = pos
     a = codes.get(t.a, t.a) if codes else t.a
     b = codes.get(t.b, t.b) if codes else t.b
     color = theme.DONE if t.done else (theme.PANEL_DIM if t.pending else theme.PANEL_TEXT)
+    if marker is not None:
+        shape, fill = ticket_marker(marker)
+        img = icon(shape, fill, round(size * 1.25), hollow=t.pending)
+        s.blit(img, img.get_rect(center=(round(x + 5 * k), round(y + size * 0.62))))
+        text(s, f"{a}–{b}", (x + 15 * k, y), size, color)
+        text(s, str(t.points), (x + width, y), size, color, bold=True, right=True)
+        return
     mark = "✓" if t.done else ("?" if t.pending else "·")
     text(s, mark, (x, y), size, color, bold=t.done)
     text(s, f"{a}–{b}", (x + 11 * k, y), size, color)
@@ -413,7 +427,7 @@ def _tickets_header(s, facts: SeatFacts, pos, k: float, label: str) -> bool:
     return True
 
 
-def _wide_body(s, rect, facts: SeatFacts, y: float, k: float, codes) -> None:
+def _wide_body(s, rect, facts: SeatFacts, y: float, k: float, codes, markers: bool = False) -> None:
     """Seat 0's panel. The stats row, the hand and the tickets are measured and
     centred together, so the block sits in the middle of the full-width panel."""
     chip_w, per_row, per_col, col_w = 34 * k, 9, 4, 100 * k
@@ -429,16 +443,18 @@ def _wide_body(s, rect, facts: SeatFacts, y: float, k: float, codes) -> None:
         return
     for i, t in enumerate(facts.tickets or ()):
         col, row = i // per_col, i % per_col
-        _ticket_line(s, t, (tx + col * col_w, hand_y + 14 * k + row * 15 * k), k, codes, 11 * k, 88 * k)
+        _ticket_line(s, t, (tx + col * col_w, hand_y + 14 * k + row * 15 * k), k, codes, 11 * k, 88 * k,
+                     marker=i if markers else None)
 
 
-def _narrow_body(s, facts: SeatFacts, pos, k: float, codes) -> None:
+def _narrow_body(s, facts: SeatFacts, pos, k: float, codes, markers: bool = False) -> None:
     x, y = pos
     y = _hand_block(s, facts, (x, y), k, (30 * k, 19 * k), per_row=5) + 8 * k
     if not _tickets_header(s, facts, (x, y), k, "TICKETS"):
         return
     for i, t in enumerate(facts.tickets or ()):
-        _ticket_line(s, t, (x, y + 14 * k + i * 15 * k), k, codes, 11 * k, 84 * k)
+        _ticket_line(s, t, (x, y + 14 * k + i * 15 * k), k, codes, 11 * k, 84 * k,
+                     marker=i if markers else None)
 
 
 # ------------------------------------------------------------------ choices

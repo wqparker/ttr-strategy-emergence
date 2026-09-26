@@ -28,6 +28,7 @@ from ttr.viz import panels, theme
 from ttr.viz.board_view import BoardView
 from ttr.viz.geometry import BoardLayout, Point
 from ttr.viz.overlay import Overlay, draw_board_overlay, draw_player_panel
+from ttr.viz.tickets import draw_ticket_markers
 from ttr.viz.perspective import Perspective, ViewModel, code_map
 
 SIDE_W = 200.0  # each side panel column
@@ -238,19 +239,25 @@ class Screen:
         result: object = None,
         overlay: Optional[Overlay] = None,
         overlay_hover: Optional[int] = None,
+        ticket_seat: Optional[int] = None,
     ) -> ViewModel:
         """Draw everything and return the view model that was drawn. An
         `overlay` replaces the board's claims with its colors and legend, the
         seat panels with each seat's results over the records, and hides the
-        end-of-game scoreboard; the table strip and ticker still show `game`."""
+        end-of-game scoreboard; the table strip and ticker still show `game`.
+
+        One seat's tickets are marked on the map (viz/tickets.py): the viewing
+        seat, else `ticket_seat`, else P0."""
         self._num_players = game.num_players
         vm = self.perspective.view(game, names=self.names, events=events)
         k = self.scale
         target.fill(theme.PANEL_BG)
+        marked = self.marked_seat(game, ticket_seat)
         if overlay is not None:
             draw_board_overlay(target, self.board_view, overlay, origin=self.board_origin,
                                hover_route=overlay_hover, codes=self.codes)
             result = None
+            marked = None
         else:
             self.board_view.draw(
                 target,
@@ -260,6 +267,9 @@ class Screen:
                 highlight_routes=highlight_routes,
                 highlight_cities=highlight_cities,
             )
+            tickets = vm.seats[marked].tickets if marked is not None else None
+            if tickets:
+                draw_ticket_markers(target, self.board_view, tickets, origin=self.board_origin)
         r = self.table_rect
         legend = panels.controls_layout(controls or (), r, k=k)[3]
         self.hits = panels.draw_table(target, r, vm, k=k,
@@ -275,7 +285,8 @@ class Screen:
                 draw_player_panel(target, rect, overlay.players.get(seat), seat, k=k, wide=(seat == 0))
         else:
             for seat, rect in self.seat_rects(game.num_players).items():
-                panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0), codes=self.codes)
+                panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0), codes=self.codes,
+                                 markers=(seat == marked))
         if buttons:
             panels.draw_buttons(target, buttons, k=k, active=active)
         self.hits["choices"] = (
@@ -285,6 +296,14 @@ class Screen:
             panels.draw_result(target, pygame.Rect(self.board_origin, self.board_view.size),
                                result, self.names, k=k)
         return vm
+
+    def marked_seat(self, game: Game, preferred: Optional[int] = None) -> Optional[int]:
+        """Whose tickets get map markers: the viewing seat; when all-seeing,
+        `preferred` (a human seat) or else P0."""
+        seat = self.perspective.viewer
+        if seat is None:
+            seat = preferred if preferred is not None else 0
+        return seat if 0 <= seat < game.num_players else None
 
     def render(self, game: Game, **kw) -> Tuple[pygame.Surface, ViewModel]:
         """A fresh surface with everything drawn on it (screenshots, tests)."""

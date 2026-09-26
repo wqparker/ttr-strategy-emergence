@@ -282,6 +282,10 @@ Noticed while using the viewer; none of them blocks Phase 4.
   holds a human seat's move chips.*)* It is still empty while a bot is to act. Candidates
   for that case: a longest-path / ticket-progress summary, the last few actions in full
   rather than the one-line ticker, or a larger hand and ticket display.
+- **Ticket markers on the map.** *(Done.)* One seat's tickets (the viewed seat, else the
+  human seat, else P0) get a colored shape each, drawn beside both cities and leading the
+  ticket in the panel (`viz/tickets.py`): pink moon, yellow star, light green square,
+  light blue circle, orange triangle, repeating after five. Offered tickets are hollow.
 - **Better ticket display.** Tickets are city codes plus points (`MTL–ATL 9`). Either
   write the full city names, or draw them as small ticket cards with the route drawn on
   them — closer to the physical card, and easier to read at a glance. Points are the

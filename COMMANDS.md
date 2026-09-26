@@ -36,6 +36,12 @@ ttr-view [--record FILE] [--agents NAME ...] [--human SEAT] [--board usa|toy]
 | --- | --- | --- | --- | --- | --- | --- |
 | play / pause | step fwd / back | faster / slower | perspective | jump to end / start | quit | full screen |
 
+**Ticket markers:** one seat's tickets are drawn on the map as a shape beside both of each
+ticket's cities, with the same shape leading the ticket in that seat's panel: pink moon, yellow
+star, light green square, light blue circle, orange triangle (then repeating). The marked seat is
+the `--perspective` seat, else the `--human` seat, else P0. Tickets still on offer are hollow;
+completed ones are green in the panel. Hidden while an overlay is on.
+
 Full screen scales the viewer to the display's height and widens the side panels to fill the
 width (1920x1080: scale 1.07, no bars).
 

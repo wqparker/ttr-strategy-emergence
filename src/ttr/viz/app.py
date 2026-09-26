@@ -461,6 +461,7 @@ class Viewer:
             result=game.result,
             overlay=overlay,
             overlay_hover=self.hover if overlay is not None else None,
+            ticket_seat=min(self.human.seats) if self.human.seats else None,
         )
 
 
