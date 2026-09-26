@@ -5,6 +5,8 @@
     ttr-shot --record runs/records/g.json --step 120 --out mid.png
     ttr-shot --board-only --out board.png
     ttr-shot --compare --out check.png        # blend with the board photo
+    ttr-shot --overlay runs/records --stat avg_turn --agent greedy --out turns.png
+    ttr-shot --overlay runs/records --seat 0 --out first_seat.png
 
 (or `python -m ttr.viz.screenshot ...`, which is the same entry point)
 
@@ -12,6 +14,8 @@ With no --record, greedy agents play `--turns` turns of a seeded game so the
 panels and the claimed routes have something to show. --compare overlays the
 render on docs/ticket-to-ride_usa_map.jpg (kept locally, not in the repo) at 50%
 so positions can be checked against the real board; it implies --board-only.
+--overlay DIR draws the board colored by a statistic over the records in DIR
+(see ttr.analysis), with its legend and no claimed trains.
 """
 
 from __future__ import annotations
@@ -26,10 +30,12 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 import pygame  # noqa: E402
 
 from ttr.agents import GreedyAgent  # noqa: E402
+from ttr.analysis import STATS, analyze  # noqa: E402
 from ttr.board import load_board  # noqa: E402
 from ttr.game import Game  # noqa: E402
 from ttr.record import GameRecord  # noqa: E402
 from ttr.viz.board_view import BoardView  # noqa: E402
+from ttr.viz.overlay import draw_board_overlay, make_overlay  # noqa: E402
 from ttr.viz.perspective import Perspective, parse_viewer  # noqa: E402
 from ttr.viz.screen import Screen  # noqa: E402
 
@@ -74,9 +80,26 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--memory-level", type=int, default=2, choices=(0, 1, 2))
     parser.add_argument("--board-only", action="store_true", help="no panels")
     parser.add_argument("--compare", action="store_true", help="blend with the board photo at 50%%")
+    parser.add_argument("--overlay", type=Path, default=None, metavar="DIR",
+                        help="color routes by a statistic over the records in DIR")
+    parser.add_argument("--stat", default=next(iter(STATS)), choices=list(STATS),
+                        help="with --overlay: the statistic")
+    parser.add_argument("--agent", default=None, help="with --overlay: count one agent's claims only")
+    parser.add_argument("--seat", type=int, default=None, help="with --overlay: count one seat's claims only")
     args = parser.parse_args(argv)
 
     pygame.init()
+    if args.overlay:
+        summary = analyze(args.overlay)
+        if args.agent is not None and args.agent not in summary.agents:
+            raise SystemExit(f"no agent {args.agent!r} in the records; they have {summary.agents}")
+        if args.seat is not None and args.seat not in summary.seats:
+            raise SystemExit(f"no seat {args.seat} in the records; they have {summary.seats}")
+        view = BoardView(summary.board, scale=args.scale)
+        surface = pygame.Surface(view.size)
+        draw_board_overlay(surface, view, make_overlay(summary, args.stat, args.agent, args.seat))
+        save(surface, args.out)
+        return
     if args.record:
         record = GameRecord.load(args.record)
         states = record.replay_states()
@@ -96,9 +119,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         surface.set_alpha(128)
         photo.blit(surface, (0, 0))
         surface = photo
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    pygame.image.save(surface, str(args.out))
-    print(f"saved {args.out} {surface.get_size()}")
+    save(surface, args.out)
+
+
+def save(surface: pygame.Surface, out: Path) -> None:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    pygame.image.save(surface, str(out))
+    print(f"saved {out} {surface.get_size()}")
 
 
 if __name__ == "__main__":

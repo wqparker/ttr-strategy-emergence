@@ -4,6 +4,7 @@
     ttr-view --agents greedy greedy greedy     # three seats
     ttr-view --record runs/records/g.json      # replay a saved game
     ttr-view --record g.json --perspective 0   # from one seat's view
+    ttr-view --overlay runs/records            # route statistics over a folder
 
 (or `python -m ttr.viz.app ...`, which is the same entry point)
 
@@ -11,6 +12,12 @@ Both modes walk a `Timeline` of game states, one per sub-step, so stepping back
 is an index move rather than a re-simulation. A replay loads every state from the
 record up front; a live game produces the next state on demand by cloning the
 last one and letting the seat's agent act, which keeps the same history.
+
+--overlay DIR (milestone 7) colors every route by a statistic over the records in
+DIR (see ttr.analysis) and replays the first of them unless --record picks
+another game. `o` cycles the statistic (and off, to see the game's own claims),
+`a` whose claims it counts (everyone, each agent, each seat); hover a route for
+its value.
 
 Controls: space play/pause, `.`/`,` step, `]`/`[` speed, `v` perspective,
 home/end jump, esc quit. The same actions sit as buttons in the bottom panel.
@@ -27,11 +34,13 @@ import pygame
 
 from ttr.actions import Action, ClaimRoute, DrawBlind, DrawFaceUp, DrawTickets, KeepTickets, Pass, Pay
 from ttr.agents import Agent
+from ttr.analysis import STATS, Summary, analyze, record_paths
 from ttr.board import Board, load_board
 from ttr.game import Game, Phase
 from ttr.record import GameRecord
+from ttr.viz.overlay import Filter, Overlay, filters, make_overlay
 from ttr.viz.perspective import Perspective, code_map, parse_viewer
-from ttr.viz.screen import CONTROLS, Screen
+from ttr.viz.screen import CONTROLS, OVERLAY_CONTROLS, Screen
 
 # Seconds between sub-steps, slowest first. Index 2 is the default pace.
 SPEEDS: Tuple[float, ...] = (1.0, 0.5, 0.25, 0.12, 0.06, 0.02)
@@ -262,7 +271,8 @@ class Viewer:
     feed it events and frames without a display."""
 
     def __init__(self, timeline: Timeline, screen: Screen, playing: bool = True, speed: int = 2,
-                 human: Optional[HumanControl] = None):
+                 human: Optional[HumanControl] = None, summary: Optional[Summary] = None,
+                 overlay_on: bool = False):
         self.timeline = timeline
         self.screen = screen
         self.playing = playing
@@ -272,6 +282,37 @@ class Viewer:
         self.hover: Optional[int] = None  # route under the cursor
         self._next_step = 0.0
         self._buttons: List[Tuple[str, str, pygame.Rect]] = []
+        # Analysis overlays (milestone 7): which statistic, if any, and whose games.
+        self.summary = summary
+        self.stat: Optional[str] = next(iter(STATS)) if summary and overlay_on else None
+        self.filter: Filter = (None, None)  # (agent, seat); (None, None) = everyone
+        self._overlay: Optional[Overlay] = None
+
+    # --------------------------------------------------------------- overlay
+
+    @property
+    def overlay(self) -> Optional[Overlay]:
+        if self.summary is None or self.stat is None:
+            return None
+        o = self._overlay
+        if o is None or (o.stat, (o.agent, o.seat)) != (self.stat, self.filter):
+            self._overlay = o = make_overlay(self.summary, self.stat, *self.filter)
+        return o
+
+    def cycle_stat(self) -> None:
+        """Off -> each statistic in turn -> off."""
+        if self.summary is None:
+            return
+        stats = list(STATS)
+        i = -1 if self.stat is None else stats.index(self.stat)
+        self.stat = stats[i + 1] if i + 1 < len(stats) else None
+
+    def cycle_filter(self) -> None:
+        """Everyone -> each agent in the records -> each seat -> everyone."""
+        if self.summary is None:
+            return
+        options = filters(self.summary)
+        self.filter = options[(options.index(self.filter) + 1) % len(options)]
 
     # ---------------------------------------------------------------- actions
 
@@ -298,6 +339,10 @@ class Viewer:
             self.speed = max(0, self.speed - 1)
         elif name == "view":
             self.screen.cycle_perspective()
+        elif name == "overlay":
+            self.cycle_stat()
+        elif name == "filter":
+            self.cycle_filter()
         elif name == "start":
             self.playing = False
             self.timeline.to_start()
@@ -314,6 +359,8 @@ class Viewer:
         pygame.K_RIGHTBRACKET: "faster",
         pygame.K_LEFTBRACKET: "slower",
         pygame.K_v: "view",
+        pygame.K_o: "overlay",
+        pygame.K_a: "filter",
         pygame.K_HOME: "start",
         pygame.K_END: "end",
         pygame.K_ESCAPE: "quit",
@@ -377,7 +424,8 @@ class Viewer:
         """The key legend, plus where the timeline stands, in the same columns."""
         where = f"{self.timeline.index}/{len(self.timeline.states) - 1}"
         state = "playing" if self.playing else ("end" if self.timeline.at_end else "paused")
-        return CONTROLS + (("step", where), ("speed", f"x{self.speed + 1}  ·  {state}"))
+        overlay = OVERLAY_CONTROLS if self.summary is not None else ()
+        return CONTROLS + overlay + (("step", where), ("speed", f"x{self.speed + 1}  ·  {state}"))
 
     def draw(self, target: pygame.Surface) -> None:
         game = self.timeline.current
@@ -387,6 +435,7 @@ class Viewer:
         ]
         claimable = self.human.claimable(game)
         highlight = [self.hover] if self.hover in claimable else []
+        overlay = self.overlay
         self.screen.draw(
             target,
             game,
@@ -397,6 +446,8 @@ class Viewer:
             choices=self.human.choices(game),
             choices_title=self.human.title(game),
             result=game.result,
+            overlay=overlay,
+            overlay_hover=self.hover if overlay is not None else None,
         )
 
 
@@ -415,12 +466,17 @@ def fit_scale(size: Tuple[int, int], want: Optional[float] = None) -> float:
     return max(0.5, min(1.6, room[0] / size[0], room[1] / size[1]))
 
 
-def build(args: argparse.Namespace) -> Tuple[Timeline, Screen, HumanControl]:
+def build(args: argparse.Namespace) -> Tuple[Timeline, Screen, HumanControl, Optional[Summary]]:
     from ttr.simulate import AGENTS  # local: keeps the viewer out of the engine's import path
 
     human = [] if args.human is None else [args.human]
-    if args.record:
-        record = GameRecord.load(args.record)
+    summary = None
+    record_path = args.record
+    if args.overlay:
+        summary = analyze(args.overlay)
+        record_path = record_path or record_paths(args.overlay)[0]
+    if record_path:
+        record = GameRecord.load(record_path)
         timeline = replay_timeline(record)
         names = record.agents
         board = timeline.current.board
@@ -433,7 +489,7 @@ def build(args: argparse.Namespace) -> Tuple[Timeline, Screen, HumanControl]:
         names = [("human" if i in human else name) for i, name in enumerate(args.agents)]
     screen = Screen(board, names=names,
                     perspective=Perspective(parse_viewer(args.perspective), args.memory_level))
-    return timeline, screen, HumanControl(human)
+    return timeline, screen, HumanControl(human), summary
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -450,14 +506,18 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--human", type=int, default=None, metavar="SEAT",
                         help="play a seat yourself (live games only), e.g. --human 0")
     parser.add_argument("--paused", action="store_true", help="start paused")
+    parser.add_argument("--overlay", type=Path, default=None, metavar="DIR",
+                        help="color routes by statistics over the records in DIR (o/a keys)")
     args = parser.parse_args(argv)
 
     pygame.init()
-    pygame.display.set_caption("Ticket to Ride" + (" — replay" if args.record else " — live"))
-    timeline, screen, human = build(args)
+    mode = " — overlay" if args.overlay else (" — replay" if args.record else " — live")
+    pygame.display.set_caption("Ticket to Ride" + mode)
+    timeline, screen, human, summary = build(args)
     screen.set_scale(fit_scale(screen.size, args.scale))
     surface = pygame.display.set_mode(screen.size)
-    viewer = Viewer(timeline, screen, playing=not args.paused, human=human)
+    viewer = Viewer(timeline, screen, playing=not (args.paused or args.overlay), human=human,
+                    summary=summary, overlay_on=True)
 
     clock = pygame.time.Clock()
     while viewer.running:

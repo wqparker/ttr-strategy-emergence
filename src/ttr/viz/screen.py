@@ -27,6 +27,7 @@ from ttr.game import Game
 from ttr.viz import panels, theme
 from ttr.viz.board_view import BoardView
 from ttr.viz.geometry import BoardLayout, Point
+from ttr.viz.overlay import Overlay, draw_board_overlay, draw_player_panel
 from ttr.viz.perspective import Perspective, ViewModel, code_map
 
 SIDE_W = 200.0  # each side panel column
@@ -47,6 +48,11 @@ CONTROLS = (
     ("v", "perspective"),
     ("end home", "jump to end / start"),
     ("esc", "quit"),
+)
+# Shown only when the viewer has overlay data (ttr-view --overlay).
+OVERLAY_CONTROLS = (
+    ("o", "overlay stat"),
+    ("a", "agent / seat"),
 )
 BUTTON_W, BUTTON_H, BUTTON_GAP = 46.0, 22.0, 5.0
 
@@ -211,20 +217,30 @@ class Screen:
         choices: Sequence[Tuple[str, bool, bool]] = (),
         choices_title: str = "",
         result: object = None,
+        overlay: Optional[Overlay] = None,
+        overlay_hover: Optional[int] = None,
     ) -> ViewModel:
-        """Draw everything and return the view model that was drawn."""
+        """Draw everything and return the view model that was drawn. An
+        `overlay` replaces the board's claims with its colors and legend, the
+        seat panels with each seat's results over the records, and hides the
+        end-of-game scoreboard; the table strip and ticker still show `game`."""
         self._num_players = game.num_players
         vm = self.perspective.view(game, names=self.names, events=events)
         k = self.scale
         target.fill(theme.PANEL_BG)
-        self.board_view.draw(
-            target,
-            game,
-            origin=self.board_origin,
-            route_tint=route_tint,
-            highlight_routes=highlight_routes,
-            highlight_cities=highlight_cities,
-        )
+        if overlay is not None:
+            draw_board_overlay(target, self.board_view, overlay, origin=self.board_origin,
+                               hover_route=overlay_hover, codes=self.codes)
+            result = None
+        else:
+            self.board_view.draw(
+                target,
+                game,
+                origin=self.board_origin,
+                route_tint=route_tint,
+                highlight_routes=highlight_routes,
+                highlight_cities=highlight_cities,
+            )
         r = self.table_rect
         legend = panels.controls_layout(controls or (), r, k=k)[3]
         self.hits = panels.draw_table(target, r, vm, k=k,
@@ -232,9 +248,15 @@ class Screen:
         if controls:
             panels.draw_controls(target, r, controls, k=k)
         panels.draw_ticker(target, self.ticker_rect, vm.events, k=k)
-        rects = self.seat_rects(game.num_players)
-        for seat, rect in rects.items():
-            panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0), codes=self.codes)
+        if overlay is not None:
+            # Each seat's results over the records replace the replayed game's
+            # hands and tickets; the table strip and ticker still follow the game.
+            seats = max([game.num_players - 1, *overlay.players]) + 1
+            for seat, rect in self.seat_rects(min(seats, len(theme.PLAYER))).items():
+                draw_player_panel(target, rect, overlay.players.get(seat), seat, k=k, wide=(seat == 0))
+        else:
+            for seat, rect in self.seat_rects(game.num_players).items():
+                panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0), codes=self.codes)
         if buttons:
             panels.draw_buttons(target, buttons, k=k, active=active)
         self.hits["choices"] = (
