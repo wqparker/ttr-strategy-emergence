@@ -4,6 +4,7 @@
     ttr-shot --out shot.png --perspective 0   # seat 0's view
     ttr-shot --record runs/records/g.json --step 120 --out mid.png
     ttr-shot --board-only --out board.png
+    ttr-shot --fit 1920x1080 --out full.png   # the full-screen layout
     ttr-shot --compare --out check.png        # blend with the board photo
     ttr-shot --overlay runs/records --stat avg_turn --agent greedy --out turns.png
     ttr-shot --overlay runs/records --seat 0 --out first_seat.png
@@ -23,7 +24,7 @@ from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
@@ -59,9 +60,22 @@ def render_board(game: Game, scale: float) -> pygame.Surface:
     return BoardView(game.board, scale=scale).render(game)
 
 
-def render_screen(game: Game, scale: float, viewer: Optional[int], level: int) -> pygame.Surface:
+def render_screen(game: Game, scale: float, viewer: Optional[int], level: int,
+                  fit: Optional[Tuple[int, int]] = None) -> pygame.Surface:
+    """The whole screen. `fit` lays it out as full screen on a display of that
+    size (side panels widened to fill), instead of at `scale`."""
     screen = Screen(game.board, scale=scale, perspective=Perspective(viewer, level))
+    if fit:
+        screen.fit(*fit)
     return screen.render(game)[0]
+
+
+def parse_size(text: str) -> Tuple[int, int]:
+    w, _, h = text.lower().partition("x")
+    try:
+        return (int(w), int(h))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected WIDTHxHEIGHT, e.g. 1920x1080, not {text!r}")
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -79,6 +93,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--perspective", default="all", help="'all' or a seat number")
     parser.add_argument("--memory-level", type=int, default=2, choices=(0, 1, 2))
     parser.add_argument("--board-only", action="store_true", help="no panels")
+    parser.add_argument("--fit", type=parse_size, default=None, metavar="WxH",
+                        help="lay out as full screen on a WxH display, e.g. 1920x1080 (ignores --scale)")
     parser.add_argument("--compare", action="store_true", help="blend with the board photo at 50%%")
     parser.add_argument("--overlay", type=Path, default=None, metavar="DIR",
                         help="color routes by a statistic over the records in DIR")
@@ -110,7 +126,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if args.compare or args.board_only:
         surface = render_board(game, 1.0 if args.compare else args.scale)
     else:
-        surface = render_screen(game, args.scale, parse_viewer(args.perspective), args.memory_level)
+        surface = render_screen(game, args.scale, parse_viewer(args.perspective), args.memory_level,
+                                fit=args.fit)
 
     if args.compare:
         if not PHOTO.exists():

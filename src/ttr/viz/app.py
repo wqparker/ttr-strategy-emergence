@@ -20,7 +20,9 @@ another game. `o` cycles the statistic (and off, to see the game's own claims),
 its value.
 
 Controls: space play/pause, `.`/`,` step, `]`/`[` speed, `v` perspective,
-home/end jump, esc quit. The same actions sit as buttons in the bottom panel.
+F11 full screen, home/end jump, esc quit. The transport actions also sit as
+buttons in the bottom panel. Full screen (or --fullscreen) scales the viewer to
+the display's height and widens the side panels to fill its width.
 """
 
 from __future__ import annotations
@@ -40,7 +42,8 @@ from ttr.game import Game, Phase
 from ttr.record import GameRecord
 from ttr.viz.overlay import Filter, Overlay, filters, make_overlay
 from ttr.viz.perspective import Perspective, code_map, parse_viewer
-from ttr.viz.screen import CONTROLS, OVERLAY_CONTROLS, Screen
+from ttr.viz import theme
+from ttr.viz.screen import CONTROLS, OVERLAY_CONTROLS, SIDE_W, Screen
 
 # Seconds between sub-steps, slowest first. Index 2 is the default pace.
 SPEEDS: Tuple[float, ...] = (1.0, 0.5, 0.25, 0.12, 0.06, 0.02)
@@ -279,6 +282,8 @@ class Viewer:
         self.speed = speed
         self.human = human or HumanControl()
         self.running = True
+        self.fullscreen = False  # the window loop applies a change (main)
+        self.offset: Tuple[int, int] = (0, 0)  # where the screen sits in the window
         self.hover: Optional[int] = None  # route under the cursor
         self._next_step = 0.0
         self._buttons: List[Tuple[str, str, pygame.Rect]] = []
@@ -339,6 +344,8 @@ class Viewer:
             self.speed = max(0, self.speed - 1)
         elif name == "view":
             self.screen.cycle_perspective()
+        elif name == "fullscreen":
+            self.fullscreen = not self.fullscreen
         elif name == "overlay":
             self.cycle_stat()
         elif name == "filter":
@@ -359,6 +366,7 @@ class Viewer:
         pygame.K_RIGHTBRACKET: "faster",
         pygame.K_LEFTBRACKET: "slower",
         pygame.K_v: "view",
+        pygame.K_F11: "fullscreen",
         pygame.K_o: "overlay",
         pygame.K_a: "filter",
         pygame.K_HOME: "start",
@@ -374,13 +382,18 @@ class Viewer:
             if name:
                 self.act(name)
         elif event.type == pygame.MOUSEMOTION:
-            self.hover = self._route_at(event.pos)
+            self.hover = self._route_at(self._local(event.pos))
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            name = self.screen.button_at(event.pos, self._buttons)
+            pos = self._local(event.pos)
+            name = self.screen.button_at(pos, self._buttons)
             if name:
                 self.act(name)
             else:
-                self.click(event.pos)
+                self.click(pos)
+
+    def _local(self, pos) -> Tuple[int, int]:
+        """Window pixel -> screen pixel (they differ when the screen is centered)."""
+        return (pos[0] - self.offset[0], pos[1] - self.offset[1])
 
     def _route_at(self, pos) -> Optional[int]:
         point = self.screen.board_point(pos)
@@ -466,6 +479,36 @@ def fit_scale(size: Tuple[int, int], want: Optional[float] = None) -> float:
     return max(0.5, min(1.6, room[0] / size[0], room[1] / size[1]))
 
 
+def desktop_size() -> Tuple[int, int]:
+    try:
+        return tuple(pygame.display.get_desktop_sizes()[0])  # type: ignore[return-value]
+    except (pygame.error, IndexError):
+        info = pygame.display.Info()
+        return (info.current_w, info.current_h)
+
+
+def layout_for(screen: Screen, fullscreen: bool, want: Optional[float] = None,
+               display: Optional[Tuple[int, int]] = None) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    """Fit the screen to full screen or a window. Returns the window size and
+    where the screen sits in it (centered; side bars only if the display is
+    narrower than the default layout)."""
+    if fullscreen:
+        display = display or desktop_size()
+        screen.fit(*display)
+        w, h = screen.size
+        return display, ((display[0] - w) // 2, (display[1] - h) // 2)
+    screen.side_w = SIDE_W
+    cw, ch = screen.canvas_size
+    screen.set_scale(fit_scale((round(cw), round(ch)), want))
+    return screen.size, (0, 0)
+
+
+def open_window(viewer: Viewer, want: Optional[float] = None) -> pygame.Surface:
+    size, viewer.offset = layout_for(viewer.screen, viewer.fullscreen, want)
+    flags = pygame.FULLSCREEN if viewer.fullscreen else 0
+    return pygame.display.set_mode(size, flags)
+
+
 def build(args: argparse.Namespace) -> Tuple[Timeline, Screen, HumanControl, Optional[Summary]]:
     from ttr.simulate import AGENTS  # local: keeps the viewer out of the engine's import path
 
@@ -508,23 +551,31 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--paused", action="store_true", help="start paused")
     parser.add_argument("--overlay", type=Path, default=None, metavar="DIR",
                         help="color routes by statistics over the records in DIR (o/a keys)")
+    parser.add_argument("--fullscreen", action="store_true",
+                        help="start full screen at the display's resolution (F11 toggles)")
     args = parser.parse_args(argv)
 
     pygame.init()
     mode = " — overlay" if args.overlay else (" — replay" if args.record else " — live")
     pygame.display.set_caption("Ticket to Ride" + mode)
     timeline, screen, human, summary = build(args)
-    screen.set_scale(fit_scale(screen.size, args.scale))
-    surface = pygame.display.set_mode(screen.size)
     viewer = Viewer(timeline, screen, playing=not (args.paused or args.overlay), human=human,
                     summary=summary, overlay_on=True)
+    viewer.fullscreen = args.fullscreen
+    window = open_window(viewer, args.scale)
+    shown = viewer.fullscreen
 
     clock = pygame.time.Clock()
     while viewer.running:
         for event in pygame.event.get():
             viewer.handle(event)
+        if viewer.fullscreen != shown:  # F11
+            window = open_window(viewer, args.scale)
+            shown = viewer.fullscreen
         viewer.tick(pygame.time.get_ticks() / 1000)
-        viewer.draw(surface)
+        window.fill(theme.PANEL_BG)
+        area = pygame.Rect(viewer.offset, viewer.screen.size).clip(window.get_rect())
+        viewer.draw(window.subsurface(area))
         pygame.display.flip()
         clock.tick(60)
     pygame.quit()

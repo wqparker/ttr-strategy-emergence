@@ -78,6 +78,32 @@ def test_board_point_maps_window_pixels_to_canvas():
     assert screen.board_point((ox + screen.board_view.size[0] + 1, oy)) is None
 
 
+@pytest.mark.parametrize("display", [(1920, 1080), (2560, 1440), (3840, 2160), (1280, 1024)])
+def test_fit_fills_the_display(display):
+    game = started_game(num_players=5, seed=3)
+    screen = Screen(game.board)
+    screen.fit(*display)
+    w, h = screen.size
+    assert w <= display[0] and h <= display[1] + 1  # height may round a pixel over
+    assert display[0] - w <= 1 or display[1] - h <= 1  # one dimension is filled
+    if display[0] / display[1] >= screen.canvas_size[0] / screen.canvas_size[1]:
+        assert w == display[0]  # wide displays: side panels take up the slack
+        assert screen.side_w >= SIDE_W
+    surface, _ = screen.render(game)
+    board = pygame.Rect(screen.board_origin, screen.board_view.size)
+    for rect in screen.seat_rects(5).values():
+        assert surface.get_rect().contains(rect)
+        assert rect is screen.seat_rects(5)[0] or not rect.colliderect(board)
+
+
+def test_screenshot_cli_fit(tmp_path):
+    from ttr.viz.screenshot import main
+
+    out = tmp_path / "full.png"
+    main(["--out", str(out), "--fit", "1920x1080", "--turns", "2"])
+    assert pygame.image.load(str(out)).get_size() == (1920, 1080)
+
+
 def test_game_over_state_renders():
     game = started_game(seed=11, max_turns=6)
     while not game.game_over:

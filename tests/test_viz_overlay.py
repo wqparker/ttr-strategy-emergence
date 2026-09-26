@@ -106,8 +106,10 @@ def test_screen_draws_player_panels(summary, records):
 
     game = started_game()
     overlay = make_overlay(summary, "contested", seat=0)
-    for scale in (0.6, 1.2):
-        screen = Screen(game.board, scale=scale)
+    for fit in (None, (1920, 1080)):
+        screen = Screen(game.board, scale=0.6)
+        if fit:
+            screen.fit(*fit)
         surface, _ = screen.render(game, overlay=overlay)
         rect = screen.seat_rects(2)[0]
         # The selected seat's box is outlined in the highlight color.

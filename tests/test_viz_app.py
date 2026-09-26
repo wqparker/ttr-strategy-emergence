@@ -10,10 +10,10 @@ from ttr.game import Game  # noqa: E402
 from ttr.record import GameRecord  # noqa: E402
 from ttr.simulate import play_game  # noqa: E402
 from ttr.viz.app import (  # noqa: E402
-    BUTTONS, SPEEDS, Timeline, Viewer, fit_scale, live_timeline, replay_timeline,
+    BUTTONS, SPEEDS, Timeline, Viewer, fit_scale, layout_for, live_timeline, replay_timeline,
 )
 from ttr.viz.perspective import Perspective  # noqa: E402
-from ttr.viz.screen import Screen  # noqa: E402
+from ttr.viz.screen import SIDE_W, Screen  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -199,6 +199,37 @@ def test_draw_renders_the_whole_screen(record):
     assert surface.get_size() == v.screen.size
     keys = [k for k, _ in v.status()]
     assert "space" in keys and "step" in keys  # legend plus position
+
+
+def test_fullscreen_layout_and_back():
+    v = viewer(live())
+    size, offset = layout_for(v.screen, True, display=(1920, 1080))
+    assert size == (1920, 1080) and v.screen.size[0] == 1920
+    assert offset == (0, (1080 - v.screen.size[1]) // 2)
+    size, offset = layout_for(v.screen, False, want=0.5)
+    assert offset == (0, 0) and size == v.screen.size
+    assert v.screen.side_w == SIDE_W and v.screen.scale == 0.5
+
+
+def test_f11_toggles_fullscreen():
+    v = viewer(live())
+    v.handle(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F11))
+    assert v.fullscreen
+    v.handle(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F11))
+    assert not v.fullscreen
+
+
+def test_mouse_positions_account_for_the_offset():
+    v = viewer(live())
+    v.playing = False
+    v.draw(pygame.Surface(v.screen.size))
+    rect = {name: r for name, _, r in v._buttons}["forward"]
+    v.offset = (100, 40)
+    v.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=rect.center))
+    assert v.timeline.index == 0  # the unshifted spot is no longer the button
+    v.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
+                                pos=(rect.centerx + 100, rect.centery + 40)))
+    assert v.timeline.index == 1
 
 
 def test_fit_scale_respects_an_explicit_scale():

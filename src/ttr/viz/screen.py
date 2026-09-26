@@ -46,6 +46,7 @@ CONTROLS = (
     (". ,", "step fwd / back"),
     ("] [", "faster / slower"),
     ("v", "perspective"),
+    ("f11", "full screen"),
     ("end home", "jump to end / start"),
     ("esc", "quit"),
 )
@@ -78,6 +79,7 @@ class Screen:
         self.names = list(names) if names else None
         self.perspective = perspective or Perspective()
         self.board_view = BoardView(board, scale=scale, layout=layout)
+        self.side_w = SIDE_W  # canvas units; `fit` widens it to fill a wide display
         self.codes = code_map(board)
         self._num_players = 2
         # Where the last draw put the things a human can click.
@@ -93,15 +95,32 @@ class Screen:
         self.board_view.set_scale(scale)
 
     @property
+    def canvas_size(self) -> Tuple[float, float]:
+        """The screen's size at scale 1.0 with the default side panels."""
+        w, h = self.board_view.layout.canvas
+        return (w + 2 * SIDE_W, h + TOP_H + TICKER_H + BOTTOM_H)
+
+    def fit(self, width: int, height: int) -> None:
+        """Fill a width x height display: scale to its height (or its width, if
+        that is the tighter fit), then widen the side panels into any width left
+        over. Nothing is ever narrower than the default layout."""
+        cw, ch = self.canvas_size
+        scale = min(height / ch, width / cw)
+        self.set_scale(scale)
+        # From the board's rounded pixel width, so the total lands on `width` exactly.
+        board_px = self.board_view.size[0]
+        self.side_w = max(SIDE_W, (width - board_px) / (2 * scale))
+
+    @property
     def size(self) -> Tuple[int, int]:
         bw, bh = self.board_view.size
         k = self.scale
-        return (round(2 * SIDE_W * k) + bw, round((TOP_H + TICKER_H + BOTTOM_H) * k) + bh)
+        return (round(2 * self.side_w * k) + bw, round((TOP_H + TICKER_H + BOTTOM_H) * k) + bh)
 
     @property
     def board_origin(self) -> Tuple[int, int]:
         k = self.scale
-        return (round(SIDE_W * k), round(TOP_H * k))
+        return (round(self.side_w * k), round(TOP_H * k))
 
     def _rect(self, x: float, y: float, w: float, h: float) -> pygame.Rect:
         k = self.scale
@@ -128,9 +147,9 @@ class Screen:
         slot_h = (self.board_view.size[1] / self.scale - GAP) / 2 - GAP
         w = self.size[0] / self.scale
         for seat in seats_in_play(num_players)[1:]:
-            x = GAP if seat in LEFT_SEATS else w - SIDE_W + GAP
+            x = GAP if seat in LEFT_SEATS else w - self.side_w + GAP
             row = (LEFT_SEATS if seat in LEFT_SEATS else RIGHT_SEATS).index(seat)
-            rects[seat] = self._rect(x, TOP_H + GAP + row * (slot_h + GAP), SIDE_W - 2 * GAP, slot_h)
+            rects[seat] = self._rect(x, TOP_H + GAP + row * (slot_h + GAP), self.side_w - 2 * GAP, slot_h)
         return rects
 
     def button_rects(self, names: Sequence[str]) -> List[pygame.Rect]:
