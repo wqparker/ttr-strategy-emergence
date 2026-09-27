@@ -531,10 +531,16 @@ def draw_choices(s: pygame.Surface, rect: pygame.Rect, title: str, entries, k: f
     return out
 
 
+def completion_pct(completed: int, held: int) -> str:
+    """"83%" of the tickets held; a dash for a seat that held none."""
+    return f"{100 * completed / held:.0f}%" if held else "–"
+
+
 def draw_result(s: pygame.Surface, area: pygame.Rect, result, names=None, k: float = 1.0) -> None:
     """The final scoreboard, over the board: winner first, then every seat's
-    points. Same columns as render.render_result in the terminal."""
-    cols = ("routes", "tickets", "done/fail", "longest", "bonus", "total")
+    points. The columns follow render.render_result in the terminal, except that
+    tickets completed show as a share of the tickets held, not done/failed."""
+    cols = ("routes", "tickets", "completed", "longest", "bonus", "total")
     rows = len(result.players)
     w, h = 500 * k, (74 + 26 * rows) * k
     box = pygame.Rect(round(area.centerx - w / 2), round(area.centery - h / 2), round(w), round(h))
@@ -556,8 +562,9 @@ def draw_result(s: pygame.Surface, area: pygame.Rect, result, names=None, k: flo
         pygame.draw.rect(s, theme.PANEL_DIM, swatch, max(1, round(k)), border_radius=max(1, round(2 * k)))
         label = f"P{seat}" + (f" {names[seat]}" if names and names[seat] else "")
         text(s, label, (left + 15 * k, y), 12 * k, theme.PANEL_TEXT, bold=seat in result.winners)
+        held = r.tickets_completed + r.tickets_failed
         values = (str(r.route_points), f"{r.ticket_points:+d}",
-                  f"{r.tickets_completed}/{r.tickets_failed}", str(r.longest_path),
+                  completion_pct(r.tickets_completed, held), str(r.longest_path),
                   "+10" if r.longest_path_bonus else "–", str(r.total))
         for i, v in enumerate(values):
             text(s, v, (left + 96 * k + i * 64 * k, y), 12 * k,

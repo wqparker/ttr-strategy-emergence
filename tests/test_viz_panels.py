@@ -51,6 +51,11 @@ def test_wide_panel_uses_columns_of_three_and_stays_inside(count):
     assert not drawn_outside(surface, rect)
 
 
+@pytest.mark.parametrize("completed,held,shown", [(5, 6, "83%"), (3, 3, "100%"), (0, 4, "0%"), (0, 0, "–")])
+def test_completion_percentage(completed, held, shown):
+    assert panels.completion_pct(completed, held) == shown
+
+
 def test_wide_panel_respects_a_right_bound():
     facts = seat_with_long_tickets(9)
     surface = pygame.Surface((1600, 160))
