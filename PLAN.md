@@ -109,7 +109,21 @@ development or tuning.
     overall, per agent or per seat; `ttr-view --overlay DIR` (`o`/`a` keys, hover for
     a value) and `ttr-shot --overlay DIR --stat S [--agent A] [--seat N]`. pandas is
     in a new `[analysis]` extra. The ASCII board view is kept.
-- **Current: Phase 4, the PettingZoo environment.** Not started.
+  - Since then (viewer backlog): ticket markers and yellow ticket cities, full city
+    names in panels, full screen, `--games N`, random default seed in `ttr-view`,
+    random seating with colors that follow the agent.
+- **Current: Phase 4, the PettingZoo environment.**
+  - Done: step 1, the action space (`src/ttr/env/actions.py`): `encode` / `decode`
+    between engine actions and Discrete(168) indices, and `legal_mask`. A test walks
+    random games on both boards at 2–5 players and checks at every state that each
+    legal action round-trips to a distinct index inside its sub-step's block.
+  - Done: step 2, engine speed. `Game.legal_actions()` is cached per state (cleared by
+    `step()`; hand edits call `invalidate()`), so choosing and validating no longer
+    compute legal moves twice: 7.1k → 12.6k sub-steps/s, 11.2k with mask and decode
+    (`scripts/bench_env.py`, USA, 2 players, random play).
+  - Next: step 3, the observation encoder (the ~760-number vector in "Agent design
+    decisions"), then the AEC wrapper with reward modes, then `api_test` and a
+    random-agent smoke test. PettingZoo and Gymnasium go in an `[env]` extra.
 
 ## Roadmap
 
@@ -482,9 +496,9 @@ not just to find the strongest one. Each tier teaches something different:
 
 ## Open questions
 
-- **Engine speed**: about 10k steps/s now, and `step()` recomputes the legal-move list to
-  validate each action. Revisit when legal moves become action masks in Phase 4,
-  probably with a cached mask per state.
+- **Engine speed**: *(settled for now.)* Legal moves are cached per state; 12.6k
+  sub-steps/s engine-only, 11.2k with the env's mask (USA, 2 players). Revisit if
+  training throughput needs more, e.g. incremental claimability per route.
 
 ## Notes
 

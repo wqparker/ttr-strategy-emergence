@@ -30,6 +30,7 @@ def set_hand(game: Game, player: int, **cards: int) -> None:
         for _ in range(n):
             game.deck.remove(color)
     game.players[player].hand = new
+    game.invalidate()
 
 
 def set_market(game: Game, *colors: Color) -> None:
@@ -39,6 +40,7 @@ def set_market(game: Game, *colors: Color) -> None:
     for c in colors:
         game.deck.remove(c)
         game.market.append(c)
+    game.invalidate()
 
 
 def empty_the_piles(game: Game, into: int = 1) -> None:
@@ -48,6 +50,7 @@ def empty_the_piles(game: Game, into: int = 1) -> None:
     for card in game.deck + game.discard:
         hand[card] += 1
     game.deck, game.discard = [], []
+    game.invalidate()
 
 
 def total_cards(game: Game) -> int:

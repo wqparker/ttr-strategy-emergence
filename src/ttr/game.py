@@ -119,6 +119,7 @@ class Game:
         self.market: List[Color] = []
         self.ticket_deck: List[int] = [t.id for t in self.board.tickets]  # top = index 0
         self.log: List[Event] = []
+        self._legal_cache: Optional[List[Action]] = None  # see legal_actions
 
         self.turn = 0  # completed main turns
         self.market_resets = 0
@@ -222,6 +223,18 @@ class Game:
     # ---------------------------------------------------------- legal moves
 
     def legal_actions(self) -> List[Action]:
+        """Every legal action now. Computed once per state and cached until the
+        next step: the env builds its mask from it and step() validates against
+        it. Code that edits the state directly (tests) must call invalidate()."""
+        if self._legal_cache is None:
+            self._legal_cache = self._compute_legal_actions()
+        return list(self._legal_cache)
+
+    def invalidate(self) -> None:
+        """Forget the cached legal actions after editing the state by hand."""
+        self._legal_cache = None
+
+    def _compute_legal_actions(self) -> List[Action]:
         if self.phase is Phase.GAME_OVER:
             return []
         player = self.players[self.current_player]
@@ -298,6 +311,7 @@ class Game:
     def step(self, action: Action) -> None:
         if action not in self.legal_actions():
             raise IllegalAction(f"{action!r} is not legal in phase {self.phase.value}")
+        self._legal_cache = None  # the state is about to change
         p = self.current_player
         player = self.players[p]
 

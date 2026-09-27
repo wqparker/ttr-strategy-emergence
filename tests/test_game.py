@@ -244,6 +244,7 @@ def test_double_route_open_to_others_in_large_games(num_players):
     game.route_owner[a] = 1
     assert ClaimRoute(b) in game.legal_actions()
     game.route_owner[a] = 0  # same player may never own both halves
+    game.invalidate()  # the state was edited by hand
     assert ClaimRoute(b) not in game.legal_actions()
 
 
