@@ -219,11 +219,50 @@ for 2 players).
       tickets" (keep.count −0.16, keep.points −0.12): the agents learned tickets are
       a liability because they rarely finish them (39% of kept tickets completed vs
       greedy's 96%), not which tickets are finishable.
-- **Next:** second-pass ideas for tier A, to try when we return to it: learn V(s)
-  once, shared, and give each action type only an advantage over it, so the action
-  features get the gradient; features for the claim itself relative to alternatives
-  (e.g. trains to finish my tickets after this claim); smaller α with more games.
-  Then DQN / PPO (needs PyTorch).
+  - Done: tier A, second pass (2026-09-27).
+    - Changes: Q(s, a) = v · state(s) + w[type] · ψ(s, a), one shared value and a
+      per-type advantage (bias + that type's features, which now carry the state
+      context that matters to them: hand size and endgame for draws, trains after
+      and endgame for claims, last turn / open tickets / trains for ticket draws);
+      ticket-choice features for finishability (share of path already on my other
+      tickets' paths, costliest ticket vs uncommitted trains, points per train);
+      `--opponent mixed` (random or greedy, a coin flip per game); the best
+      checkpoint by margin against greedy is kept (`linear:PATH@best`);
+      `ttr-dash --group` averages seeds.
+    - Batch: 4 settings × 3 seeds, 2000 games each (`runs/linear/pass2/`).
+      Against greedy (each seed's last 5 evaluations, mean over seeds):
+
+      | Setting | Margin (seeds) | Win share | Pass 1 |
+      | --- | --- | --- | --- |
+      | Q vs random | −35 (−32, −37, −36) | 10% | −64, 2% |
+      | Q vs greedy | −59 (−82, −36, −60) | 9% | −80, 0% |
+      | Q vs mixed | −62 (−51, −83, −51) | 5% | — |
+      | SARSA vs mixed | −66 (−79, −52, −68) | 6% | — |
+
+      Every setting improved on pass 1 and all beat random ≥ 98%. The advantage
+      weights now carry signal (pay.route_points +0.28, claim.points +0.15 for Q vs
+      mixed; pass 1: ≈ 0).
+    - Best checkpoints hold up on 200 fresh games against greedy: Q vs mixed s0
+      36% wins, −12; Q vs greedy s2 36%, −14; Q vs greedy s1 33%, −15 — where the
+      same runs' final weights score 12%, 0% and 10%. Evaluation margins inside one
+      run swing between about −10 and −90 (Q vs greedy s2: −37, −14, −77, −79 over
+      its last four), so the policy moves between strategies rather than
+      converging. Keeping the best checkpoint is worth more than any other change.
+    - The best policies are all the same strategy: race to the end. Long routes
+      (mean length 3.9–4.2, 3.4–3.9 claims of 5–6), blind draws, the minimum 2
+      tickets, trigger the end in 75–99% of games, which last about 72 turns vs 85.
+      The greedy bot then scores 80–93 instead of its usual 106, because it runs
+      out of time to finish tickets. Q vs mixed s0's final weights still claim long
+      routes (8 claims of 5–6) but trigger the end only 27% of the time, and greedy
+      scores 114: the tempo, not the long routes alone, is what works.
+    - The mixed opponent did not help: Q vs random is best and most consistent
+      (seed spread 5 vs 30). SARSA vs Q (mixed): no difference beyond seed noise.
+    - Tickets are still the gap: every agent completes under 1 ticket a game
+      (greedy 4.9). Rare final-round ticket choices still learn noisy weights
+      (keep.doomed_points +0.12 for Q vs random, the wrong sign).
+- **Next:** decide between a third tier-A pass (stabilise: smaller α or averaged
+  weights; ticket completion) and moving on to DQN / PPO (needs PyTorch). The
+  race-to-the-end strategy is a finding for the tempo question either way.
 
 ## Roadmap
 

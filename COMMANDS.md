@@ -154,8 +154,8 @@ ttr-sim [--agents AGENT ...] [--games N] [--seed N]
 | `ttr-sim --games 20 --record runs/records` | save replayable games |
 | `ttr-sim --agents linear:runs/linear/q_greedy.json greedy --games 200` | a trained agent vs greedy |
 
-An agent is `random`, `greedy`, or `linear:PATH` (trained linear Q / SARSA weights, needs the
-`[env]` extra). `ttr-view --agents` takes the same names.
+An agent is `random`, `greedy`, `linear:PATH` (trained linear Q / SARSA weights, needs the
+`[env]` extra) or `linear:PATH@best` (that run's best checkpoint). `ttr-view --agents` takes the same names.
 
 Each game deals the agents into random seats and starts at a random seat, so every order of play comes up and first-player advantage averages out. The seed is printed at the
 start of every run; `--seed N` replays that batch exactly. A record is a seed plus a list of
@@ -181,13 +181,15 @@ greedy every `--eval-every` games and prints a line per evaluation.
 ```
 ttr-train-linear --algo q --opponent random --games 2000 --out runs/linear/q_random.json
 ttr-train-linear --algo sarsa --opponent greedy --games 2000 --out runs/linear/sarsa_greedy.json
+ttr-train-linear --algo q --opponent mixed --seed 1 --games 2000 --out runs/linear/q_mixed_s1.json
 ttr-train-linear ... --init runs/linear/q_random.json    # continue from saved weights
+ttr-sim --agents linear:runs/linear/q_mixed_s1.json@best greedy   # the run's best checkpoint
 ```
 
 | Option | Default | |
 | --- | --- | --- |
 | `--algo` | `q` | `q` (Q-learning) or `sarsa` |
-| `--opponent` | `random` | `random` or `greedy` |
+| `--opponent` | `random` | `random`, `greedy`, or `mixed` (either, a coin flip per game) |
 | `--alpha` | `0.05` | step size (normalized by the feature vector's squared length) |
 | `--epsilon-start` / `--epsilon-end` / `--epsilon-decay` | `0.2` / `0.02` / `0.5` | exploration, falling linearly over that share of the games |
 | `--reward` | `margin` | `score`, `margin` or `win` |
@@ -196,7 +198,9 @@ ttr-train-linear ... --init runs/linear/q_random.json    # continue from saved w
 The output JSON holds the weights by action type with feature names, the config, one row of
 game metrics per training game, every evaluation (mean metrics against random and greedy),
 the weights at each evaluation, and the random and greedy bots' metrics on the final
-evaluation's games. Feature definitions: `src/ttr/learn/features.py`; metrics:
+evaluation's games, and the best checkpoint (the weights at the evaluation with the best margin
+against greedy; play it as `linear:PATH@best`). Name runs `NAME_s<seed>.json` to average seeds
+in `ttr-dash --group`. Feature definitions: `src/ttr/learn/features.py`; metrics:
 `src/ttr/learn/metrics.py`.
 
 ## ttr-dash
@@ -208,6 +212,7 @@ extra).
 ttr-dash runs/linear/q_greedy.json                              # one run
 ttr-dash runs/linear/q_greedy.json runs/linear/sarsa_greedy.json   # compare (up to 8)
 ttr-dash runs/linear/*.json --save runs/linear/dash               # all pages as PNG, no window
+ttr-dash runs/linear/pass2/*.json --group                        # average NAME_s0, NAME_s1, ... into NAME xN
 ```
 
 | Page | Shows |

@@ -84,3 +84,27 @@ def test_old_run_files_are_refused(tmp_path):
     path.write_text(json.dumps({"history": [{"games": 1, "vs_random_win_rate": 1}]}), encoding="utf-8")
     with pytest.raises(RunFormatError):
         load_run(path, "#000000")
+
+
+def test_group_averages_seeds(run_file, tmp_path):
+    pytest.importorskip("matplotlib")
+    from ttr.learn.dashboard import SERIES, group_runs, load_run
+
+    data = json.loads(run_file.read_text(encoding="utf-8"))
+    paths = []
+    for seed, shift in ((0, 0.0), (1, 10.0)):
+        d = json.loads(json.dumps(data))
+        for e in d["history"]:
+            e["eval"]["greedy"]["margin"] += shift
+        d["config"]["seed"] = seed
+        path = tmp_path / f"q_test_s{seed}.json"
+        path.write_text(json.dumps(d), encoding="utf-8")
+        paths.append(path)
+    other = tmp_path / "sarsa_x.json"
+    other.write_text(json.dumps(data), encoding="utf-8")
+    runs = [load_run(p, SERIES[i]) for i, p in enumerate(paths)] + [load_run(other, SERIES[2])]
+    grouped = group_runs(runs)
+    assert [r.name for r in grouped] == ["q_test x2", "sarsa_x"]
+    mean = grouped[0].history[-1]["eval"]["greedy"]["margin"]
+    assert mean == pytest.approx(data["history"][-1]["eval"]["greedy"]["margin"] + 5)
+    assert grouped[0].config["seed"] == "0, 1"

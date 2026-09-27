@@ -24,9 +24,11 @@ def test_feature_names_are_unique_and_match_the_vectors():
     for kind in F.ACTION_TYPES:
         names = F.feature_names(kind)
         assert len(set(names)) == len(names)
-    for kind, phi in F.all_features(game, 0):
-        assert len(phi) == len(F.feature_names(kind))
-        assert np.isfinite(phi).all() and phi.min() >= -1 and phi.max() <= 1
+    state, feats = F.all_features(game, 0)
+    assert len(state) == len(F.STATE_FEATURES)
+    for kind, psi in feats:
+        assert len(psi) == len(F.feature_names(kind)) and psi[0] == 1  # the type's bias
+        assert np.isfinite(psi).all() and psi.min() >= -1 and psi.max() <= 1
 
 
 def named(game, p, action):
@@ -78,20 +80,29 @@ def test_keep_features():
 
 def test_features_ignore_the_opponents_hidden_cards_and_tickets():
     game = started_game(seed=4)
-    base = [(k, phi.tolist()) for k, phi in F.all_features(game, 0)]
+    def view():
+        state, feats = F.all_features(game, 0)
+        return state.tolist(), [(k, psi.tolist()) for k, psi in feats]
+
+    base = view()
     set_hand(game, 1, red=game.players[1].hand_size)
     game.players[1].tickets = [t for t in range(30) if t not in game.players[0].tickets][:3]
-    assert [(k, phi.tolist()) for k, phi in F.all_features(game, 0)] == base
+    assert view() == base
 
 
 def test_update_moves_q_toward_the_target():
     agent = LinearAgent()
-    phi = np.array([1.0, 0.5] + [0.0] * (len(F.feature_names("draw_blind")) - 2))
+    psi = np.array([1.0, 0.5] + [0.0] * (len(F.feature_names("draw_blind")) - 2))
+    state = np.linspace(1.0, 0.2, len(F.STATE_FEATURES))
+
+    def q():
+        return float(agent.weights["value"] @ state + agent.weights["draw_blind"] @ psi)
+
     for _ in range(3):
-        before = float(agent.weights["draw_blind"] @ phi)
-        _update(agent, "draw_blind", phi, 1.0, alpha=0.5)
-        after = float(agent.weights["draw_blind"] @ phi)
-        assert abs(1.0 - after) == pytest.approx(0.5 * abs(1.0 - before))
+        before = q()
+        _update(agent, "draw_blind", psi, state, 1.0, alpha=0.5)
+        assert abs(1.0 - q()) == pytest.approx(0.5 * abs(1.0 - before))
+    assert agent.weights["value"].any() and not agent.weights["claim"].any()
 
 
 @pytest.mark.parametrize("algo", ["q", "sarsa"])
@@ -169,3 +180,35 @@ def test_a_run_records_everything_the_dashboard_reads(tmp_path):
     result.save(path, cfg)
     loaded = LinearAgent.load(path)
     assert np.allclose(loaded.weights["claim"], result.agent.weights["claim"], atol=1e-6)
+
+
+def test_shared_path_rewards_tickets_that_overlap_mine():
+    """Holding Denver-El Paso, an offered ticket through Santa Fe shares its path."""
+    game = started_game()
+    game.players[0].tickets = [DENVER_EL_PASO]
+    ctx = F.context(game, 0)
+    for tid, cost in ctx.offer_costs.items():
+        assert 0 <= ctx.offer_shared[tid] <= cost
+    denver_santa_fe = route_id(game, "Denver", "Santa Fe")
+    assert denver_santa_fe in ctx.route_tickets
+
+
+def test_mixed_opponents_and_best_checkpoint(tmp_path):
+    from ttr.learn.linear import TRAIN_OPPONENTS
+
+    kinds = {TRAIN_OPPONENTS["mixed"](s).name for s in range(20)}
+    assert kinds == {"random", "greedy"}
+    cfg = TrainConfig(games=6, seed=5, opponent="mixed")
+    result = train(cfg, eval_every=2, eval_games=2, log=lambda line: None, baselines=False)
+    margins = [e["eval"]["greedy"]["margin"] for e in result.history]
+    assert result.best["margin_vs_greedy"] == max(margins)
+    assert result.best["games"] == result.history[margins.index(max(margins))]["games"]
+    assert {r["vs_greedy"] for r in result.games} <= {0.0, 1.0}
+    path = tmp_path / "run.json"
+    result.save(path, cfg)
+    best = LinearAgent.load(path, best=True)
+    snap = next(s for s in result.snapshots if s["games"] == result.best["games"])
+    assert np.allclose(best.weights["value"], snap["weights"]["value"])
+
+    from ttr.agents.registry import make_agent
+    assert make_agent(f"linear:{path}@best", 0).name.endswith("@best")

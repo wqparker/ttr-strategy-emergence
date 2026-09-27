@@ -4,6 +4,7 @@ training runs (the JSON `ttr-train-linear` writes).
     ttr-dash runs/linear/q_greedy.json
     ttr-dash runs/linear/q_greedy.json runs/linear/sarsa_greedy.json     # compare runs
     ttr-dash runs/linear/*.json --save runs/linear/dash                   # every page as PNG, no window
+    ttr-dash runs/linear/pass2/*.json --group                             # average seeds: X_s0, X_s1 -> X
 
 Pages (keys 1-7 or left/right):
 
@@ -31,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import textwrap
 import sys
 from dataclasses import dataclass
@@ -156,6 +158,45 @@ def load_run(path: Path, color: str) -> Run:
     return Run(name=Path(path).stem, path=Path(path), data=data, color=color)
 
 
+def _mean_tree(items: Sequence):
+    """Elementwise mean of equally shaped JSON values (dicts, lists, numbers);
+    anything else is taken from the first."""
+    first = items[0]
+    if isinstance(first, dict):
+        return {k: _mean_tree([it[k] for it in items]) for k in first if all(k in it for it in items)}
+    if isinstance(first, list):
+        n = min(len(it) for it in items)
+        return [_mean_tree([it[i] for it in items]) for i in range(n)]
+    if isinstance(first, (int, float)) and not isinstance(first, bool):
+        return float(np.mean(items))
+    return first
+
+
+def group_runs(runs: Sequence[Run]) -> List[Run]:
+    """Merge runs named NAME_s<seed> into one run NAME (n seeds): every recorded
+    number is the mean over the seeds, game by game and evaluation by evaluation
+    (all seeds evaluate on the same games). Other runs pass through."""
+    groups: Dict[str, List[Run]] = {}
+    for run in runs:
+        groups.setdefault(re.sub(r"_s\d+$", "", run.name), []).append(run)
+    out = []
+    for i, (name, members) in enumerate(groups.items()):
+        if len(members) == 1:
+            out.append(Run(members[0].name, members[0].path, members[0].data, SERIES[i % len(SERIES)]))
+            continue
+        data = {k: _mean_tree([m.data[k] for m in members])
+                for k in ("history", "games", "snapshots", "baselines", "weights") if all(k in m.data for m in members)}
+        data["features"] = members[0].data["features"]
+        data["config"] = dict(members[0].data.get("config", {}),
+                              seed=", ".join(str(m.config.get("seed")) for m in members))
+        data["eval_games"] = members[0].data.get("eval_games", "?")
+        bests = [m.data.get("best") for m in members if m.data.get("best")]
+        if bests:
+            data["best"] = {"games": "mean", "margin_vs_greedy": float(np.mean([b["margin_vs_greedy"] for b in bests]))}
+        out.append(Run(f"{name} x{len(members)}", members[0].path, data, SERIES[i % len(SERIES)]))
+    return out
+
+
 def rolling(ys: np.ndarray, window: int) -> np.ndarray:
     """Trailing mean; the first points average what exists so far."""
     if len(ys) == 0:
@@ -199,7 +240,7 @@ def draw_table(ax, header: Sequence[str], rows: Sequence[Sequence[str]], title: 
         ax.text(0, 1, "no data", color=INK_2, fontsize=font, va="top", transform=ax.transAxes)
         return
     height = 1.0 if row_height is None else min(1.0, (len(rows) + 1.6) * row_height)
-    header = [textwrap.fill(h, 14) for h in header]
+    header = [textwrap.fill(h, 11) for h in header]
     table = ax.table(cellText=[list(r) for r in rows], colLabels=list(header), loc="upper left",
                      cellLoc="right", colLoc="right", colWidths=col_widths, bbox=[0, 1 - height, 1, height])
     table.auto_set_font_size(False)
@@ -337,6 +378,9 @@ class Dashboard:
         for k in keys:
             cfg_rows.append([k] + [str(r.config.get(k, "")) for r in self.runs])
         cfg_rows.append(["training time"] + [f"{r.history[-1]['seconds']:.0f} s" for r in self.runs])
+        cfg_rows.append(["best vs greedy"] + [
+            f"{r.data['best']['games']}: {r.data['best']['margin_vs_greedy']:+.1f}"
+            if r.data.get("best") else "" for r in self.runs])
         draw_table(self.fig.add_subplot(gs[2, 2]), ["setting"] + [r.name for r in self.runs], cfg_rows,
                    title="run settings", swatches=[None] + [r.color for r in self.runs])
 
@@ -423,38 +467,52 @@ class Dashboard:
         run = self.run
         feats: Dict[str, List[str]] = run.data["features"]
         weights: Dict[str, List[float]] = run.data["weights"]
-        types = list(feats)
-        n_state = _shared_prefix([feats[t] for t in types])
-        state_names = feats[types[0]][:n_state]
-        width = max(len(feats[t]) - n_state for t in types)
-        state = np.array([weights[t][:n_state] for t in types])
+        all_blocks = list(feats)
+        if "value" in feats:
+            # Value + advantage (second pass): one shared state row, then each
+            # type's bias and own features.
+            types = [t for t in all_blocks if t != "value"]
+            state_rows, state_names = ["value (shared)"], feats["value"]
+            state = np.array([weights["value"]])
+            own = {t: (feats[t], weights[t]) for t in types}
+            state_title = f"{run.name}: state value weights (shared by every action)"
+        else:
+            # First pass: every type carries its own copy of the state features.
+            types = all_blocks
+            n_state = _shared_prefix([feats[t] for t in types])
+            state_rows, state_names = types, feats[types[0]][:n_state]
+            state = np.array([weights[t][:n_state] for t in types])
+            own = {t: (feats[t][n_state:], weights[t][n_state:]) for t in types}
+            state_title = f"{run.name}: state-feature weights (shared names, one row per action type)"
+        n_state = len(state_names)
+        width = max(len(own[t][0]) for t in types)
         action = np.full((len(types), max(width, 1)), np.nan)
         for i, t in enumerate(types):
-            w = weights[t][n_state:]
-            action[i, :len(w)] = w
+            action[i, :len(own[t][1])] = own[t][1]
         lim = float(np.nanmax(np.abs(np.concatenate([state.ravel(), action[~np.isnan(action)]])))) or 1.0
         cmap = LinearSegmentedColormap.from_list("div", DIVERGING).with_extremes(bad=SURFACE)
         norm = TwoSlopeNorm(0.0, -lim, lim)
 
         gs = self.grid(2, 2, width_ratios=[1, 1], height_ratios=[1, 1.05], hspace=0.35, wspace=0.12, left=0.07)
         ax = self.fig.add_subplot(gs[0, 0])
-        style_axes(ax, f"{run.name}: state-feature weights (shared names, one row per action type)")
+        style_axes(ax, state_title)
         ax.grid(False)
         ax.imshow(state, cmap=cmap, norm=norm, aspect="auto")
         ax.set_xticks(range(n_state), state_names, rotation=30, ha="right", fontsize=7.5)
-        ax.set_yticks(range(len(types)), types, fontsize=7.5)
-        for i in range(len(types)):
+        ax.set_yticks(range(len(state_rows)), state_rows, fontsize=7.5)
+        for i in range(len(state_rows)):
             for j in range(n_state):
                 ax.text(j, i, f"{state[i, j]:+.2f}", ha="center", va="center", fontsize=6.5, color=INK)
 
         ax = self.fig.add_subplot(gs[0, 1])
-        style_axes(ax, "action-feature weights (each type's own features)")
+        style_axes(ax, "advantage weights (each type's bias and own features)" if "value" in feats
+                   else "action-feature weights (each type's own features)")
         ax.grid(False)
         ax.imshow(action, cmap=cmap, norm=norm, aspect="auto")
         ax.set_xticks([])
         ax.set_yticks(range(len(types)), types, fontsize=7.5)
         for i, t in enumerate(types):
-            for j, name in enumerate(feats[t][n_state:]):
+            for j, name in enumerate(own[t][0]):
                 ax.text(j, i, f"{name}\n{action[i, j]:+.3f}", ha="center", va="center", fontsize=6, color=INK)
 
         # Trajectories of the weights that moved most over training.
@@ -464,7 +522,7 @@ class Dashboard:
         if snaps:
             xs = np.array([s["games"] for s in snaps], dtype=float)
             series = {}
-            for t in types:
+            for t in all_blocks:
                 for j, name in enumerate(feats[t]):
                     series[f"{t}.{name}"] = np.array([s["weights"][t][j] for s in snaps])
             top = sorted(series, key=lambda k: -abs(series[k][-1] - series[k][0]))[:8]
@@ -580,9 +638,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--page", type=int, default=1, help="page to open on (1-7)")
     parser.add_argument("--save", type=Path, metavar="DIR", help="write every page as PNG to DIR and exit")
     parser.add_argument("--windowed", action="store_true", help="don't start full screen")
+    parser.add_argument("--group", action="store_true",
+                        help="average runs named NAME_s<seed> into one line per NAME")
     args = parser.parse_args(argv)
-    if len(args.runs) > len(SERIES):
-        parser.error(f"at most {len(SERIES)} runs at once")
 
     import matplotlib
 
@@ -594,9 +652,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     import matplotlib.pyplot as plt
 
     try:
-        runs = [load_run(p, SERIES[i]) for i, p in enumerate(args.runs)]
+        runs = [load_run(p, SERIES[i % len(SERIES)]) for i, p in enumerate(args.runs)]
     except (RunFormatError, OSError) as e:
         sys.exit(str(e))
+    if args.group:
+        runs = group_runs(runs)
+    if len(runs) > len(SERIES):
+        parser.error(f"at most {len(SERIES)} runs at once (--group averages seeds)")
     dash = Dashboard(runs, opponent=args.opponent)
     dash.page = max(0, min(len(dash.pages), args.page) - 1)
     if args.save:

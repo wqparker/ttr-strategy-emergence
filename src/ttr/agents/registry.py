@@ -3,6 +3,7 @@
     random                     RandomAgent
     greedy                     GreedyAgent
     linear:PATH                trained linear Q / SARSA weights (ttr.learn.linear; `[env]` extra)
+    linear:PATH@best           the same run's best checkpoint
 
 `make_agent(spec, seed)` builds one; `agent_spec` validates a spec for argparse.
 Weight files are read once per path and shared.
@@ -18,7 +19,7 @@ from ttr.agents.base import Agent
 from ttr.agents.greedy import GreedyAgent
 from ttr.agents.random_agent import RandomAgent
 
-KINDS = ("random", "greedy", "linear:PATH")
+KINDS = ("random", "greedy", "linear:PATH", "linear:PATH@best")
 _linear_weights: Dict[str, dict] = {}
 
 
@@ -31,8 +32,9 @@ def make_agent(spec: str, seed: int) -> Agent:
     if kind == "linear" and arg:
         from ttr.learn.linear import LinearAgent
 
+        path, best = (arg[:-len("@best")], True) if arg.endswith("@best") else (arg, False)
         if arg not in _linear_weights:
-            _linear_weights[arg] = LinearAgent.load(Path(arg)).weights
+            _linear_weights[arg] = LinearAgent.load(Path(path), best=best).weights
         weights = {k: w.copy() for k, w in _linear_weights[arg].items()}
         return LinearAgent(weights, seed=seed, name=spec)
     raise ValueError(f"unknown agent {spec!r}; expected one of {', '.join(KINDS)}")

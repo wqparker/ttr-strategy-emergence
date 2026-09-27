@@ -1,11 +1,14 @@
 """Linear Q-learning and SARSA on hand-made features (PLAN.md "Methods to
 compare", tier A).
 
-    ttr-train-linear --algo q --opponent random --games 2000 --out runs/linear/q_random.json
-    ttr-sim --agents linear:runs/linear/q_random.json greedy --games 200
+    ttr-train-linear --algo q --opponent mixed --games 2000 --out runs/linear/q_mixed.json
+    ttr-sim --agents linear:runs/linear/q_mixed.json greedy --games 200
+    ttr-sim --agents linear:runs/linear/q_mixed.json@best greedy       # the best checkpoint
 
-Q(s, a) = w[type(a)] . phi(s, a), features in ttr.learn.features. The learner
-plays one seat against a scripted bot; its seat is random each game. It decides
+Q(s, a) = v . state(s) + w[type(a)] . psi(s, a): a value shared by every action
+plus an advantage per action type (features in ttr.learn.features). The learner
+plays one seat against a scripted bot (random, greedy, or a coin flip between
+them each game: "mixed"); its seat is random each game. It decides
 at every one of its engine sub-steps, and the reward between two of its
 decisions is the change in `reward_values` (ttr.env.reward, default the score
 margin, scaled by 1/100) over everything that happened in between, opponent
@@ -15,11 +18,17 @@ moves included. gamma = 1: every game ends.
     SARSA       target = r + Q(s', a'), a' the action actually taken, exploration included
     terminal    target = r
 
-    w[type(a)] += alpha * (target - Q(s, a)) * phi(s, a) / (phi . phi)
+    delta = target - Q(s, a);  n = state . state + psi . psi
+    v         += alpha * delta * state / n
+    w[type(a)] += alpha * delta * psi / n
 
-The update is normalized by phi . phi (normalized LMS), so alpha is the share of
-the error corrected on that sample whatever the number of features. Exploration
-is epsilon-greedy, epsilon decaying linearly over the first part of training.
+The update is normalized (normalized LMS), so alpha is the share of the error
+corrected on that sample whatever the number of features. Exploration is
+epsilon-greedy, epsilon decaying linearly over the first part of training.
+
+Every evaluation that beats the best margin against greedy so far keeps a copy
+of the weights ("best" in the saved file, `linear:PATH@best` to play it). The
+same evaluation both picks and scores it, so its recorded score is optimistic.
 """
 
 from __future__ import annotations
@@ -41,7 +50,7 @@ from ttr.agents import GreedyAgent, RandomAgent
 from ttr.board import Board, load_board
 from ttr.env.reward import REWARD_MODES, reward_values
 from ttr.game import Game
-from ttr.learn.features import ACTION_TYPES, all_features, feature_names
+from ttr.learn.features import ACTION_TYPES, STATE_FEATURES, all_features, feature_names
 from ttr.learn.metrics import METRICS, game_metrics, mean_metrics
 
 ALGOS = ("q", "sarsa")
@@ -49,6 +58,12 @@ OPPONENTS = {
     "random": lambda seed: RandomAgent(seed),
     "greedy": lambda seed: GreedyAgent(seed),
 }
+# Training opponents: the bots, or either at random each game.
+TRAIN_OPPONENTS = {
+    **OPPONENTS,
+    "mixed": lambda seed: (GreedyAgent if random.Random(seed).random() < 0.5 else RandomAgent)(seed),
+}
+VALUE = "value"  # the weight block over the state features
 
 
 class LinearAgent:
@@ -57,18 +72,21 @@ class LinearAgent:
     def __init__(self, weights: Optional[Dict[str, np.ndarray]] = None, epsilon: float = 0.0,
                  seed: Optional[int] = None, name: str = "linear") -> None:
         self.weights = weights if weights is not None else {
-            k: np.zeros(len(feature_names(k))) for k in ACTION_TYPES
+            VALUE: np.zeros(len(STATE_FEATURES)),
+            **{k: np.zeros(len(feature_names(k))) for k in ACTION_TYPES},
         }
         self.epsilon = epsilon
         self.rng = random.Random(seed)
         self.name = name
 
-    def evaluate(self, game: Game, p: int) -> Tuple[List[Action], List[Tuple[str, np.ndarray]], List[float]]:
-        """Legal actions, their (type, phi) and Q values."""
+    def evaluate(self, game: Game, p: int
+                 ) -> Tuple[List[Action], np.ndarray, List[Tuple[str, np.ndarray]], List[float]]:
+        """Legal actions, the state vector, each action's (type, psi) and Q values."""
         actions = game.legal_actions()
-        feats = all_features(game, p, actions)
-        qs = [float(self.weights[kind] @ phi) for kind, phi in feats]
-        return actions, feats, qs
+        state, feats = all_features(game, p, actions)
+        value = float(self.weights[VALUE] @ state)
+        qs = [value + float(self.weights[kind] @ psi) for kind, psi in feats]
+        return actions, state, feats, qs
 
     def choose(self, qs: Sequence[float]) -> int:
         if len(qs) > 1 and self.epsilon > 0 and self.rng.random() < self.epsilon:
@@ -77,14 +95,14 @@ class LinearAgent:
         return self.rng.choice([i for i, q in enumerate(qs) if q >= best - 1e-12])
 
     def act(self, game: Game, player: int) -> Action:
-        actions, _, qs = self.evaluate(game, player)
+        actions, _, _, qs = self.evaluate(game, player)
         return actions[self.choose(qs)]
 
     # ------------------------------------------------------------ files
 
     def to_dict(self) -> dict:
         return {
-            "features": {k: list(feature_names(k)) for k in ACTION_TYPES},
+            "features": {VALUE: list(STATE_FEATURES), **{k: list(feature_names(k)) for k in ACTION_TYPES}},
             "weights": {k: [round(float(x), 6) for x in w] for k, w in self.weights.items()},
         }
 
@@ -94,14 +112,18 @@ class LinearAgent:
         path.write_text(json.dumps({**meta, **self.to_dict()}, indent=1), encoding="utf-8")
 
     @classmethod
-    def load(cls, path: Path, seed: Optional[int] = None, name: Optional[str] = None) -> "LinearAgent":
+    def load(cls, path: Path, seed: Optional[int] = None, name: Optional[str] = None,
+             best: bool = False) -> "LinearAgent":
+        """The final weights, or with `best` the best checkpoint's."""
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        weights = {}
-        for k in ACTION_TYPES:
-            if data["features"].get(k) != list(feature_names(k)):
-                raise ValueError(f"{path}: {k} features differ from this version's; retrain")
-            weights[k] = np.array(data["weights"][k], dtype=np.float64)
-        return cls(weights, seed=seed, name=name or f"linear:{path}")
+        expected = {VALUE: list(STATE_FEATURES), **{k: list(feature_names(k)) for k in ACTION_TYPES}}
+        if data.get("features") != expected:
+            raise ValueError(f"{path}: its features differ from this version's; retrain")
+        if best and "best" not in data:
+            raise ValueError(f"{path} has no best checkpoint")
+        source = data["best"]["weights"] if best else data["weights"]
+        weights = {k: np.array(source[k], dtype=np.float64) for k in expected}
+        return cls(weights, seed=seed, name=name or f"linear:{path}{'@best' if best else ''}")
 
 
 # ------------------------------------------------------------------ training
@@ -129,10 +151,13 @@ def epsilon_at(cfg: TrainConfig, g: int) -> float:
     return cfg.epsilon_start + f * (cfg.epsilon_end - cfg.epsilon_start)
 
 
-def _update(agent: LinearAgent, kind: str, phi: np.ndarray, target: float, alpha: float) -> float:
-    w = agent.weights[kind]
-    delta = target - float(w @ phi)
-    w += alpha * delta * phi / float(phi @ phi)
+def _update(agent: LinearAgent, kind: str, psi: np.ndarray, state: np.ndarray, target: float,
+            alpha: float) -> float:
+    v, w = agent.weights[VALUE], agent.weights[kind]
+    delta = target - float(v @ state) - float(w @ psi)
+    step = alpha * delta / (float(state @ state) + float(psi @ psi))
+    v += step * state
+    w += step * psi
     return delta
 
 
@@ -141,7 +166,7 @@ def train_game(agent: LinearAgent, opponent, game: Game, seat: int, cfg: TrainCo
     game metrics (ttr.learn.metrics) plus `decisions` and `mean_abs_td`."""
     scale = 1.0 if cfg.reward_mode == "win" else cfg.reward_scale
     last_value = reward_values(game, cfg.reward_mode)[seat]
-    prev: Optional[Tuple[str, np.ndarray]] = None
+    prev: Optional[Tuple[str, np.ndarray, np.ndarray]] = None  # (type, psi, state)
     deltas: List[float] = []
     while not game.game_over:
         p = game.current_player
@@ -150,17 +175,18 @@ def train_game(agent: LinearAgent, opponent, game: Game, seat: int, cfg: TrainCo
             continue
         value = reward_values(game, cfg.reward_mode)[seat]
         r, last_value = scale * (value - last_value), value
-        actions, feats, qs = agent.evaluate(game, p)
+        actions, state, feats, qs = agent.evaluate(game, p)
         i = agent.choose(qs)
         if prev is not None:
             nxt = max(qs) if cfg.algo == "q" else qs[i]
             deltas.append(_update(agent, *prev, r + nxt, cfg.alpha))
-        prev = feats[i]
+        prev = (feats[i][0], feats[i][1], state)
         game.step(actions[i])
     r = scale * (reward_values(game, cfg.reward_mode)[seat] - last_value)
     if prev is not None:
         deltas.append(_update(agent, *prev, r, cfg.alpha))
     row = game_metrics(game, seat)
+    row["vs_greedy"] = float(getattr(opponent, "name", "") == "greedy")
     row["decisions"] = float(len(deltas))
     row["mean_abs_td"] = statistics.mean(abs(d) for d in deltas) if deltas else 0.0
     return row
@@ -200,6 +226,7 @@ class TrainResult:
                since the previous one, and eval[opponent] = mean metrics
     snapshots  the weights at each evaluation (games -> type -> list)
     baselines  the scripted bots on the final evaluation's games: bot -> opponent -> metrics
+    best       the weights at the evaluation with the best margin against greedy
     """
 
     agent: LinearAgent
@@ -208,10 +235,12 @@ class TrainResult:
     snapshots: List[dict] = field(default_factory=list)
     baselines: Dict[str, Dict[str, Dict[str, float]]] = field(default_factory=dict)
     eval_games: int = 0
+    best: Optional[dict] = None
 
     def save(self, path: Path, cfg: TrainConfig, **meta) -> None:
         self.agent.save(path, config=asdict(cfg), eval_games=self.eval_games, metrics=METRICS, history=self.history,
-                        snapshots=self.snapshots, baselines=self.baselines, games=self.games, **meta)
+                        snapshots=self.snapshots, baselines=self.baselines, games=self.games, best=self.best,
+                        **meta)
 
 
 EVAL_OPPONENTS = ("random", "greedy")
@@ -229,8 +258,8 @@ def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
     play the final evaluation's games too, for comparison."""
     if cfg.algo not in ALGOS:
         raise ValueError(f"algo must be one of {ALGOS}")
-    if cfg.opponent not in OPPONENTS:
-        raise ValueError(f"opponent must be one of {sorted(OPPONENTS)}")
+    if cfg.opponent not in TRAIN_OPPONENTS:
+        raise ValueError(f"opponent must be one of {sorted(TRAIN_OPPONENTS)}")
     if cfg.reward_mode not in REWARD_MODES:
         raise ValueError(f"reward mode must be one of {REWARD_MODES}")
     board = load_board(cfg.board)
@@ -242,7 +271,7 @@ def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
     for g in range(cfg.games):
         agent.epsilon = epsilon_at(cfg, g)
         game = Game(board, num_players=2, seed=rng.getrandbits(32), max_turns=cfg.max_turns)
-        opponent = OPPONENTS[cfg.opponent](rng.getrandbits(32))
+        opponent = TRAIN_OPPONENTS[cfg.opponent](rng.getrandbits(32))
         seat = rng.randrange(2)
         row = train_game(agent, opponent, game, seat, cfg)
         row.update(game=float(g + 1), epsilon=agent.epsilon, seat=float(seat))
@@ -262,7 +291,11 @@ def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
                 },
             }
             out.history.append(entry)
-            out.snapshots.append({"games": done, "weights": agent.to_dict()["weights"]})
+            weights = agent.to_dict()["weights"]
+            out.snapshots.append({"games": done, "weights": weights})
+            selection = entry["eval"]["greedy"]["margin"]
+            if out.best is None or selection > out.best["margin_vs_greedy"]:
+                out.best = {"games": done, "margin_vs_greedy": selection, "weights": weights}
             window = []
             log(_progress_line(entry))
     if baselines:
@@ -288,7 +321,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     d = TrainConfig()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--algo", choices=ALGOS, default=d.algo)
-    parser.add_argument("--opponent", choices=sorted(OPPONENTS), default=d.opponent)
+    parser.add_argument("--opponent", choices=sorted(TRAIN_OPPONENTS), default=d.opponent,
+                        help="training opponent; mixed = random or greedy, a coin flip each game")
     parser.add_argument("--games", type=int, default=d.games)
     parser.add_argument("--alpha", type=float, default=d.alpha)
     parser.add_argument("--epsilon-start", type=float, default=d.epsilon_start)
@@ -312,6 +346,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         reward_mode=args.reward, seed=args.seed,
     )
     agent = LinearAgent.load(args.init, seed=cfg.seed) if args.init else None
+    print(f"(best checkpoint kept by margin vs greedy; play it as linear:{args.out}@best)")
     print(f"training {cfg.algo} vs {cfg.opponent}: {cfg.games} games, alpha {cfg.alpha}, "
           f"epsilon {cfg.epsilon_start} -> {cfg.epsilon_end}, reward {cfg.reward_mode}")
     result = train(cfg, eval_every=args.eval_every, eval_games=args.eval_games, agent=agent)
