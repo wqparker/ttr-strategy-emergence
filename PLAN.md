@@ -300,7 +300,113 @@ for 2 players).
     the step scaling ((1 − λ) with accumulating traces) or credit reaching the wrong
     actions; λ 0.98 with a larger α; and whether α 0.02 alone (p3a) is simply slower
     than pass 2's 0.05.
-- **Next:** finish the pass-3 analysis (re-score best and final weights on fresh
+  - Fourth pass (2026-09-27 overnight, `scripts/linear_pass4.ps1`, `runs/linear/pass4/`):
+    Q vs random, 10000 games, 3 seeds, epsilon reaching 0.02 at game 1000 as before, to
+    answer the pass-3 questions. 24 minutes for all 18 runs. Against greedy, last 5
+    evaluations, mean over seeds; "mid" is the same at game 5000:
+
+    | Setting | Margin (seeds) | Win | Within-run sd | Tickets done / failed | Mid |
+    | --- | --- | --- | --- | --- | --- |
+    | p4a α 0.05 (pass 2, longer) | −20 (−11, −29, −19) | 27% | 13.8 | 1.21 / 0.79 | −22 |
+    | p4b + average 100 | −6 (−2, −6, −9) | 41% | 4.3 | 1.55 / 0.45 | −6 |
+    | p4c α 0.02 + average (p3a, longer) | −10 (−13, −3, −14) | 35% | 5.0 | 0.36 / 1.65 | −30 |
+    | p4d α 0.05 + average + shaping 1 | −7 (−13, −5, −2) | 39% | 4.2 | 1.60 / 0.40 | −11 |
+    | p4e α 0.05 + average + λ 0.9 | −5 (+2, −7, −11) | 41% | 5.0 | 0.91 / 1.09 | −11 |
+    | p4f α 0.2 + average + λ 0.98 | −8 (−10, −4, −11) | 40% | 8.4 | 1.38 / 0.63 | −29 |
+
+    Readings: pass 3 was mostly too short. Averaging is the clearest gain (−20 → −6,
+    evaluation noise sd 13.8 → 4.3); pass 3 blamed it for what was α 0.02's slowness.
+    α 0.02 is slower, not worse (still rising). λ 0.98 learns once α is larger, so the
+    pass-3 collapse was the step α(1 − λ) being too small. Shaping makes every seed
+    complete its tickets without improving the margin. The fast settings plateau near
+    −5 against greedy from mid-run: parity with greedy, not beyond, against random.
+    Seeds split into ticket completers and ticket dumpers (keep 2, complete none).
+  - Fifth pass (`scripts/linear_pass5.ps1`, `runs/linear/pass5/`): p4b's setting
+    (α 0.05, average 100), 30000 games, 5 seeds, evaluations every 500, at most 12 runs
+    at a time (~28 min a run). Does the training opponent get past parity, and Q vs
+    SARSA? Against greedy, last 5 evaluations, mean over seeds:
+
+    | Setting | Margin (seeds) | Win | Tickets done / failed | Curve, games 5k → 30k |
+    | --- | --- | --- | --- | --- |
+    | Q vs random | −14 (−19, −9, −10, −14, −16) | 29% | 1.68 / 0.32 | −13 → −12, flat |
+    | SARSA vs random | −7 (−10, −2, −10, −10, −2) | 36% | 1.63 / 0.37 | −15 → −8, rising |
+    | Q vs greedy | −14 (−15, −11, −30, −10, −4) | 33% | 1.36 / 0.64 | −5 → −15, peaks early |
+    | Q vs mixed | −18 (−15, −15, −24, −18, −19) | 30% | 0.01 / 2.02 | −13 → −19 |
+    | Q vs self | −58 (−38, −75, −73, −74, −30) | 7% | 1.60 / 0.40 | +2 → −64, collapses |
+
+    Readings: longer training against random doesn't pass parity (Q flat from 5000 to
+    30000 games; linear on these features tops out near −5 to −15 vs greedy). Every
+    Q-learning run against a real opponent peaks near game 5000 and then declines at
+    constant α; self-play collapses against greedy while still beating random by 130+.
+    SARSA is steadier (evaluation sd 2.9, the lowest) and still rising: consistent with
+    off-policy Q-learning chattering or diverging under function approximation where
+    on-policy SARSA doesn't. Mixed opponents turn every seed into a ticket dumper.
+    Best checkpoints reach +2 to +9 against greedy but are picked by the same
+    evaluation that scores them, so they need re-scoring on fresh games.
+  - Sixth pass (`scripts/linear_pass6.ps1`, `runs/linear/pass6/`): α decay 0.05 →
+    0.005 as the fix for the late decline, over {Q, SARSA} × {random, greedy, self},
+    plus SARSA at constant α against greedy and self, completing the algorithm ×
+    opponent × α-schedule grid with pass 5. 8 settings × 5 seeds, 30000 games, 12 at a
+    time (~1 h 45 min). Mixed dropped. Same measure as pass 5:
+
+    | Setting | Constant α (pass 5 / 6) | α decay (pass 6) |
+    | --- | --- | --- |
+    | Q vs random | −14 | −17 (−14, −24, −18, −19, −11) |
+    | SARSA vs random | −7 | −12 (−19, −18, −6, +3, −22) |
+    | Q vs greedy | −14 | −12 (−21, −1, −7, −22, −10) |
+    | SARSA vs greedy | −29 (−29, −27, −24, −31, −33) | −36 (−50, −23, −33, −36, −38) |
+    | Q vs self | −58 | −35 (−27, −16, −22, −82, −26) |
+    | SARSA vs self | −56 (−74, −45, −42, −74, −44) | −66 (−74, −81, −68, −78, −30) |
+
+    Readings: α decay doesn't stop the decline (it helps Q against greedy and self a
+    little and hurts SARSA). SARSA declines against greedy and self too, and does worse
+    than Q there, so the decline is not off-policy divergence. The weights stay small
+    (norm about 1), and the training margin falls with the evaluation margin: the
+    policy drifts. Near game 5000 the agents claim about 12 routes of length ~3.7 and
+    end the game themselves 85–90% of the time. Later they claim about 20 routes of
+    length 2 and end it about 30% of the time. Every run against greedy or self peaks
+    near game 5000 (−1 to −10). This looks like a limit of the linear features holding
+    a good policy against a strong opponent: a case for DQN (tier B).
+  - Re-scoring (`scripts/rescore.py`; `runs/linear/rescore_pass4-5.*`,
+    `rescore_pass6.*`): final weights and best checkpoint of every pass 4–6 run against
+    greedy on the same 1000 fresh games (batch seed 9001, never used in training;
+    standard error about ±1 per agent). Mean margin over seeds, best checkpoint's seeds
+    in brackets:
+
+    | Setting | Final | Best (seeds) | Best win |
+    | --- | --- | --- | --- |
+    | p4a Q random α 0.05 | −12 | −7 (−8, −4, −9) | 38% |
+    | p4b + average | −8 | −4 (−3, −1, −8) | 41% |
+    | p4c α 0.02 + average | −13 | −5 (−9, −3, −1) | 42% |
+    | p4d + shaping | −8 | −6 (−14, −1, −3) | 39% |
+    | p4e + λ 0.9 | −7 | −3 (+0, +2, −11) | 43% |
+    | p4f α 0.2 + λ 0.98 | −5 | +5 (−7, +13, +8) | 56% |
+    | p5 Q random | −14 | −6 (−10, −6, −10, −11, +6) | 39% |
+    | p5 SARSA random | −9 | −5 (−10, +2, −9, −7, +2) | 41% |
+    | p5 Q greedy | −18 | +3 (+1, +1, +5, +3, +7) | 54% |
+    | p5 Q mixed | −20 | −10 (+0, −3, −17, −13, −17) | 39% |
+    | p5 Q self | −52 | +3 (+7, +3, +4, +5, −4) | 53% |
+    | p6 Q random, decay | −16 | −6 (+1, −12, −8, −10, −0) | 40% |
+    | p6 SARSA random, decay | −16 | −5 (−7, −7, +4, +2, −14) | 42% |
+    | p6 Q greedy, decay | −12 | **+7 (+9, +6, +9, +6, +7)** | **59%** |
+    | p6 SARSA greedy, decay | −36 | −5 (−8, −1, −3, −2, −13) | 43% |
+    | p6 Q self, decay | −35 | +3 (+6, +7, +4, −6, +6) | 53% |
+    | p6 SARSA self, decay | −67 | +0 (+9, +8, +6, −15, −8) | 49% |
+    | p6 SARSA greedy | −32 | −8 (−9, −5, −3, −7, −15) | 39% |
+    | p6 SARSA self | −51 | −3 (−7, +2, −6, +3, −7) | 45% |
+
+    Readings: early stopping works. Linear Q trained against greedy, stopped at its best
+    evaluation, beats greedy on fresh games: +3 at constant α, +7 with α decay, where
+    every seed is between +6 and +9 with 59% wins. The recorded best margins were only
+    mildly optimistic. The strongest single agent is `p4f_lam98_s1@best`: +13.4 ± 1.0,
+    66% wins. Q beats SARSA against greedy and self; SARSA is only competitive against
+    random. The checkpoints that beat greedy complete fewer tickets than the final
+    weights (1.1–1.2 against 1.4–1.7): they win on routes and by ending the game.
+  - Seventh pass started (`scripts/linear_pass7.ps1`, `runs/linear/pass7/`): p4f's
+    setting (α 0.2, λ 0.98, average 100) for 30000 games against random, greedy and
+    self (Q), and SARSA(λ) against random; 4 settings × 5 seeds, 12 at a time.
+- **Next:** read the pass-6 results; re-score best and final weights of passes 4–6 on
+  fresh games; finish the pass-3 analysis (re-score best and final weights on fresh
   games, per-seed curves), then the next ladder. DQN / PPO (needs PyTorch) after tier A settles. The race-to-the-end
   strategy is a finding for the tempo question either way.
 
