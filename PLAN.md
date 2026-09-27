@@ -121,9 +121,16 @@ development or tuning.
     `step()`; hand edits call `invalidate()`), so choosing and validating no longer
     compute legal moves twice: 7.1k → 12.6k sub-steps/s, 11.2k with mask and decode
     (`scripts/bench_env.py`, USA, 2 players, random play).
-  - Next: step 3, the observation encoder (the ~760-number vector in "Agent design
-    decisions"), then the AEC wrapper with reward modes, then `api_test` and a
-    random-agent smoke test. PettingZoo and Gymnasium go in an `[env]` extra.
+  - Done: step 3, the observation encoder (`src/ttr/env/observation.py`): the
+    765-number vector in "Agent design decisions", numpy float32, memory level 0–2.
+    Card memory reuses `ttr.memory`; trains-to-finish is a Dijkstra per ticket source,
+    cached until the next claim. Tests cover each block, the relative seat order, that
+    an opponent's hand, tickets and offer and the deck order don't change the vector,
+    and that the cached encoder matches a fresh one across random games at 2–5 players.
+    Speed: about 4.4k sub-steps/s with mask and observation (random play, which hoards
+    tickets, is the worst case for the Dijkstra cache). New `[env]` extra (numpy).
+  - Next: step 4, the AEC wrapper with reward modes, then `api_test` and a
+    random-agent smoke test. PettingZoo and Gymnasium join the `[env]` extra.
 
 ## Roadmap
 
@@ -437,7 +444,9 @@ not just to find the strongest one. Each tier teaches something different:
 - **Observation: one flat vector from the acting player's view**, for a plain multilayer
   network. "Me" comes first and opponents follow in seat order, so one network can play
   any seat (needed for self-play with shared weights). Counts are scaled to about [0, 1].
-  About 760 numbers for 2 players:
+  765 numbers for 2 players; in general 100(N+1) + 4N + 10(N−1) + 447. Built by
+  `ObservationEncoder` in `src/ttr/env/observation.py`, which documents each block's
+  slice and scale:
 
   | Block | Encoding | Size (2p) |
   | --- | --- | --- |
@@ -448,7 +457,7 @@ not just to find the strongest one. Each tier teaches something different:
   | Market | counts per color | 9 |
   | Pile sizes | train deck, discard, ticket deck | 3 |
   | Per player | trains left, public score, hand size, ticket count | 8 |
-  | Endgame | final round started; this is my last turn | 2 |
+  | Endgame | final round started; I still have a turn in it | 2 |
   | Card memory (Level 2) | per opponent: 9 known + 1 unknown; unseen pool: 9 | 19 |
   | My hand | counts per color | 9 |
   | My tickets | held, multi-hot by ticket ID | 30 |
@@ -456,6 +465,8 @@ not just to find the strongest one. Each tier teaches something different:
   | Trains to finish | per held ticket: fewest trains still needed + an "impossible" flag | 60 |
   | Tickets on offer | 3 offer slots × one-hot ticket ID (matches `KeepTickets` action order) | 90 |
 
+  - **The two endgame flags are equal for the player to act** (every final-round turn is
+    that player's last). They differ only in a waiting seat's view, after it has played.
   - **Tickets are identified by ID.** The board never changes, so the network can learn
     what each ticket means.
   - **Computed values** ("open to me", "completed", "trains to finish", endgame flags) are
@@ -463,7 +474,8 @@ not just to find the strongest one. Each tier teaches something different:
     required because the final-turn ticket draw is unmasked.
   - **Trains to finish** is the fewest trains needed to connect a held ticket's cities,
     counting the player's own routes as free and using only routes still open to them.
-    It changes only when a route is claimed, so compute it then and cache it. It leans
+    It changes only when a route is claimed, so compute it then and cache it.
+    "Impossible" means no such path, or more trains needed than the player has left. It leans
     furthest toward strategy of the computed values; switching it off is a possible
     experiment.
   - **Tier A doesn't use this vector.** Linear Q-learning/SARSA needs hand-made features
@@ -497,7 +509,8 @@ not just to find the strongest one. Each tier teaches something different:
 ## Open questions
 
 - **Engine speed**: *(settled for now.)* Legal moves are cached per state; 12.6k
-  sub-steps/s engine-only, 11.2k with the env's mask (USA, 2 players). Revisit if
+  sub-steps/s engine-only, 11.2k with the env's mask, about 4.4k adding the observation
+  (USA, 2 players, random play). Revisit if
   training throughput needs more, e.g. incremental claimability per route.
 
 ## Notes
