@@ -182,6 +182,20 @@ for 2 players).
     action block) take nearly all the weight and fit V(s); the action features that
     rank one claim against another stay near 0 (route points ≈ 0.00, completes ticket
     ≈ +0.06). Ticket points arrive only at game end, about 100 decisions later.
+  - Done: agent analysis dashboard (`ttr-dash`, `src/ttr/learn/dashboard.py`,
+    matplotlib, `[analysis]` extra). Training runs now record per-game metrics
+    (`src/ttr/learn/metrics.py`: score breakdown, tickets, claims and claim length,
+    draw types, ticket draws and final-round ticket draws, ...), every evaluation's
+    mean metrics, weight snapshots, and the bots' metrics on the final evaluation's
+    games. Seven pages: overview, behavior over training, training games, action mix,
+    weights, raw evaluations, raw games; one run or several compared. Chosen over an
+    HTML page or a Pygame screen to stay on the stack's analysis tools (matplotlib).
+  - Seen with it: the draw policy is nearly indifferent between face-up color and
+    blind draws (biases −0.57 vs −0.54 after 2000 games against greedy), so small
+    weight changes flip it wholesale: about 42 color / 0 blind draws a game in the
+    evaluations at 1400–1800 games, 6 / 36 at 2000. Q-learning trained against
+    random swings hard early (training margin +120 → −290 → +110 over games
+    250–1000).
 - **Next:** second-pass ideas for tier A, to try when we return to it: learn V(s)
   once, shared, and give each action type only an advantage over it, so the action
   features get the gradient; features for the claim itself relative to alternatives

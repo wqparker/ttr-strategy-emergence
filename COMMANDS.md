@@ -193,8 +193,36 @@ ttr-train-linear ... --init runs/linear/q_random.json    # continue from saved w
 | `--reward` | `margin` | `score`, `margin` or `win` |
 | `--eval-every` / `--eval-games` | `200` / `100` | evaluation schedule |
 
-The output JSON holds the weights by action type with feature names, the config, and the
-evaluation history. Feature definitions: `src/ttr/learn/features.py`.
+The output JSON holds the weights by action type with feature names, the config, one row of
+game metrics per training game, every evaluation (mean metrics against random and greedy),
+the weights at each evaluation, and the random and greedy bots' metrics on the final
+evaluation's games. Feature definitions: `src/ttr/learn/features.py`; metrics:
+`src/ttr/learn/metrics.py`.
+
+## ttr-dash
+
+Agent analysis: a full-screen matplotlib window over one or more training runs (`[analysis]`
+extra).
+
+```
+ttr-dash runs/linear/q_greedy.json                              # one run
+ttr-dash runs/linear/q_greedy.json runs/linear/sarsa_greedy.json   # compare (up to 8)
+ttr-dash runs/linear/*.json --save runs/linear/dash               # all pages as PNG, no window
+```
+
+| Page | Shows |
+| --- | --- |
+| 1 Overview | evaluation win share and margin over training, training margin, TD error, epsilon, decisions; final evaluation table next to the random and greedy bots on the same games; run settings |
+| 2 Behavior | 16 evaluation metrics over training (score, tickets, claims, claim length, ticket draws, final-round ticket draws, ...), bots as reference lines |
+| 3 Training games | the same over the training games themselves (exploring), rolling means |
+| 4 Action mix | share of turn actions over training; actions per game against the bots |
+| 5 Weights | final weights as heatmaps; the weights that moved most, over training |
+| 6 Evaluations | raw table of every evaluation |
+| 7 Games | raw table of every training game, 32 per page |
+
+Keys: `1`-`7` or `←`/`→` pages, `o` evaluation opponent (greedy / random), `r` next run
+(pages 4-7), `PgUp`/`PgDn`/`Home`/`End` raw games, `s` save the page as PNG, `f` full screen,
+`q` quit. `--opponent`, `--page` and `--windowed` set the start.
 
 ## Tests and setup
 
@@ -211,7 +239,7 @@ py -3.14 -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"    # engine + pytest
 python -m pip install -e ".[viz]"    # pygame-ce, for the viewer
-python -m pip install -e ".[analysis]"  # pandas, for ttr.analysis rows
+python -m pip install -e ".[analysis]"  # pandas + matplotlib: ttr.analysis rows, ttr-dash
 python -m pip install -e ".[env]"    # numpy, PettingZoo, Gymnasium: the RL env (ttr.env)
 python -m pip install -e ".[photo]"  # numpy + OpenCV, board-data tools only
 ```

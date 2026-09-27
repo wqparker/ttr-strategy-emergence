@@ -98,8 +98,8 @@ def test_update_moves_q_toward_the_target():
 def test_training_game_runs(algo):
     agent = LinearAgent(epsilon=0.1, seed=0)
     game = Game(load_board("usa"), num_players=2, seed=1, max_turns=1000)
-    stats = train_game(agent, RandomAgent(1), game, 0, TrainConfig(algo=algo))
-    assert game.game_over and stats.decisions > 20
+    row = train_game(agent, RandomAgent(1), game, 0, TrainConfig(algo=algo))
+    assert game.game_over and row["decisions"] > 20 and row["mean_abs_td"] > 0
     assert any(w.any() for w in agent.weights.values())
 
 
@@ -118,11 +118,12 @@ def test_learns_to_beat_random():
     training run against random should win nearly every game."""
     board = load_board("usa")
     untrained = evaluate(LinearAgent(seed=0), "random", 30, board, seed=1)
-    agent, history = train(TrainConfig(games=100, seed=2), eval_games=5, log=lambda line: None)
-    trained = evaluate(agent, "random", 30, board, seed=1)
-    assert untrained["win_rate"] < 0.75
-    assert trained["win_rate"] >= 0.9 and trained["margin"] > untrained["margin"] + 50
-    assert len(history) == 1 and history[0]["games"] == 100
+    result = train(TrainConfig(games=100, seed=2), eval_games=5, log=lambda line: None, baselines=False)
+    trained = evaluate(result.agent, "random", 30, board, seed=1)
+    assert untrained["win_share"] < 0.75
+    assert trained["win_share"] >= 0.9 and trained["margin"] > untrained["margin"] + 50
+    assert len(result.history) == 1 and result.history[0]["games"] == 100
+    assert len(result.games) == 100
 
 
 def test_payment_carries_the_route_features():
@@ -150,3 +151,21 @@ def test_tickets_kept_on_the_last_turn_are_doomed():
     early.step(DrawTickets())
     offer = early.players[0].pending_tickets
     assert named(early, 0, KeepTickets(frozenset(offer)))["doomed_points"] == 0
+
+
+def test_a_run_records_everything_the_dashboard_reads(tmp_path):
+    from ttr.learn.metrics import METRICS
+
+    cfg = TrainConfig(games=4, seed=3)
+    result = train(cfg, eval_every=2, eval_games=2, log=lambda line: None)
+    assert [e["games"] for e in result.history] == [2, 4]
+    assert [s["games"] for s in result.snapshots] == [2, 4]
+    assert set(result.history[0]["eval"]) == {"random", "greedy"}
+    assert set(result.baselines) == {"random", "greedy"}
+    assert set(result.baselines["greedy"]["random"]) == set(METRICS)
+    for row in result.games:
+        assert set(METRICS) <= set(row) and {"game", "epsilon", "seat", "decisions", "mean_abs_td"} <= set(row)
+    path = tmp_path / "run.json"
+    result.save(path, cfg)
+    loaded = LinearAgent.load(path)
+    assert np.allclose(loaded.weights["claim"], result.agent.weights["claim"], atol=1e-6)

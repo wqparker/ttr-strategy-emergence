@@ -30,7 +30,7 @@ import random
 import statistics
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -42,6 +42,7 @@ from ttr.board import Board, load_board
 from ttr.env.reward import REWARD_MODES, reward_values
 from ttr.game import Game
 from ttr.learn.features import ACTION_TYPES, all_features, feature_names
+from ttr.learn.metrics import METRICS, game_metrics, mean_metrics
 
 ALGOS = ("q", "sarsa")
 OPPONENTS = {
@@ -122,15 +123,6 @@ class TrainConfig:
     board: str = "usa"
 
 
-@dataclass
-class GameStats:
-    won: bool
-    margin: float
-    score: int
-    decisions: int
-    mean_abs_td: float
-
-
 def epsilon_at(cfg: TrainConfig, g: int) -> float:
     span = max(1, int(cfg.games * cfg.epsilon_decay))
     f = min(1.0, g / span)
@@ -144,8 +136,9 @@ def _update(agent: LinearAgent, kind: str, phi: np.ndarray, target: float, alpha
     return delta
 
 
-def train_game(agent: LinearAgent, opponent, game: Game, seat: int, cfg: TrainConfig) -> GameStats:
-    """Play one game, learning at every decision of `seat`."""
+def train_game(agent: LinearAgent, opponent, game: Game, seat: int, cfg: TrainConfig) -> Dict[str, float]:
+    """Play one game, learning at every decision of `seat`. Returns the seat's
+    game metrics (ttr.learn.metrics) plus `decisions` and `mean_abs_td`."""
     scale = 1.0 if cfg.reward_mode == "win" else cfg.reward_scale
     last_value = reward_values(game, cfg.reward_mode)[seat]
     prev: Optional[Tuple[str, np.ndarray]] = None
@@ -167,29 +160,22 @@ def train_game(agent: LinearAgent, opponent, game: Game, seat: int, cfg: TrainCo
     r = scale * (reward_values(game, cfg.reward_mode)[seat] - last_value)
     if prev is not None:
         deltas.append(_update(agent, *prev, r, cfg.alpha))
-    return _stats(game, seat, len(deltas), deltas)
+    row = game_metrics(game, seat)
+    row["decisions"] = float(len(deltas))
+    row["mean_abs_td"] = statistics.mean(abs(d) for d in deltas) if deltas else 0.0
+    return row
 
 
-def _stats(game: Game, seat: int, decisions: int, deltas: Sequence[float] = ()) -> GameStats:
-    result = game.result
-    scores = [r.total for r in result.players]
-    others = [s for q, s in enumerate(scores) if q != seat]
-    return GameStats(
-        won=seat in result.winners and len(result.winners) == 1,
-        margin=scores[seat] - statistics.mean(others),
-        score=scores[seat],
-        decisions=decisions,
-        mean_abs_td=statistics.mean(abs(d) for d in deltas) if deltas else 0.0,
-    )
-
-
-def evaluate(agent: LinearAgent, opponent: str, games: int, board: Board, seed: int = 0,
+def evaluate(agent, opponent: str, games: int, board: Board, seed: int = 0,
              max_turns: int = 1000) -> Dict[str, float]:
-    """Greedy play (epsilon 0) against a scripted bot, random seats. Returns the
-    win rate (shared wins count half), mean margin and mean score."""
-    saved, agent.epsilon = agent.epsilon, 0.0
-    wins = margins = scores = 0.0
+    """Mean game metrics (ttr.learn.metrics) of `agent` over `games` against a
+    scripted bot, random seats. A LinearAgent plays greedily (epsilon 0). Any
+    `Agent` works, so the scripted bots get the same numbers as baselines."""
+    saved = getattr(agent, "epsilon", None)
+    if saved is not None:
+        agent.epsilon = 0.0
     rng = random.Random(seed)
+    rows = []
     try:
         for g in range(games):
             game = Game(board, num_players=2, seed=seed * 100_000 + g, max_turns=max_turns)
@@ -198,22 +184,49 @@ def evaluate(agent: LinearAgent, opponent: str, games: int, board: Board, seed: 
             while not game.game_over:
                 p = game.current_player
                 game.step(agent.act(game, p) if p == seat else opp.act(game, p))
-            result = game.result
-            if seat in result.winners:
-                wins += 1 / len(result.winners)
-            s = _stats(game, seat, 0)
-            margins += s.margin
-            scores += s.score
+            rows.append(game_metrics(game, seat))
     finally:
-        agent.epsilon = saved
-    return {"win_rate": wins / games, "margin": margins / games, "score": scores / games}
+        if saved is not None:
+            agent.epsilon = saved
+    return mean_metrics(rows)
+
+
+@dataclass
+class TrainResult:
+    """Everything a run records; `save` writes it next to the weights.
+
+    games      one row per training game: metrics + game, epsilon, seat, decisions, mean_abs_td
+    history    one entry per evaluation: games so far, epsilon, the training means
+               since the previous one, and eval[opponent] = mean metrics
+    snapshots  the weights at each evaluation (games -> type -> list)
+    baselines  the scripted bots on the final evaluation's games: bot -> opponent -> metrics
+    """
+
+    agent: LinearAgent
+    games: List[Dict[str, float]] = field(default_factory=list)
+    history: List[dict] = field(default_factory=list)
+    snapshots: List[dict] = field(default_factory=list)
+    baselines: Dict[str, Dict[str, Dict[str, float]]] = field(default_factory=dict)
+    eval_games: int = 0
+
+    def save(self, path: Path, cfg: TrainConfig, **meta) -> None:
+        self.agent.save(path, config=asdict(cfg), eval_games=self.eval_games, metrics=METRICS, history=self.history,
+                        snapshots=self.snapshots, baselines=self.baselines, games=self.games, **meta)
+
+
+EVAL_OPPONENTS = ("random", "greedy")
+
+
+def _eval_seed(i: int) -> int:
+    return 10_000 + i
 
 
 def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
-          log=print, agent: Optional[LinearAgent] = None) -> Tuple[LinearAgent, List[dict]]:
+          log=print, agent: Optional[LinearAgent] = None, baselines: bool = True) -> TrainResult:
     """Train for cfg.games games. Every `eval_every` games (0 = only at the end)
-    the greedy policy plays `eval_games` against random and against greedy; the
-    history holds those results and the training averages since the last one."""
+    the greedy policy plays `eval_games` against random and against greedy, and
+    the weights are snapshotted. With `baselines`, the random and greedy bots then
+    play the final evaluation's games too, for comparison."""
     if cfg.algo not in ALGOS:
         raise ValueError(f"algo must be one of {ALGOS}")
     if cfg.opponent not in OPPONENTS:
@@ -221,40 +234,53 @@ def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
     if cfg.reward_mode not in REWARD_MODES:
         raise ValueError(f"reward mode must be one of {REWARD_MODES}")
     board = load_board(cfg.board)
-    agent = agent or LinearAgent(seed=cfg.seed)
+    out = TrainResult(agent or LinearAgent(seed=cfg.seed), eval_games=eval_games)
+    agent = out.agent
     rng = random.Random(cfg.seed)
-    history: List[dict] = []
-    window: List[GameStats] = []
+    window: List[Dict[str, float]] = []
     start = time.perf_counter()
     for g in range(cfg.games):
         agent.epsilon = epsilon_at(cfg, g)
         game = Game(board, num_players=2, seed=rng.getrandbits(32), max_turns=cfg.max_turns)
         opponent = OPPONENTS[cfg.opponent](rng.getrandbits(32))
-        window.append(train_game(agent, opponent, game, rng.randrange(2), cfg))
+        seat = rng.randrange(2)
+        row = train_game(agent, opponent, game, seat, cfg)
+        row.update(game=float(g + 1), epsilon=agent.epsilon, seat=float(seat))
+        out.games.append(row)
+        window.append(row)
         done = g + 1
         if (eval_every and done % eval_every == 0) or done == cfg.games:
             entry = {
                 "games": done,
                 "epsilon": round(agent.epsilon, 4),
-                "train_win_rate": statistics.mean(s.won for s in window),
-                "train_margin": statistics.mean(s.margin for s in window),
-                "mean_abs_td": statistics.mean(s.mean_abs_td for s in window),
                 "seconds": round(time.perf_counter() - start, 1),
+                "train": {k: statistics.mean(r[k] for r in window) for k in ("won", "margin", "mean_abs_td")},
+                "eval": {
+                    opp: evaluate(agent, opp, eval_games, board, seed=_eval_seed(len(out.history)),
+                                  max_turns=cfg.max_turns)
+                    for opp in EVAL_OPPONENTS
+                },
             }
-            for opp in ("random", "greedy"):
-                res = evaluate(agent, opp, eval_games, board, seed=10_000 + len(history), max_turns=cfg.max_turns)
-                entry.update({f"vs_{opp}_{k}": v for k, v in res.items()})
-            history.append(entry)
+            out.history.append(entry)
+            out.snapshots.append({"games": done, "weights": agent.to_dict()["weights"]})
             window = []
             log(_progress_line(entry))
-    return agent, history
+    if baselines:
+        seed = _eval_seed(len(out.history) - 1)
+        for bot in ("random", "greedy"):
+            out.baselines[bot] = {
+                opp: evaluate(OPPONENTS[bot](seed), opp, eval_games, board, seed=seed, max_turns=cfg.max_turns)
+                for opp in EVAL_OPPONENTS
+            }
+    return out
 
 
 def _progress_line(e: dict) -> str:
-    return (f"{e['games']:6d} games  eps {e['epsilon']:.3f}  train win {e['train_win_rate']:.2f} "
-            f"margin {e['train_margin']:+6.1f}  |td| {e['mean_abs_td']:.3f}  "
-            f"eval vs random win {e['vs_random_win_rate']:.2f} ({e['vs_random_margin']:+.1f})  "
-            f"vs greedy win {e['vs_greedy_win_rate']:.2f} ({e['vs_greedy_margin']:+.1f})  "
+    t, ev = e["train"], e["eval"]
+    return (f"{e['games']:6d} games  eps {e['epsilon']:.3f}  train win {t['won']:.2f} "
+            f"margin {t['margin']:+6.1f}  |td| {t['mean_abs_td']:.3f}  "
+            f"eval vs random win {ev['random']['win_share']:.2f} ({ev['random']['margin']:+.1f})  "
+            f"vs greedy win {ev['greedy']['win_share']:.2f} ({ev['greedy']['margin']:+.1f})  "
             f"[{e['seconds']:.0f}s]")
 
 
@@ -274,7 +300,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--eval-every", type=int, default=200, help="games between evaluations (0 = at the end)")
     parser.add_argument("--eval-games", type=int, default=100)
     parser.add_argument("--init", type=Path, help="start from these weights instead of zeros")
-    parser.add_argument("--out", type=Path, required=True, help="weights + config + history JSON")
+    parser.add_argument("--out", type=Path, required=True,
+                        help="JSON: weights, config, per-game rows, evaluations, weight snapshots, baselines")
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -287,9 +314,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     agent = LinearAgent.load(args.init, seed=cfg.seed) if args.init else None
     print(f"training {cfg.algo} vs {cfg.opponent}: {cfg.games} games, alpha {cfg.alpha}, "
           f"epsilon {cfg.epsilon_start} -> {cfg.epsilon_end}, reward {cfg.reward_mode}")
-    agent, history = train(cfg, eval_every=args.eval_every, eval_games=args.eval_games, agent=agent)
-    agent.save(args.out, config=asdict(cfg), init=str(args.init) if args.init else None, history=history)
-    print(f"saved {args.out}")
+    result = train(cfg, eval_every=args.eval_every, eval_games=args.eval_games, agent=agent)
+    result.save(args.out, cfg, init=str(args.init) if args.init else None)
+    print(f"saved {args.out}  (ttr-dash {args.out} to analyze)")
 
 
 if __name__ == "__main__":
