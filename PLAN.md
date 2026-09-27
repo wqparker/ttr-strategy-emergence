@@ -196,6 +196,29 @@ for 2 players).
     evaluations at 1400–1800 games, 6 / 36 at 2000. Q-learning trained against
     random swings hard early (training margin +120 → −290 → +110 over games
     250–1000).
+  - Analysis of the three recorded runs (2000 games each, one seed each):
+    - Two strategies emerged. Trained against greedy (Q and SARSA alike): short
+      routes (mean length 1.8, no 5–6 claims), keep the minimum 2 tickets, never draw
+      more, complete 0.85 — score 38 vs greedy's 112. Trained against random: rush
+      the end with long routes (length 3.7, triggers the end in 97% of games, 74
+      turns vs 83) — route points 73, more than greedy's 61 — but keeps 3.7 tickets
+      and completes 0.15, and still draws tickets in the final round (0.68 a game).
+      Best margin against greedy of the three (−59).
+    - The best policy of any run was Q-learning vs random at 200 games: 26% wins and
+      −16 margin against greedy, claiming routes of mean length 5.5. It was lost by 400
+      games and never regained.
+    - Evaluation k of every run uses the same games (seed 10 000 + k), so runs are
+      compared on paired games. The swings from one evaluation to the next move
+      together across runs (all three at −71 to −72 or better at 1800), so they are
+      mostly which games were drawn, not policy change. Against greedy, Q and SARSA
+      plateau from about 1200 games; Q ends about 4.5 margin ahead over the last five
+      evaluations, about 2 standard errors: weak evidence.
+    - None of the agents interferes with greedy: greedy scores more against them
+      (119–122) than against itself (106).
+    - Ticket keep weights are the largest action weights and all say "fewer, cheaper
+      tickets" (keep.count −0.16, keep.points −0.12): the agents learned tickets are
+      a liability because they rarely finish them (39% of kept tickets completed vs
+      greedy's 96%), not which tickets are finishable.
 - **Next:** second-pass ideas for tier A, to try when we return to it: learn V(s)
   once, shared, and give each action type only an advantage over it, so the action
   features get the gradient; features for the claim itself relative to alternatives
