@@ -16,6 +16,7 @@ each command with `.venv/Scripts/`. Roadmap and reasoning: [PLAN.md](PLAN.md).
 ttr-view [--record FILE] [--agents NAME ...] [--human SEAT] [--board usa|toy]
          [--perspective all|SEAT] [--memory-level 0|1|2] [--seed N]
          [--max-turns N] [--scale F] [--paused] [--overlay DIR] [--fullscreen]
+         [--games N [--advance S]]
 ```
 
 | Flag | Default | Meaning |
@@ -29,6 +30,8 @@ ttr-view [--record FILE] [--agents NAME ...] [--human SEAT] [--board usa|toy]
 | `--paused` | off | start stopped |
 | `--overlay DIR` | — | color routes by statistics over the records in `DIR` (see below) |
 | `--fullscreen` | off | start full screen at the display's resolution (`F11` toggles) |
+| `--games N` | `1` | live: N games in a row; seeds `--seed`, `+1`, …; agents rotate seats |
+| `--advance S` | `5` | with `--games`: seconds the final scoreboard stays up before the next game |
 
 **Keys** (the first six are also buttons, bottom-left; the legend is top-left):
 
@@ -48,6 +51,12 @@ the `--perspective` seat, else the `--human` seat, else P0. Hidden while an over
 - While choosing tickets, ticked ones show hollow markers in the pair they will keep; unticked
   ones show none.
 - Every city on a marked ticket (open or ticked) has its dot turned from red to yellow.
+
+**Several games** (`--games N`, e.g. `ttr-view --fullscreen --agents greedy greedy --games 5`):
+when a game ends its scoreboard stays up for `--advance` seconds, then the next game starts.
+`n` / `p` jump to the next / previous game (a revisited game is as you left it); pausing on the
+scoreboard holds it, and `space` there moves on. The legend shows `game 2/5`. A `--human` seat
+stays in place instead of rotating. Live games only, not `--record` or `--overlay`.
 
 Full screen scales the viewer to the display's height and widens the side panels to fill the
 width (1920x1080: scale 1.07, no bars).

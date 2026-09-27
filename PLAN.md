@@ -282,6 +282,12 @@ Noticed while using the viewer; none of them blocks Phase 4.
   holds a human seat's move chips.*)* It is still empty while a bot is to act. Candidates
   for that case: a longest-path / ticket-progress summary, the last few actions in full
   rather than the one-line ticker, or a larger hand and ticket display.
+- **Several live games in a row.** *(Done.)* `ttr-view --games N` (`Series` in
+  `viz/app.py`): game g uses seed + g with agents rotated one seat per game, as `ttr-sim`
+  batches do (a human seat stays put); the scoreboard stays up `--advance` seconds, then
+  the next game starts; `n` / `p` move between games, each kept as left. `--games 1` is
+  the old single game with the same seeds. Still open: `--record DIR` to replay a folder
+  of saved games the same way.
 - **Ticket markers on the map.** *(Done.)* One seat's open tickets (the viewed seat, else
   the human seat, else P0) get a (shape, color) pair each, drawn beside both cities and
   leading the ticket in the panel (`viz/tickets.py`). The five base pairs (pink moon,

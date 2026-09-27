@@ -1,5 +1,7 @@
 """The live and replay viewers (ttr.viz.app), driven without a window."""
 
+from argparse import Namespace
+
 import pytest
 
 pygame = pytest.importorskip("pygame")
@@ -10,7 +12,7 @@ from ttr.game import Game  # noqa: E402
 from ttr.record import GameRecord  # noqa: E402
 from ttr.simulate import play_game  # noqa: E402
 from ttr.viz.app import (  # noqa: E402
-    BUTTONS, SPEEDS, Timeline, Viewer, fit_scale, layout_for, live_timeline, replay_timeline,
+    BUTTONS, SPEEDS, Timeline, Viewer, build, fit_scale, layout_for, live_timeline, replay_timeline,
 )
 from ttr.viz.perspective import Perspective  # noqa: E402
 from ttr.viz.screen import SIDE_W, Screen  # noqa: E402
@@ -230,6 +232,110 @@ def test_mouse_positions_account_for_the_offset():
     v.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1,
                                 pos=(rect.centerx + 100, rect.centery + 40)))
     assert v.timeline.index == 1
+
+
+# -------------------------------------------------------------------- series
+
+
+def series_viewer(games=3, agents=("greedy", "random"), advance=2.0, **kw):
+    args = Namespace(record=None, overlay=None, agents=list(agents), board="usa", seed=5,
+                     max_turns=1000, perspective="all", memory_level=2, human=None, games=games)
+    for key, value in kw.items():
+        setattr(args, key, value)
+    timeline, screen, human, summary, series = build(args)
+    screen.set_scale(0.5)
+    return Viewer(timeline, screen, playing=True, human=human, series=series, advance=advance)
+
+
+def test_one_game_is_not_a_series():
+    v = series_viewer(games=1)
+    assert v.series is None
+    assert not any(k == "game" for k, _ in v.status())
+
+
+def test_single_live_game_keeps_its_old_seeds():
+    """--games 1 plays exactly what ttr-view always played for a seed."""
+    v = series_viewer(games=1)
+    board = v.timeline.current.board
+    old = Game(board, num_players=2, seed=5, max_turns=1000)
+    assert v.timeline.current.players[0].pending_tickets == old.players[0].pending_tickets
+
+
+def test_agents_rotate_seats_between_games():
+    v = series_viewer(games=3)
+    assert v.screen.names == ["greedy", "random"]
+    v.act("next_game")
+    assert v.game_no == 1 and v.screen.names == ["random", "greedy"]
+    v.act("next_game")
+    assert v.screen.names == ["greedy", "random"]
+    assert not v.next_game()  # no fourth game
+    v.act("prev_game")
+    assert v.game_no == 1
+
+
+def test_finished_game_hands_over_after_the_delay():
+    v = series_viewer(games=2, advance=2.0)
+    v.timeline.to_end()
+    first = v.timeline
+    assert first.current.game_over
+    v.tick(0.0)  # the step that finds the end schedules the hand-over for t=2
+    assert v.game_no == 0 and v.playing
+    assert dict(v.status())["speed"].endswith("next game soon")
+    v.tick(1.9)
+    assert v.game_no == 0  # the scoreboard is still up
+    v.tick(2.1)
+    assert v.game_no == 1 and v.timeline is not first and v.playing
+    # Going back finds the first game as it was left.
+    v.act("prev_game")
+    assert v.timeline is first and first.current.game_over
+
+
+def test_last_game_just_stops():
+    v = series_viewer(games=2)
+    v.show_game(1)
+    v.timeline.to_end()
+    v.tick(0.0)
+    v.tick(1.0)
+    assert not v.playing and v.game_no == 1
+
+
+def test_pausing_cancels_the_hand_over():
+    v = series_viewer(games=2, advance=2.0)
+    v.timeline.to_end()
+    v.tick(0.0)
+    v.tick(1.0)
+    v.act("play")  # pause on the scoreboard
+    v.tick(10.0)
+    assert v.game_no == 0 and not v.playing
+    v.act("play")  # play again at the end of a finished game: moves on
+    assert v.playing
+    v.tick(11.0)
+    v.tick(13.5)
+    assert v.game_no == 1
+
+
+def test_series_keys_and_legend():
+    v = series_viewer(games=4)
+    v.handle(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_n))
+    v.handle(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_n))
+    v.handle(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_p))
+    assert v.game_no == 1
+    status = dict(v.status())
+    assert status["game"] == "2/4" and "n p" in status
+    v.draw(pygame.Surface(v.screen.size))
+
+
+def test_human_seat_stays_put():
+    v = series_viewer(games=2, human=0)
+    assert v.screen.names == ["human", "random"]
+    v.next_game()
+    assert v.screen.names == ["human", "random"]
+
+
+def test_games_cannot_replay_records(record, tmp_path):
+    path = record.save(tmp_path / "g.json")
+    with pytest.raises(SystemExit):
+        series_viewer(games=2, record=path)
 
 
 def test_fit_scale_respects_an_explicit_scale():

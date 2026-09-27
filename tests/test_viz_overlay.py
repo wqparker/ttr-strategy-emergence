@@ -153,7 +153,7 @@ def test_screenshot_cli_overlay(records, tmp_path):
 def overlay_viewer(records):
     args = Namespace(record=None, overlay=records, agents=["greedy", "random"], board="usa",
                      seed=0, max_turns=1000, perspective="all", memory_level=2, human=None)
-    timeline, screen, human, summary = build(args)
+    timeline, screen, human, summary, _ = build(args)
     screen.set_scale(0.5)
     return Viewer(timeline, screen, playing=False, human=human, summary=summary, overlay_on=True)
 

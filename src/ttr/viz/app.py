@@ -5,6 +5,7 @@
     ttr-view --record runs/records/g.json      # replay a saved game
     ttr-view --record g.json --perspective 0   # from one seat's view
     ttr-view --overlay runs/records            # route statistics over a folder
+    ttr-view --fullscreen --agents greedy greedy --games 5   # five games in a row
 
 (or `python -m ttr.viz.app ...`, which is the same entry point)
 
@@ -18,6 +19,10 @@ DIR (see ttr.analysis) and replays the first of them unless --record picks
 another game. `o` cycles the statistic (and off, to see the game's own claims),
 `a` whose claims it counts (everyone, each agent, each seat); hover a route for
 its value.
+
+--games N plays N live games in a row (see Series): a finished game's scoreboard
+stays up for --advance seconds, then the next game starts; `n` / `p` jump to the
+next or previous game.
 
 Controls: space play/pause, `.`/`,` step, `]`/`[` speed, `v` perspective,
 F11 full screen, home/end jump, esc quit. The transport actions also sit as
@@ -47,6 +52,9 @@ from ttr.viz.screen import CONTROLS, OVERLAY_CONTROLS, SIDE_W, Screen
 
 # Seconds between sub-steps, slowest first. Index 2 is the default pace.
 SPEEDS: Tuple[float, ...] = (1.0, 0.5, 0.25, 0.12, 0.06, 0.02)
+# --games: seconds a finished game's scoreboard stays up before the next game.
+ADVANCE_DELAY = 5.0
+SERIES_CONTROLS = ("n p", "next / prev game")
 # Button labels name the action. They stay ASCII on purpose: the system font
 # pygame resolves here has no geometric shapes, and a missing glyph draws a box.
 BUTTONS: Tuple[Tuple[str, str], ...] = (
@@ -137,6 +145,47 @@ def replay_timeline(record: GameRecord, board: Optional[Board] = None) -> Timeli
     return Timeline(record.replay_states(board))
 
 
+class Series:
+    """Live games one after another (`--games N`). Game g uses seed + g, and the
+    agents move one seat along each game, as `ttr-sim` batches rotate them (not
+    with a human seat, which stays put). Games are built when first shown and
+    kept, so going back to an earlier game keeps its history."""
+
+    def __init__(self, board: Board, agents: Sequence[str], count: int, seed: int = 0,
+                 max_turns: Optional[int] = None, human: Sequence[int] = ()) -> None:
+        if count < 1:
+            raise ValueError("a series needs at least one game")
+        self.board = board
+        self.agents = list(agents)
+        self.count = count
+        self.seed = seed
+        self.max_turns = max_turns
+        self.human = list(human)
+        self._games: Dict[int, Tuple[Timeline, List[str]]] = {}
+
+    def names(self, g: int) -> List[str]:
+        """Agent name per seat in game g."""
+        n = len(self.agents)
+        if self.human:
+            return list(self.agents)
+        by_seat = [""] * n
+        for slot, name in enumerate(self.agents):
+            by_seat[(slot + g) % n] = name
+        return by_seat
+
+    def game(self, g: int) -> Tuple[Timeline, List[str]]:
+        """Game g's timeline and its seat names (human seats named "human")."""
+        if g not in self._games:
+            from ttr.simulate import AGENTS  # local: keeps the viewer out of the engine's import path
+
+            names = self.names(g)
+            agents = [AGENTS[name](self.seed + g * 10 + seat) for seat, name in enumerate(names)]
+            game = Game(self.board, num_players=len(names), seed=self.seed + g, max_turns=self.max_turns)
+            shown = [("human" if seat in self.human else name) for seat, name in enumerate(names)]
+            self._games[g] = (live_timeline(game, agents, self.human), shown)
+        return self._games[g]
+
+
 def pay_label(game: Game, action: Pay) -> str:
     """"4 red", "3 red + 1 loco", "4 loco"."""
     route = game.board.routes[game.pending_route]
@@ -221,6 +270,11 @@ class HumanControl:
         self._sync_keep(game)
         return set(self.keep)
 
+    def reset(self) -> None:
+        """Forget the ticket selection (a new game is on screen)."""
+        self.keep = set()
+        self._keep_for = None
+
     def _keep_action(self, game: Game) -> KeepTickets:
         return KeepTickets(frozenset(self.keep))
 
@@ -283,9 +337,16 @@ class Viewer:
 
     def __init__(self, timeline: Timeline, screen: Screen, playing: bool = True, speed: int = 2,
                  human: Optional[HumanControl] = None, summary: Optional[Summary] = None,
-                 overlay_on: bool = False):
+                 overlay_on: bool = False, series: Optional[Series] = None,
+                 advance: float = ADVANCE_DELAY):
         self.timeline = timeline
         self.screen = screen
+        # Consecutive games (--games): which one is on screen, and when a
+        # finished game hands over to the next (seconds on the scoreboard).
+        self.series = series
+        self.game_no = 0
+        self.advance = advance
+        self._advance_at: Optional[float] = None
         self.playing = playing
         self.speed = speed
         self.human = human or HumanControl()
@@ -327,6 +388,29 @@ class Viewer:
         options = filters(self.summary)
         self.filter = options[(options.index(self.filter) + 1) % len(options)]
 
+    # ----------------------------------------------------------------- series
+
+    @property
+    def has_next_game(self) -> bool:
+        return self.series is not None and self.game_no + 1 < self.series.count
+
+    def show_game(self, g: int) -> bool:
+        """Switch to game g of the series. False if there is no such game."""
+        if self.series is None or not 0 <= g < self.series.count:
+            return False
+        self.game_no = g
+        self.timeline, self.screen.names = self.series.game(g)
+        self.hover = None
+        self._advance_at = None
+        self.human.reset()
+        return True
+
+    def next_game(self) -> bool:
+        return self.show_game(self.game_no + 1)
+
+    def prev_game(self) -> bool:
+        return self.show_game(self.game_no - 1)
+
     # ---------------------------------------------------------------- actions
 
     @property
@@ -334,7 +418,9 @@ class Viewer:
         return SPEEDS[self.speed]
 
     def toggle_play(self) -> None:
-        self.playing = not self.playing and not self.timeline.at_end
+        # At the end of a finished game, play moves on to the next one.
+        can_run = not self.timeline.at_end or (self.timeline.current.game_over and self.has_next_game)
+        self.playing = not self.playing and can_run
 
     def act(self, name: str) -> None:
         """One control, by name. Stepping by hand pauses, as on any player."""
@@ -354,6 +440,10 @@ class Viewer:
             self.screen.cycle_perspective()
         elif name == "fullscreen":
             self.fullscreen = not self.fullscreen
+        elif name == "next_game":
+            self.next_game()
+        elif name == "prev_game":
+            self.prev_game()
         elif name == "overlay":
             self.cycle_stat()
         elif name == "filter":
@@ -375,6 +465,8 @@ class Viewer:
         pygame.K_LEFTBRACKET: "slower",
         pygame.K_v: "view",
         pygame.K_F11: "fullscreen",
+        pygame.K_n: "next_game",
+        pygame.K_p: "prev_game",
         pygame.K_o: "overlay",
         pygame.K_a: "filter",
         pygame.K_HOME: "start",
@@ -432,12 +524,21 @@ class Viewer:
         """Advance the timeline if enough time has passed. `now` is seconds."""
         if not self.playing:
             self._next_step = now + self.interval
+            self._advance_at = None
+            return
+        if self._advance_at is not None:  # a finished game on its scoreboard
+            if now >= self._advance_at:
+                self.next_game()
+                self._next_step = now + self.interval
             return
         if now < self._next_step:
             return
         self._next_step = now + self.interval
         if not self.timeline.forward():
-            self.playing = False
+            if self.timeline.current.game_over and self.has_next_game:
+                self._advance_at = now + self.advance
+            else:
+                self.playing = False
 
     # ---------------------------------------------------------------- drawing
 
@@ -446,7 +547,13 @@ class Viewer:
         where = f"{self.timeline.index}/{len(self.timeline.states) - 1}"
         state = "playing" if self.playing else ("end" if self.timeline.at_end else "paused")
         overlay = OVERLAY_CONTROLS if self.summary is not None else ()
-        return CONTROLS + overlay + (("step", where), ("speed", f"x{self.speed + 1}  ·  {state}"))
+        series: Tuple[Tuple[str, str], ...] = ()
+        if self.series is not None:
+            if self._advance_at is not None:
+                state = "next game soon"
+            series = (SERIES_CONTROLS, ("game", f"{self.game_no + 1}/{self.series.count}"))
+        return CONTROLS + overlay + series[:1] + (("step", where),) + series[1:] + (
+            ("speed", f"x{self.speed + 1}  ·  {state}"),)
 
     def draw(self, target: pygame.Surface) -> None:
         game = self.timeline.current
@@ -520,16 +627,21 @@ def open_window(viewer: Viewer, want: Optional[float] = None) -> pygame.Surface:
     return pygame.display.set_mode(size, flags)
 
 
-def build(args: argparse.Namespace) -> Tuple[Timeline, Screen, HumanControl, Optional[Summary]]:
-    from ttr.simulate import AGENTS  # local: keeps the viewer out of the engine's import path
-
+def build(args: argparse.Namespace
+          ) -> Tuple[Timeline, Screen, HumanControl, Optional[Summary], Optional[Series]]:
+    """The viewer's parts from the command line. The series is None unless
+    --games asks for more than one live game."""
     human = [] if args.human is None else [args.human]
+    games = getattr(args, "games", 1)
     summary = None
+    series = None
     record_path = args.record
     if args.overlay:
         summary = analyze(args.overlay)
         record_path = record_path or record_paths(args.overlay)[0]
     if record_path:
+        if games > 1:
+            raise SystemExit("--games plays live games; it can't be combined with --record or --overlay")
         record = GameRecord.load(record_path)
         timeline = replay_timeline(record)
         names = record.agents
@@ -537,13 +649,13 @@ def build(args: argparse.Namespace) -> Tuple[Timeline, Screen, HumanControl, Opt
         human = []  # a replay is fixed; nothing to play
     else:
         board = load_board(args.board)
-        agents = [AGENTS[name](args.seed + i) for i, name in enumerate(args.agents)]
-        game = Game(board, num_players=len(args.agents), seed=args.seed, max_turns=args.max_turns)
-        timeline = live_timeline(game, agents, human)
-        names = [("human" if i in human else name) for i, name in enumerate(args.agents)]
+        # A single live game is game 0 of a one-game series: same seeds as before.
+        live = Series(board, args.agents, games, seed=args.seed, max_turns=args.max_turns, human=human)
+        timeline, names = live.game(0)
+        series = live if games > 1 else None
     screen = Screen(board, names=names,
                     perspective=Perspective(parse_viewer(args.perspective), args.memory_level))
-    return timeline, screen, HumanControl(human), summary
+    return timeline, screen, HumanControl(human), summary, series
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
@@ -564,14 +676,20 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                         help="color routes by statistics over the records in DIR (o/a keys)")
     parser.add_argument("--fullscreen", action="store_true",
                         help="start full screen at the display's resolution (F11 toggles)")
+    parser.add_argument("--games", type=int, default=1, metavar="N",
+                        help="live mode: play N games one after another (n / p to skip)")
+    parser.add_argument("--advance", type=float, default=ADVANCE_DELAY, metavar="SECONDS",
+                        help="with --games: how long a finished game's scoreboard stays up")
     args = parser.parse_args(argv)
+    if args.games < 1:
+        parser.error("--games must be at least 1")
 
     pygame.init()
     mode = " — overlay" if args.overlay else (" — replay" if args.record else " — live")
     pygame.display.set_caption("Ticket to Ride" + mode)
-    timeline, screen, human, summary = build(args)
+    timeline, screen, human, summary, series = build(args)
     viewer = Viewer(timeline, screen, playing=not (args.paused or args.overlay), human=human,
-                    summary=summary, overlay_on=True)
+                    summary=summary, overlay_on=True, series=series, advance=args.advance)
     viewer.fullscreen = args.fullscreen
     window = open_window(viewer, args.scale)
     shown = viewer.fullscreen
