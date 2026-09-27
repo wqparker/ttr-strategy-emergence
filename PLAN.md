@@ -402,9 +402,30 @@ for 2 players).
     66% wins. Q beats SARSA against greedy and self; SARSA is only competitive against
     random. The checkpoints that beat greedy complete fewer tickets than the final
     weights (1.1–1.2 against 1.4–1.7): they win on routes and by ending the game.
-  - Seventh pass started (`scripts/linear_pass7.ps1`, `runs/linear/pass7/`): p4f's
-    setting (α 0.2, λ 0.98, average 100) for 30000 games against random, greedy and
-    self (Q), and SARSA(λ) against random; 4 settings × 5 seeds, 12 at a time.
+  - Seventh pass (`scripts/linear_pass7.ps1`, `runs/linear/pass7/`): p4f's setting
+    (α 0.2, λ 0.98, average 100) for 30000 games against random, greedy and self (Q),
+    and SARSA(λ) against random; 4 settings × 5 seeds, 12 at a time (~1 h). Training
+    evaluations (last 5, mean over seeds) and the fresh-game re-score
+    (`runs/linear/rescore_pass7.*`):
+
+    | Setting | Training eval | Curve 10k → 30k | Final, fresh | Best, fresh (seeds) | Best win |
+    | --- | --- | --- | --- | --- | --- |
+    | Q(λ) vs random | −23 | −15 → −25 | −24 | +4 (+5, +6, +5, +3, −0) | 55% |
+    | SARSA(λ) vs random | −21 | −14 → −23 | −30 | +7 (+12, +5, +1, +17, −2) | 59% |
+    | Q(λ) vs greedy | **+3** | **+1 → +2, no decline** | −8 | **+11 (+12, +15, +15, +10, +4)** | **64%** |
+    | Q(λ) vs self | −12 | −28 → −12 | −15 | +10 (+12, +12, +15, +5, +7) | 63% |
+
+    Readings: λ 0.98 against greedy is the first setting whose training curve holds
+    above parity instead of peaking and declining, and its best checkpoints are the
+    strongest setting so far (every seed positive, 64% wins). λ self-play also gives
+    reliable greedy-beaters (+10). Final weights are noisy at α 0.2 (within-run sd
+    10–15), so a final can be anywhere from −30 to +15. The strongest single agents
+    on fresh games: `p7b_sarsa_lam98_random_s3@best` +17.4 ± 0.8 (73% wins);
+    `p7c_q_lam98_greedy_s1` final weights +15.5 (70%) and its best +15.3;
+    `p7d_q_lam98_self_s2@best` +14.9; `p7c_q_lam98_greedy_s2@best` +14.6.
+  - Eighth pass started (`scripts/linear_pass8.ps1`, `runs/linear/pass8/`): λ 0.98 with
+    α decay 0.2 → 0.02, Q against greedy and self, 5 seeds, all 10 at once: whether
+    decay steadies the noisy finals of pass 7.
 - **Next:** read the pass-6 results; re-score best and final weights of passes 4–6 on
   fresh games; finish the pass-3 analysis (re-score best and final weights on fresh
   games, per-seed curves), then the next ladder. DQN / PPO (needs PyTorch) after tier A settles. The race-to-the-end
