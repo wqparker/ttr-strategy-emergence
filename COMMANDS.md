@@ -194,6 +194,7 @@ ttr-sim --agents linear:runs/linear/q_mixed_s1.json@best greedy   # the run's be
 | `--epsilon-start` / `--epsilon-end` / `--epsilon-decay` | `0.2` / `0.02` / `0.5` | exploration, falling linearly over that share of the games |
 | `--reward` | `margin` | `score`, `margin` or `win` |
 | `--eval-every` / `--eval-games` | `200` / `100` | evaluation schedule |
+| `--live [N]` | off | also rewrite the run file every N games (25 if no N) and after every evaluation, for `ttr-dash --live`; off means one write at the end |
 
 The output JSON holds the weights by action type with feature names, the config, one row of
 game metrics per training game, every evaluation (mean metrics against random and greedy),
@@ -214,6 +215,23 @@ ttr-dash runs/linear/q_greedy.json runs/linear/sarsa_greedy.json   # compare (up
 ttr-dash runs/linear/*.json --save runs/linear/dash               # all pages as PNG, no window
 ttr-dash runs/linear/pass2/*.json --group                        # average NAME_s0, NAME_s1, ... into NAME xN
 ```
+
+**Live view while training.** Start the run with `--live`, then point `ttr-dash --live` at the
+same file in a second terminal. The window rereads the file every 3 seconds (`--live 5` for 5)
+and redraws the page on screen when it changed; the header shows each run's progress
+(`1225/2000 training`) and the time of the last update. It waits for files that don't exist yet,
+so it can be started first. Training-game pages move every N games; evaluation curves, the final
+table and weight snapshots move at each evaluation (`--eval-every 50` for a finer curve, at the
+cost of 200 evaluation games each time).
+
+```
+ttr-train-linear --algo q --opponent random --seed 0 --live --out runs/linear/pass3/q_random_s0.json
+ttr-dash --live runs/linear/pass3/q_random_s0.json
+ttr-dash --live --group runs/linear/pass3/q_random_s0.json runs/linear/pass3/q_random_s1.json   # seeds in parallel
+```
+
+A live save of a full 2000-game run takes about 20 ms, so `--live 25` adds about 1–2 s to a
+5-minute run.
 
 | Page | Shows |
 | --- | --- |

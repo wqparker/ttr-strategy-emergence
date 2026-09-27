@@ -108,3 +108,54 @@ def test_group_averages_seeds(run_file, tmp_path):
     mean = grouped[0].history[-1]["eval"]["greedy"]["margin"]
     assert mean == pytest.approx(data["history"][-1]["eval"]["greedy"]["margin"] + 5)
     assert grouped[0].config["seed"] == "0, 1"
+
+
+def test_live_training_writes_partial_runs(tmp_path):
+    from ttr.learn.linear import TrainConfig, train
+
+    cfg = TrainConfig(games=10, seed=2)
+    path = tmp_path / "live.json"
+    seen = []
+
+    def snapshot(result):
+        result.save(path, cfg, finished=False)
+        seen.append(json.loads(path.read_text(encoding="utf-8"))["progress"])
+
+    result = train(cfg, eval_every=6, eval_games=2, log=lambda line: None, baselines=False,
+                   on_progress=snapshot, progress_every=4)
+    # every 4 games, plus after the evaluations at 6 and 10
+    assert [p["games"] for p in seen] == [4, 6, 8, 10]
+    assert not any(p["finished"] for p in seen)
+    result.save(path, cfg)
+    assert json.loads(path.read_text(encoding="utf-8"))["progress"] == {"games": 10, "of": 10, "finished": True}
+    assert not (tmp_path / "live.json.tmp").exists()
+
+
+def test_live_dashboard_waits_then_follows_the_file(tmp_path):
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from ttr.learn.dashboard import SERIES, Dashboard, load_run
+    from ttr.learn.linear import TrainConfig, train
+
+    path = tmp_path / "run.json"
+    dash = Dashboard([], loader=lambda: [load_run(path, SERIES[0])], sources=[path])
+    dash.draw()  # nothing yet: a waiting message
+    assert not dash.poll()
+
+    cfg = TrainConfig(games=3, seed=4)
+    train(cfg, eval_every=0, eval_games=2, log=lambda line: None, baselines=False,
+          on_progress=lambda r: r.save(path, cfg, finished=False), progress_every=2)
+    assert dash.poll() and dash.runs and dash.runs[0].progress == "3/3 training"
+    assert not dash.poll()  # unchanged since
+
+    # A partial run with no evaluation draws every page.
+    partial = json.loads(path.read_text(encoding="utf-8"))
+    partial["history"], partial["snapshots"], partial["best"] = [], [], None
+    path.write_text(json.dumps(partial), encoding="utf-8")
+    assert dash.poll()
+    for page in range(len(dash.pages)):
+        dash.page = page
+        dash.draw()
+    plt.close(dash.fig)

@@ -260,9 +260,17 @@ for 2 players).
     - Tickets are still the gap: every agent completes under 1 ticket a game
       (greedy 4.9). Rare final-round ticket choices still learn noisy weights
       (keep.doomed_points +0.12 for Q vs random, the wrong sign).
-- **Next:** decide between a third tier-A pass (stabilise: smaller α or averaged
-  weights; ticket completion) and moving on to DQN / PPO (needs PyTorch). The
-  race-to-the-end strategy is a finding for the tempo question either way.
+  - Done: live view. `ttr-train-linear --live [N]` rewrites the run file every N games
+    (default 25) and after each evaluation (whole-file replace, so readers never see a
+    partial file); `ttr-dash --live` rereads it every few seconds and redraws. Off by
+    default: one write at the end, as before. A live save of a 2000-game run is about
+    20 ms.
+  - Decided (2026-09-27): keep doing tier-A passes until learning settles, before
+    DQN / PPO.
+- **Next:** third tier-A pass: stabilise learning (smaller α or averaged weights,
+  compared across seeds, watched live), then ticket completion. DQN / PPO (needs
+  PyTorch) after tier A settles. The race-to-the-end strategy is a finding for the
+  tempo question either way.
 
 ## Roadmap
 

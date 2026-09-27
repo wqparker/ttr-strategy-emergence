@@ -5,6 +5,7 @@ training runs (the JSON `ttr-train-linear` writes).
     ttr-dash runs/linear/q_greedy.json runs/linear/sarsa_greedy.json     # compare runs
     ttr-dash runs/linear/*.json --save runs/linear/dash                   # every page as PNG, no window
     ttr-dash runs/linear/pass2/*.json --group                             # average seeds: X_s0, X_s1 -> X
+    ttr-dash --live runs/linear/pass3/q_random_s0.json                    # follow a run training with --live
 
 Pages (keys 1-7 or left/right):
 
@@ -22,6 +23,10 @@ Pages (keys 1-7 or left/right):
     o  evaluation opponent: greedy / random      r  next run (pages 4-7)
     PgUp / PgDn  page through raw games          s  save this page as PNG
     f  full screen                               q  quit
+
+`--live [SECONDS]` rereads the files every few seconds (default 3) and redraws
+the page on screen when one changed; train with `ttr-train-linear --live` so the
+file is rewritten while training. Files that don't exist yet are waited for.
 
 Evaluations are greedy play (no exploration) against a fixed set of games per
 evaluation; the bots' baselines are measured on the final evaluation's games.
@@ -146,7 +151,15 @@ class Run:
         return xs, ys
 
     def final(self, opponent: str) -> Dict[str, float]:
-        return self.history[-1]["eval"][opponent]
+        """The latest evaluation; empty before the first one (a live run)."""
+        return self.history[-1]["eval"][opponent] if self.history else {}
+
+    @property
+    def progress(self) -> str:
+        p = self.data.get("progress")
+        if not p:
+            return ""
+        return f"{p['games']}/{p['of']}" + ("" if p.get("finished", True) else " training")
 
 
 def load_run(path: Path, color: str) -> Run:
@@ -190,6 +203,10 @@ def group_runs(runs: Sequence[Run]) -> List[Run]:
         data["config"] = dict(members[0].data.get("config", {}),
                               seed=", ".join(str(m.config.get("seed")) for m in members))
         data["eval_games"] = members[0].data.get("eval_games", "?")
+        progress = [m.data.get("progress") for m in members if m.data.get("progress")]
+        if progress:
+            data["progress"] = {"games": min(p["games"] for p in progress), "of": progress[0]["of"],
+                                "finished": all(p.get("finished", True) for p in progress)}
         bests = [m.data.get("best") for m in members if m.data.get("best")]
         if bests:
             data["best"] = {"games": "mean", "margin_vs_greedy": float(np.mean([b["margin_vs_greedy"] for b in bests]))}
@@ -270,12 +287,19 @@ class Dashboard:
     PAGE_NAMES = ["Overview", "Behavior", "Training games", "Action mix", "Weights", "Evaluations", "Games"]
     GAMES_PER_PAGE = 32
 
-    def __init__(self, runs: Sequence[Run], figure=None, opponent: str = "greedy") -> None:
+    def __init__(self, runs: Sequence[Run], figure=None, opponent: str = "greedy",
+                 loader: Optional[Callable[[], List[Run]]] = None, sources: Sequence[Path] = ()) -> None:
+        """`loader` and `sources` make it live: `poll()` reloads the runs when a
+        source file changed. A live dashboard may start with no runs yet."""
         import matplotlib.pyplot as plt
 
-        if not runs:
+        if not runs and loader is None:
             raise ValueError("no runs to show")
         self.runs = list(runs)
+        self.loader = loader
+        self.sources = [Path(p) for p in sources]
+        self._stamps = self._source_stamps()
+        self.updated = ""
         self.fig = figure if figure is not None else plt.figure(figsize=(19.2, 10.8), dpi=100)
         self.fig.set_facecolor(SURFACE)
         self.page = 0
@@ -296,14 +320,55 @@ class Dashboard:
     def draw(self) -> None:
         self.fig.clear()
         self.fig.set_facecolor(SURFACE)
-        self.pages[self.page]()
+        if self.runs:
+            self.pages[self.page]()
+        else:
+            self.fig.text(0.5, 0.5, "waiting for " + ", ".join(p.name for p in self.sources)
+                          + "\n(start ttr-train-linear with --live and the same --out)",
+                          ha="center", va="center", fontsize=12, color=INK_2)
         names = "   ".join(f"{i + 1} {n}" for i, n in enumerate(self.PAGE_NAMES))
-        runs = ", ".join(r.name for r in self.runs)
+        runs = ", ".join(r.name + (f" [{r.progress}]" if self.loader and r.progress else "") for r in self.runs)
         self.fig.text(0.008, 0.992, f"{self.PAGE_NAMES[self.page]}  ·  runs: {runs}  ·  evaluation opponent: "
                       f"{self.opponent}", fontsize=11, color=INK, va="top", fontweight="bold")
+        if self.loader is not None:
+            self.fig.text(0.992, 0.992, f"LIVE · updated {self.updated or '—'}", ha="right", va="top",
+                          fontsize=9, color=INK_2)
         self.fig.text(0.008, 0.006, f"{names}      ←/→ page   o opponent   r run   PgUp/PgDn games   "
                       f"s save PNG   f full screen   q quit", fontsize=8, color=INK_2, va="bottom")
         self.fig.canvas.draw_idle()
+
+    # ------------------------------------------------------------ live
+
+    def _source_stamps(self) -> Tuple:
+        stamps = []
+        for p in self.sources:
+            try:
+                st = p.stat()
+                stamps.append((st.st_mtime_ns, st.st_size))
+            except OSError:
+                stamps.append(None)
+        return tuple(stamps)
+
+    def poll(self) -> bool:
+        """Reload and redraw if a source file changed. Returns True if it did.
+        A file caught mid-replace just waits for the next poll."""
+        if self.loader is None:
+            return False
+        stamps = self._source_stamps()
+        if stamps == self._stamps:
+            return False
+        try:
+            runs = self.loader()
+        except (ValueError, OSError):  # JSONDecodeError is a ValueError
+            return False
+        self._stamps = stamps
+        self.runs = runs
+        self.run_index = min(self.run_index, max(0, len(runs) - 1))
+        import time as _time
+
+        self.updated = _time.strftime("%H:%M:%S")
+        self.draw()
+        return True
 
     def grid(self, rows: int, cols: int, **kw):
         kw.setdefault("hspace", 0.55)
@@ -367,7 +432,7 @@ class Dashboard:
         cols = [(r.name, r.final(opp), r.color) for r in self.runs]
         base = self.runs[0].data.get("baselines", {})
         cols += [(f"{bot} bot", base[bot][opp], None) for bot in ("greedy", "random") if bot in base]
-        rows = [[label(k)] + [fmt(k, c[1][k]) for c in cols] for k in SUMMARY]
+        rows = [[label(k)] + [fmt(k, c[1][k]) if k in c[1] else "—" for c in cols] for k in SUMMARY]
         draw_table(self.fig.add_subplot(gs[0:2, 2]), ["metric"] + [c[0] for c in cols], rows,
                    title=f"final evaluation vs {opp} ({self._eval_games()} games each)",
                    swatches=[None] + [c[2] for c in cols], col_widths=[1.5] + [1] * len(cols))
@@ -377,7 +442,8 @@ class Dashboard:
                 "reward_mode", "reward_scale", "seed"]
         for k in keys:
             cfg_rows.append([k] + [str(r.config.get(k, "")) for r in self.runs])
-        cfg_rows.append(["training time"] + [f"{r.history[-1]['seconds']:.0f} s" for r in self.runs])
+        cfg_rows.append(["training time"] + [f"{r.history[-1]['seconds']:.0f} s" if r.history else "—"
+                                              for r in self.runs])
         cfg_rows.append(["best vs greedy"] + [
             f"{r.data['best']['games']}: {r.data['best']['margin_vs_greedy']:+.1f}"
             if r.data.get("best") else "" for r in self.runs])
@@ -437,7 +503,8 @@ class Dashboard:
         colors = SERIES[:len(ACTIONS)]
         polys = ax.stackplot(xs, shares, colors=colors, edgecolor=SURFACE, linewidth=1)
         ax.set_ylim(0, 1)
-        ax.set_xlim(xs[0], xs[-1])
+        if len(xs) > 1:
+            ax.set_xlim(xs[0], xs[-1])
         ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
         ax.set_xlabel("training games", fontsize=7.5, color=INK_2)
         self.legend(polys, [n for _, n in ACTIONS])
@@ -448,6 +515,10 @@ class Dashboard:
         base = run.data.get("baselines", {})
         groups = [(run.name, run.final(self.opponent), run.color)]
         groups += [(f"{b} bot", base[b][self.opponent], BOT_STYLE[b]["color"]) for b in ("greedy", "random") if b in base]
+        groups = [g for g in groups if g[1]]  # a live run has no evaluation yet
+        if not groups:
+            ax.text(0.5, 0.5, "no evaluation yet", ha="center", va="center", color=INK_2, transform=ax.transAxes)
+            return
         y = np.arange(len(ACTIONS))
         h = 0.8 / len(groups)
         for i, (name, metrics, color) in enumerate(groups):
@@ -640,7 +711,12 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--windowed", action="store_true", help="don't start full screen")
     parser.add_argument("--group", action="store_true",
                         help="average runs named NAME_s<seed> into one line per NAME")
+    parser.add_argument("--live", type=float, nargs="?", const=3.0, default=0.0, metavar="SECONDS",
+                        help="reread the files every SECONDS (default 3) and redraw when they change; "
+                             "for runs training with ttr-train-linear --live")
     args = parser.parse_args(argv)
+    if args.live and args.save:
+        parser.error("--live and --save don't combine")
 
     import matplotlib
 
@@ -651,15 +727,21 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             matplotlib.rcParams[key] = []
     import matplotlib.pyplot as plt
 
+    def load_all() -> List[Run]:
+        paths = [p for p in args.runs if p.exists()] if args.live else args.runs
+        loaded = [load_run(p, SERIES[i % len(SERIES)]) for i, p in enumerate(paths)]
+        return group_runs(loaded) if args.group else loaded
+
     try:
-        runs = [load_run(p, SERIES[i % len(SERIES)]) for i, p in enumerate(args.runs)]
-    except (RunFormatError, OSError) as e:
-        sys.exit(str(e))
-    if args.group:
-        runs = group_runs(runs)
+        runs = load_all()
+    except (RunFormatError, OSError, ValueError) as e:
+        if not args.live:
+            sys.exit(str(e))
+        runs = []  # caught mid-write; the first poll loads it
     if len(runs) > len(SERIES):
         parser.error(f"at most {len(SERIES)} runs at once (--group averages seeds)")
-    dash = Dashboard(runs, opponent=args.opponent)
+    live = {"loader": load_all, "sources": args.runs} if args.live else {}
+    dash = Dashboard(runs, opponent=args.opponent, **live)
     dash.page = max(0, min(len(dash.pages), args.page) - 1)
     if args.save:
         for opp in OPPONENTS:
@@ -670,6 +752,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     dash.fig.canvas.manager.set_window_title("Ticket to Ride — agent analysis")
     dash.fig.canvas.mpl_connect("key_press_event", dash.on_key)
     dash.draw()
+    if args.live:
+        timer = dash.fig.canvas.new_timer(interval=int(args.live * 1000))
+        timer.add_callback(dash.poll)
+        timer.start()
+        dash._timer = timer  # keep a reference, or it is garbage-collected
     if not args.windowed:
         try:
             dash.fig.canvas.manager.full_screen_toggle()

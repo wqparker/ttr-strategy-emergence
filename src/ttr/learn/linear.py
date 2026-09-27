@@ -29,19 +29,24 @@ epsilon-greedy, epsilon decaying linearly over the first part of training.
 Every evaluation that beats the best margin against greedy so far keeps a copy
 of the weights ("best" in the saved file, `linear:PATH@best` to play it). The
 same evaluation both picks and scores it, so its recorded score is optimistic.
+
+The run file is written once, when training ends. `--live [N]` also rewrites it
+every N games (default 25) and after every evaluation, so `ttr-dash --live`
+can follow the run while it trains; each write replaces the file whole.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import statistics
 import sys
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -107,9 +112,19 @@ class LinearAgent:
         }
 
     def save(self, path: Path, **meta) -> None:
+        """Write the file whole: to a temporary file, then swapped in, so a reader
+        (ttr-dash --live) never sees half of it."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({**meta, **self.to_dict()}, indent=1), encoding="utf-8")
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps({**meta, **self.to_dict()}, indent=1), encoding="utf-8")
+        for attempt in range(20):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:  # Windows: a reader has the file open for a moment
+                time.sleep(0.05 * (attempt + 1))
+        os.replace(tmp, path)
 
     @classmethod
     def load(cls, path: Path, seed: Optional[int] = None, name: Optional[str] = None,
@@ -237,10 +252,12 @@ class TrainResult:
     eval_games: int = 0
     best: Optional[dict] = None
 
-    def save(self, path: Path, cfg: TrainConfig, **meta) -> None:
-        self.agent.save(path, config=asdict(cfg), eval_games=self.eval_games, metrics=METRICS, history=self.history,
-                        snapshots=self.snapshots, baselines=self.baselines, games=self.games, best=self.best,
-                        **meta)
+    def save(self, path: Path, cfg: TrainConfig, finished: bool = True, **meta) -> None:
+        """`finished` False marks a snapshot taken mid-run (--live)."""
+        progress = {"games": len(self.games), "of": cfg.games, "finished": finished}
+        self.agent.save(path, config=asdict(cfg), eval_games=self.eval_games, metrics=METRICS, progress=progress,
+                        history=self.history, snapshots=self.snapshots, baselines=self.baselines, games=self.games,
+                        best=self.best, **meta)
 
 
 EVAL_OPPONENTS = ("random", "greedy")
@@ -251,11 +268,13 @@ def _eval_seed(i: int) -> int:
 
 
 def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
-          log=print, agent: Optional[LinearAgent] = None, baselines: bool = True) -> TrainResult:
+          log=print, agent: Optional[LinearAgent] = None, baselines: bool = True,
+          on_progress: Optional[Callable[["TrainResult"], None]] = None, progress_every: int = 0) -> TrainResult:
     """Train for cfg.games games. Every `eval_every` games (0 = only at the end)
     the greedy policy plays `eval_games` against random and against greedy, and
     the weights are snapshotted. With `baselines`, the random and greedy bots then
-    play the final evaluation's games too, for comparison."""
+    play the final evaluation's games too, for comparison. `on_progress(result)`
+    is called every `progress_every` games and after every evaluation (live runs)."""
     if cfg.algo not in ALGOS:
         raise ValueError(f"algo must be one of {ALGOS}")
     if cfg.opponent not in TRAIN_OPPONENTS:
@@ -298,6 +317,10 @@ def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
                 out.best = {"games": done, "margin_vs_greedy": selection, "weights": weights}
             window = []
             log(_progress_line(entry))
+            if on_progress is not None:
+                on_progress(out)
+        elif on_progress is not None and progress_every and done % progress_every == 0:
+            on_progress(out)
     if baselines:
         seed = _eval_seed(len(out.history) - 1)
         for bot in ("random", "greedy"):
@@ -336,6 +359,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--init", type=Path, help="start from these weights instead of zeros")
     parser.add_argument("--out", type=Path, required=True,
                         help="JSON: weights, config, per-game rows, evaluations, weight snapshots, baselines")
+    parser.add_argument("--live", type=int, nargs="?", const=25, default=0, metavar="N",
+                        help="also write the run file every N games (default 25) and after every evaluation, "
+                             "for ttr-dash --live; off by default (one write at the end is faster)")
     args = parser.parse_args(argv)
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -349,8 +375,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     print(f"(best checkpoint kept by margin vs greedy; play it as linear:{args.out}@best)")
     print(f"training {cfg.algo} vs {cfg.opponent}: {cfg.games} games, alpha {cfg.alpha}, "
           f"epsilon {cfg.epsilon_start} -> {cfg.epsilon_end}, reward {cfg.reward_mode}")
-    result = train(cfg, eval_every=args.eval_every, eval_games=args.eval_games, agent=agent)
-    result.save(args.out, cfg, init=str(args.init) if args.init else None)
+    init = str(args.init) if args.init else None
+    live = None
+    if args.live:
+        print(f"live: {args.out} rewritten every {args.live} games (watch with ttr-dash --live {args.out})")
+        live = lambda result: result.save(args.out, cfg, finished=False, init=init)
+    result = train(cfg, eval_every=args.eval_every, eval_games=args.eval_games, agent=agent,
+                   on_progress=live, progress_every=args.live)
+    result.save(args.out, cfg, init=init)
     print(f"saved {args.out}  (ttr-dash {args.out} to analyze)")
 
 
