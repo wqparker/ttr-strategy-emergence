@@ -30,6 +30,7 @@ ttr-view [--record FILE] [--agents NAME ...] [--human SEAT] [--board usa|toy]
 | `--paused` | off | start stopped |
 | `--overlay DIR` | — | color routes by statistics over the records in `DIR` (see below) |
 | `--fullscreen` | off | start full screen at the display's resolution (`F11` toggles) |
+| `--seed N` | random | live: fix the game; the seed used is printed at start and shown in the legend and title |
 | `--games N` | `1` | live: N games in a row; seeds `--seed`, `+1`, …; agents rotate seats |
 | `--advance S` | `5` | with `--games`: seconds the final scoreboard stays up before the next game |
 
@@ -113,7 +114,8 @@ ttr-shot --out FILE --overlay DIR [--stat claim_rate|avg_turn|contested] [--agen
 ```
 
 The viewer's screen without its controls. With no `--record`, greedy agents play `--turns` turns
-(default 12) of a seeded game first, so the panels have something to show.
+(default 12) of a seeded game first, so the panels have something to show. Its `--seed` defaults
+to 0, not random, so the same command always gives the same image.
 
 | Want | Add |
 | --- | --- |

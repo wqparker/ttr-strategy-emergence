@@ -325,6 +325,46 @@ def test_series_keys_and_legend():
     v.draw(pygame.Surface(v.screen.size))
 
 
+def test_legend_shows_the_seed_of_the_game_on_screen():
+    v = series_viewer(games=3)
+    v.seed = 5
+    assert dict(v.status())["seed"] == "5"
+    v.next_game()
+    assert dict(v.status())["seed"] == "6"
+    assert "seed" not in dict(viewer(live()).status())  # not given: not shown
+
+
+def test_caption_names_the_seed():
+    from ttr.viz.app import caption
+
+    v = series_viewer(games=3)
+    args = Namespace(overlay=None, record=None, seed=5)
+    v.next_game()
+    assert caption(args, v) == "Ticket to Ride — live · game 2/3 · seed 6"
+    assert caption(args, series_viewer(games=1)) == "Ticket to Ride — live · seed 5"
+
+
+def test_seed_defaults_to_random(monkeypatch, capsys):
+    """Without --seed, main draws one and prints how to replay it."""
+    import ttr.viz.app as app
+
+    seen = {}
+
+    def fake_build(args):
+        seen["seed"] = args.seed
+        raise SystemExit(0)  # stop before a window opens
+
+    monkeypatch.setattr(app, "build", fake_build)
+    monkeypatch.setattr(app.random, "randrange", lambda n: 424242)
+    with pytest.raises(SystemExit):
+        app.main(["--games", "3"])
+    assert seen["seed"] == 424242
+    assert "rerun with --seed 424242 --games 3" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        app.main(["--seed", "7"])
+    assert seen["seed"] == 7
+
+
 def test_human_seat_stays_put():
     v = series_viewer(games=2, human=0)
     assert v.screen.names == ["human", "random"]

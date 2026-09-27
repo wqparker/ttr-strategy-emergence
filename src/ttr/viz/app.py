@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import random
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -338,9 +339,10 @@ class Viewer:
     def __init__(self, timeline: Timeline, screen: Screen, playing: bool = True, speed: int = 2,
                  human: Optional[HumanControl] = None, summary: Optional[Summary] = None,
                  overlay_on: bool = False, series: Optional[Series] = None,
-                 advance: float = ADVANCE_DELAY):
+                 advance: float = ADVANCE_DELAY, seed: Optional[int] = None):
         self.timeline = timeline
         self.screen = screen
+        self.seed = seed  # a live game's seed (game g of a series: seed + g), for the legend
         # Consecutive games (--games): which one is on screen, and when a
         # finished game hands over to the next (seconds on the scoreboard).
         self.series = series
@@ -547,12 +549,16 @@ class Viewer:
         where = f"{self.timeline.index}/{len(self.timeline.states) - 1}"
         state = "playing" if self.playing else ("end" if self.timeline.at_end else "paused")
         overlay = OVERLAY_CONTROLS if self.summary is not None else ()
-        series: Tuple[Tuple[str, str], ...] = ()
+        keys: Tuple[Tuple[str, str], ...] = ()
+        info: Tuple[Tuple[str, str], ...] = ()
         if self.series is not None:
             if self._advance_at is not None:
                 state = "next game soon"
-            series = (SERIES_CONTROLS, ("game", f"{self.game_no + 1}/{self.series.count}"))
-        return CONTROLS + overlay + series[:1] + (("step", where),) + series[1:] + (
+            keys = (SERIES_CONTROLS,)
+            info = (("game", f"{self.game_no + 1}/{self.series.count}"),)
+        if self.seed is not None:
+            info += (("seed", str(self.seed + self.game_no)),)
+        return CONTROLS + overlay + keys + (("step", where),) + info + (
             ("speed", f"x{self.speed + 1}  ·  {state}"),)
 
     def draw(self, target: pygame.Surface) -> None:
@@ -658,13 +664,27 @@ def build(args: argparse.Namespace
     return timeline, screen, HumanControl(human), summary, series
 
 
+def caption(args: argparse.Namespace, viewer: Viewer) -> str:
+    """The window title: the mode, and for live games the seed of the game on
+    screen (which --seed replays it) and its place in a series."""
+    if args.overlay:
+        return "Ticket to Ride — overlay"
+    if args.record:
+        return "Ticket to Ride — replay"
+    if viewer.series is None:
+        return f"Ticket to Ride — live · seed {args.seed}"
+    seed = viewer.series.seed + viewer.game_no
+    return f"Ticket to Ride — live · game {viewer.game_no + 1}/{viewer.series.count} · seed {seed}"
+
+
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--record", type=Path, help="replay a saved game instead of one played live")
     parser.add_argument("--agents", nargs="+", default=["greedy", "random"],
                         help="live mode: one agent per seat")
     parser.add_argument("--board", default="usa")
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=None,
+                        help="live mode: fix the seed to replay a game (default: random, printed at start)")
     parser.add_argument("--max-turns", type=int, default=1000)
     parser.add_argument("--perspective", default="all", help="'all' or a seat number")
     parser.add_argument("--memory-level", type=int, default=2, choices=(0, 1, 2))
@@ -683,16 +703,22 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parser.parse_args(argv)
     if args.games < 1:
         parser.error("--games must be at least 1")
+    live = not (args.record or args.overlay)
+    if args.seed is None:
+        args.seed = random.randrange(1_000_000)
+    if live:
+        again = f"--seed {args.seed}" + (f" --games {args.games}" if args.games > 1 else "")
+        print(f"seed {args.seed}  (rerun with {again} to replay)")
 
     pygame.init()
-    mode = " — overlay" if args.overlay else (" — replay" if args.record else " — live")
-    pygame.display.set_caption("Ticket to Ride" + mode)
     timeline, screen, human, summary, series = build(args)
     viewer = Viewer(timeline, screen, playing=not (args.paused or args.overlay), human=human,
-                    summary=summary, overlay_on=True, series=series, advance=args.advance)
+                    summary=summary, overlay_on=True, series=series, advance=args.advance,
+                    seed=args.seed if live else None)
     viewer.fullscreen = args.fullscreen
     window = open_window(viewer, args.scale)
     shown = viewer.fullscreen
+    captioned = None
 
     clock = pygame.time.Clock()
     while viewer.running:
@@ -701,6 +727,9 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         if viewer.fullscreen != shown:  # F11
             window = open_window(viewer, args.scale)
             shown = viewer.fullscreen
+        if captioned != viewer.game_no:  # the title names the game's seed
+            captioned = viewer.game_no
+            pygame.display.set_caption(caption(args, viewer))
         viewer.tick(pygame.time.get_ticks() / 1000)
         window.fill(theme.PANEL_BG)
         area = pygame.Rect(viewer.offset, viewer.screen.size).clip(window.get_rect())
