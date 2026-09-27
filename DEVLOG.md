@@ -20,4 +20,4 @@ Testing putting in behavior input changes for Claude itself. Going for tersness,
 
 ## 9/26/26
 
-Working on post game analysis and stats, gathered per game and per batch of games, full screen scale view.
+Working on post game analysis and stats, gathered per game and per batch of games, full screen scale view. Fixed and touched up deeper potential errors in randomness and gamestate logic, randomness of seeds, randomness of player turn order. Begging to progress to more state machine building with action enocoding etc. I want to do a more in-depth dev report at end with visual states and detailed analysis of how exactly things went - I think I'll just go over commits by date for this. Just passed midnight but have been working on creating and testing first iterations of training linear Q and SARSA agents: want to do initial attempt of what features to use and work out kinks in overall process of agent development. Created intense and arguably over enthusiastic data analysis Matplot page, but data nums make brain go brrrr sometimes. 
