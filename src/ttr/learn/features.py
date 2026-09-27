@@ -12,6 +12,10 @@ have to rank the actions available in it. In the first pass every type carried
 its own copy of the state features, which took nearly all the weight and left the
 features that separate one claim from another near zero (PLAN.md).
 
+Third pass (appended, so older weight files load with these at 0): how much of
+a ticket's remaining path a route covers, tempo (the trains race to the end
+trigger), and whether a route touches the opponent's network (blocking).
+
 Everything is computed from the acting seat's view: its own hand and tickets,
 the table, and route ownership (RULES.md §9 #17). Values are scaled to about
 [0, 1] (the margin to [-1, 1]).
@@ -68,6 +72,9 @@ ACTION_FEATURES: Dict[str, Tuple[str, ...]] = {
         "triggers_end",  # leaves me with 2 or fewer trains
         "trains_after",  # trains I'd have left / 45
         "endgame",  # the final round started or an opponent is near the trigger
+        "ticket_share",  # the largest share of a served ticket's remaining trains this route covers
+        "tempo",  # (fewest opponent trains - my trains after it) / 45: + means I'm nearer the end trigger
+        "near_opponent",  # an end city is on an opponent's claimed routes (a blocking candidate)
     ),
     # The route's points are scored when it is paid for, so the payment step
     # carries the route's features too: Q(claim r) learns from max Q(pay) and
@@ -79,6 +86,7 @@ ACTION_FEATURES: Dict[str, Tuple[str, ...]] = {
         "on_ticket_path",
         "ticket_points",
         "completes_ticket",
+        "ticket_share",
     ),
     "draw_color": (
         "needed",  # a color my path routes still need
@@ -86,22 +94,26 @@ ACTION_FEATURES: Dict[str, Tuple[str, ...]] = {
         "second_draw",
         "hand_size",
         "endgame",
+        "tempo",  # (fewest opponent trains - my trains) / 45
     ),
     "draw_locomotive": (
         "hand_size",
         "endgame",
+        "tempo",
     ),
     "draw_blind": (
         "second_draw",
         "useful_face_up",  # a face-up card of a needed color was on offer instead
         "hand_size",
         "endgame",
+        "tempo",
     ),
     "draw_tickets": (
         "spare_trains",  # trains left beyond what my incomplete tickets need / 45
         "last_turn",  # the final round: nothing drawn now can be finished
         "open_tickets",
         "my_trains",
+        "tempo",
     ),
     "keep": (
         "count",  # tickets kept / 3
@@ -157,6 +169,9 @@ class Context:
     needs: Counter = field(default_factory=Counter)  # color -> cards my colored path routes still lack
     offer_costs: Dict[int, float] = field(default_factory=dict)  # ticket on offer -> cheapest path (INF if none)
     offer_shared: Dict[int, int] = field(default_factory=dict)  # ticket on offer -> its path trains already on my paths
+    opp_trains: int = 0  # fewest trains any opponent has left
+    opp_cities: frozenset = frozenset()  # cities on any opponent's claimed routes
+    ticket_trains: int = 0  # shaping potential: trains still needed per incomplete ticket, a lost one counting 45
 
 
 def _cap(x: float) -> float:
@@ -170,7 +185,7 @@ def context(game: Game, p: int) -> Context:
     mine = [board.routes[r] for r in me.routes]
 
     route_tickets: Dict[int, List[Tuple[int, int]]] = {}
-    open_count = lost = committed = 0
+    open_count = lost = committed = ticket_trains = 0
     for tid in me.tickets:
         t = board.tickets[tid]
         if connected(mine, t.a, t.b):
@@ -179,8 +194,10 @@ def context(game: Game, p: int) -> Context:
         cost, path = cheapest_path(game, p, t.a, t.b)
         if cost == INF or cost > me.trains:
             lost += 1
+            ticket_trains += full
             continue
         committed += int(cost)
+        ticket_trains += int(cost)
         for rid in path:
             route_tickets.setdefault(rid, []).append((t.points, int(cost)))
 
@@ -214,9 +231,12 @@ def context(game: Game, p: int) -> Context:
         cost, path = cheapest_path(game, p, t.a, t.b)
         offer_costs[tid] = cost
         offer_shared[tid] = sum(board.routes[r].length for r in path if r in route_tickets)
+    opp_cities = frozenset(c for q in opponents for rid in game.players[q].routes
+                           for c in (board.routes[rid].a, board.routes[rid].b))
     return Context(state=state, trains=me.trains, committed=committed, open_tickets=open_count,
                    endgame=final_round or opp_trains <= ENDGAME_TRAINS, route_tickets=route_tickets,
-                   needs=needs, offer_costs=offer_costs, offer_shared=offer_shared)
+                   needs=needs, offer_costs=offer_costs, offer_shared=offer_shared, opp_trains=opp_trains,
+                   opp_cities=opp_cities, ticket_trains=ticket_trains)
 
 
 def action_features(game: Game, p: int, ctx: Context, action: Action) -> Tuple[str, np.ndarray]:
@@ -227,6 +247,7 @@ def action_features(game: Game, p: int, ctx: Context, action: Action) -> Tuple[s
     second = float(game.phase is Phase.DRAW_SECOND_CARD)
     hand = _cap(game.players[p].hand_size / 30)
     endgame = float(ctx.endgame)
+    tempo = (ctx.opp_trains - ctx.trains) / full
 
     if kind == "claim":
         r = board.routes[action.route_id]
@@ -240,6 +261,9 @@ def action_features(game: Game, p: int, ctx: Context, action: Action) -> Tuple[s
             float(ctx.trains - r.length <= END_TRIGGER_TRAINS),
             (ctx.trains - r.length) / full,
             endgame,
+            max((r.length / need for _, need in served if need), default=0.0),
+            (ctx.opp_trains - (ctx.trains - r.length)) / full,
+            float(r.a in ctx.opp_cities or r.b in ctx.opp_cities),
         ]
     elif kind == "pay":
         pending = game.pending_route
@@ -259,21 +283,23 @@ def action_features(game: Game, p: int, ctx: Context, action: Action) -> Tuple[s
             float(bool(served)),
             _cap(sum(pts for pts, _ in served) / 20),
             float(any(need == route.length for _, need in served)),
+            max((route.length / need for _, need in served if need), default=0.0),
         ]
     elif kind == "draw_color":
         need = ctx.needs[action.color]
-        extra = [float(need > 0), _cap(need / 6), second, hand, endgame]
+        extra = [float(need > 0), _cap(need / 6), second, hand, endgame, tempo]
     elif kind == "draw_locomotive":
-        extra = [hand, endgame]
+        extra = [hand, endgame, tempo]
     elif kind == "draw_blind":
         useful = any(c is not Color.LOCOMOTIVE and ctx.needs[c] > 0 for c in game.market)
-        extra = [second, float(useful), hand, endgame]
+        extra = [second, float(useful), hand, endgame, tempo]
     elif kind == "draw_tickets":
         extra = [
             max(0, ctx.trains - ctx.committed) / full,
             float(game.final_turns_remaining is not None),
             _cap(ctx.open_tickets / 5),
             ctx.trains / full,
+            tempo,
         ]
     elif kind == "keep":
         ids = sorted(action.ticket_ids)
@@ -309,7 +335,15 @@ def all_features(game: Game, p: int, actions: Optional[Sequence[Action]] = None
                  ) -> Tuple[np.ndarray, List[Tuple[str, np.ndarray]]]:
     """The state vector and (type, psi) for each legal action, in
     `game.legal_actions()` order."""
+    ctx, feats = features_with_context(game, p, actions)
+    return ctx.state, feats
+
+
+def features_with_context(game: Game, p: int, actions: Optional[Sequence[Action]] = None
+                          ) -> Tuple[Context, List[Tuple[str, np.ndarray]]]:
+    """As all_features, returning the whole Context (the learner also reads the
+    shaping potential from it)."""
     if actions is None:
         actions = game.legal_actions()
     ctx = context(game, p)
-    return ctx.state, [action_features(game, p, ctx, a) for a in actions]
+    return ctx, [action_features(game, p, ctx, a) for a in actions]

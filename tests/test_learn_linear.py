@@ -1,5 +1,6 @@
 """Linear Q-learning / SARSA: features, updates, saving, and that it learns."""
 
+import json
 import random
 
 import pytest
@@ -212,3 +213,111 @@ def test_mixed_opponents_and_best_checkpoint(tmp_path):
 
     from ttr.agents.registry import make_agent
     assert make_agent(f"linear:{path}@best", 0).name.endswith("@best")
+
+
+# ------------------------------------------------------------- third pass
+
+
+def test_third_pass_claim_features():
+    game = started_game()
+    game.players[0].tickets = [DENVER_EL_PASO]
+    game.players[0].trains = 30
+    rid = route_id(game, "Boston", "New York", "yellow")
+    game.route_owner[rid] = 1
+    game.players[1].routes.append(rid)
+    to_santa_fe = named(game, 0, ClaimRoute(route_id(game, "Denver", "Santa Fe")))
+    assert to_santa_fe["ticket_share"] == pytest.approx(2 / 4)  # 2 of the 4 trains still needed
+    assert to_santa_fe["tempo"] == pytest.approx((45 - (30 - 2)) / 45)
+    assert to_santa_fe["near_opponent"] == 0
+    assert named(game, 0, ClaimRoute(route_id(game, "New York", "Washington", "orange")))["near_opponent"] == 1
+    assert F.context(game, 0).ticket_trains == 4
+
+
+def test_alpha_schedule():
+    from ttr.learn.linear import alpha_at
+
+    assert alpha_at(TrainConfig(alpha=0.05), 900) == 0.05
+    cfg = TrainConfig(alpha=0.05, alpha_end=0.01, games=101)
+    assert alpha_at(cfg, 0) == pytest.approx(0.05) and alpha_at(cfg, 100) == pytest.approx(0.01)
+    assert alpha_at(cfg, 50) == pytest.approx(0.03)
+
+
+def test_trace_carries_an_error_back_to_earlier_decisions():
+    """A keep decision, then 90 draws: an error at the end reaches the keep
+    weights by lambda^90 of its size (0.9 -> ~1e-4, 0.99 -> ~0.4)."""
+    from ttr.learn.linear import Trace
+
+    state = np.ones(len(F.STATE_FEATURES))
+    keep_psi = np.ones(len(F.feature_names("keep")))
+    draw_psi = np.ones(len(F.feature_names("draw_blind")))
+    moved = {}
+    for lam in (0.9, 0.99):
+        weights = LinearAgent().weights
+        trace = Trace(weights, lam)
+        trace.visit("keep", keep_psi, state)
+        for _ in range(90):
+            trace.visit("draw_blind", draw_psi, state)
+        trace.apply(weights, 1.0)
+        moved[lam] = weights["keep"][0]
+    assert moved[0.9] == pytest.approx(0.9 ** 90)
+    assert moved[0.99] == pytest.approx(0.99 ** 90)
+    trace.clear()
+    assert not any(z.any() for z in trace.z.values())
+
+
+@pytest.mark.parametrize("algo", ["q", "sarsa"])
+def test_training_with_traces_runs(algo):
+    agent = LinearAgent(seed=0, epsilon=0.1)
+    game = Game(load_board("usa"), num_players=2, seed=11, max_turns=1000)
+    row = train_game(agent, RandomAgent(3), game, 0, TrainConfig(algo=algo, lam=0.98))
+    assert game.game_over and row["decisions"] > 20
+    assert np.isfinite(agent.weights["value"]).all() and agent.weights["keep"].any()
+
+
+def test_shaping_telescopes_to_zero_over_a_game():
+    """Phi is 0 at the first decision (no tickets yet) and at the end, so the
+    shaping rewards of a game sum to 0."""
+    agent = LinearAgent(seed=0, epsilon=0.1)
+    game = Game(load_board("usa"), num_players=2, seed=5, max_turns=1000)
+    row = train_game(agent, RandomAgent(1), game, 1, TrainConfig(shaping=1.0))
+    assert row["shaping"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_averaged_weights_are_evaluated_and_saved(tmp_path):
+    cfg = TrainConfig(games=6, seed=3, average=3)
+    result = train(cfg, eval_every=3, eval_games=2, log=lambda line: None, baselines=False)
+    assert result.policy is not result.agent
+    assert not np.allclose(result.policy.weights["value"], result.agent.weights["value"])
+    path = tmp_path / "avg.json"
+    result.save(path, cfg)
+    saved = LinearAgent.load(path)
+    assert np.allclose(saved.weights["value"], result.policy.weights["value"], atol=1e-6)
+    raw = json.loads(path.read_text(encoding="utf-8"))["raw_weights"]
+    assert np.allclose(raw["value"], result.agent.weights["value"], atol=1e-6)
+
+
+def test_self_play_meets_its_best_checkpoint():
+    cfg = TrainConfig(games=12, seed=4, opponent="self")
+    result = train(cfg, eval_every=2, eval_games=2, log=lambda line: None, baselines=False)
+    assert not any(r["vs_self"] for r in result.games[:2])  # greedy until the first evaluation
+    assert any(r["vs_self"] for r in result.games[2:])
+    assert all(r["vs_self"] + r["vs_greedy"] == 1 for r in result.games)
+
+
+def test_older_weight_files_load_with_new_features_at_zero(tmp_path):
+    agent = LinearAgent()
+    agent.weights["claim"][:] = 0.5
+    path = tmp_path / "old.json"
+    agent.save(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["features"]["claim"] = data["features"]["claim"][:-3]  # as saved before the third pass
+    data["weights"]["claim"] = data["weights"]["claim"][:-3]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    loaded = LinearAgent.load(path)
+    assert loaded.weights["claim"][:-3].tolist() == [0.5] * (len(F.feature_names("claim")) - 3)
+    assert loaded.weights["claim"][-3:].tolist() == [0.0, 0.0, 0.0]
+    data["features"]["claim"].append("mystery")
+    data["weights"]["claim"].append(1.0)
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ValueError, match="unknown"):
+        LinearAgent.load(path)

@@ -189,8 +189,12 @@ ttr-sim --agents linear:runs/linear/q_mixed_s1.json@best greedy   # the run's be
 | Option | Default | |
 | --- | --- | --- |
 | `--algo` | `q` | `q` (Q-learning) or `sarsa` |
-| `--opponent` | `random` | `random`, `greedy`, or `mixed` (either, a coin flip per game) |
+| `--opponent` | `random` | `random`, `greedy`, `mixed` (either, a coin flip per game), or `self` (greedy or the run's own best checkpoint so far, a coin flip per game) |
 | `--alpha` | `0.05` | step size (normalized by the feature vector's squared length) |
+| `--alpha-end` | off | let alpha fall linearly to this by the last game |
+| `--lambda` | `0` | eligibility traces, TD(λ). A game is ~90 decisions, so use 0.97–0.99 to reach the opening; the step is scaled by (1 − λ) so `--alpha` stays comparable |
+| `--average GAMES` | off | evaluate, checkpoint and save an exponential average of the weights over about GAMES games (the raw weights are saved too) |
+| `--shaping POINTS` | off | potential-based shaping: POINTS per train still needed for my incomplete tickets. Doesn't change the best policy; evaluations report the true score |
 | `--epsilon-start` / `--epsilon-end` / `--epsilon-decay` | `0.2` / `0.02` / `0.5` | exploration, falling linearly over that share of the games |
 | `--reward` | `margin` | `score`, `margin` or `win` |
 | `--eval-every` / `--eval-games` | `200` / `100` | evaluation schedule |
@@ -247,6 +251,30 @@ $p | Wait-Process
 
 `ttr-dash` expands wildcards itself (PowerShell passes `*.json` through unexpanded), and in live
 mode re-expands them on every poll, so seed files that appear later are picked up.
+
+A ladder of settings × seeds (the third pass: each step adds one change to the one before), with
+the second pass's `q_random` as the reference line:
+
+```powershell
+# terminal 1: 4 settings x 3 seeds = 12 runs in parallel (~6-8 min on 12 cores)
+New-Item -ItemType Directory -Force runs\linear\pass3 | Out-Null
+$runs = [ordered]@{
+  "p3a_avg"   = "--alpha 0.02 --average 100"
+  "p3b_lam"   = "--alpha 0.02 --average 100 --lambda 0.98"
+  "p3c_shape" = "--alpha 0.02 --average 100 --lambda 0.98 --shaping 1"
+  "p3d_self"  = "--alpha 0.02 --average 100 --lambda 0.98 --shaping 1 --opponent self"
+}
+$p = foreach ($name in $runs.Keys) { foreach ($s in 0..2) {
+  Start-Process -NoNewWindow -PassThru -FilePath .venv\Scripts\ttr-train-linear.exe `
+    -ArgumentList "--algo q --opponent random --seed $s --games 2000 --live $($runs[$name]) --out runs\linear\pass3\${name}_s$s.json" `
+    -RedirectStandardOutput "runs\linear\pass3\${name}_s$s.log" -RedirectStandardError "runs\linear\pass3\${name}_s$s.err" } }
+$p | Wait-Process
+
+# terminal 2
+.venv\Scripts\ttr-dash.exe --live --group "runs/linear/pass3/*.json" "runs/linear/pass2/q_random_s*.json"
+```
+
+A later `--opponent` in the arguments overrides the earlier one (`p3d_self`).
 
 A live save of a full 2000-game run takes about 20 ms, so `--live 25` adds about 1–2 s to a
 5-minute run.

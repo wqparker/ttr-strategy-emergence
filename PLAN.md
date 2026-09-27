@@ -267,10 +267,24 @@ for 2 players).
     20 ms.
   - Decided (2026-09-27): keep doing tier-A passes until learning settles, before
     DQN / PPO.
-- **Next:** third tier-A pass: stabilise learning (smaller α or averaged weights,
-  compared across seeds, watched live), then ticket completion. DQN / PPO (needs
-  PyTorch) after tier A settles. The race-to-the-end strategy is a finding for the
-  tempo question either way.
+  - Built for the third pass (all options, off by default so pass-2 runs reproduce):
+    `--alpha-end` (linear α decay), `--average GAMES` (exponential weight average,
+    evaluated and saved; raw weights saved too), `--lambda` (SARSA(λ) / Watkins
+    Q(λ) eligibility traces, step scaled by 1 − λ), `--shaping POINTS`
+    (potential-based, Φ = −POINTS × trains still needed for my incomplete tickets, a
+    lost ticket counting 45; Φ = 0 at the start and end, so a game's shaping sums to
+    0), `--opponent self` (greedy or the run's best checkpoint). New features,
+    appended so older weight files still load (with these at 0): `ticket_share`
+    (share of a served ticket's remaining trains a route covers; claim and pay),
+    `tempo` ((fewest opponent trains − my trains) / 45; claim and draws),
+    `near_opponent` (a route end is on an opponent's claimed routes; claim).
+  - Found while building it: a game is about 85–100 of the learner's decisions, so
+    traces need λ ≈ 0.97–0.99 to carry the final score back to the opening
+    (0.9^100 ≈ 3·10⁻⁵, 0.99^100 ≈ 0.37); λ 0.8–0.9 would not reach it.
+- **Next:** run the third-pass ladder (COMMANDS.md "Live view while training"): average
+  → + λ 0.98 → + shaping → + self-play, 3 seeds each, against the pass-2 `q_random`
+  reference. DQN / PPO (needs PyTorch) after tier A settles. The race-to-the-end
+  strategy is a finding for the tempo question either way.
 
 ## Roadmap
 

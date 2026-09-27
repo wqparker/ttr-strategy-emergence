@@ -455,8 +455,8 @@ class Dashboard:
                    swatches=[None] + [c[2] for c in cols], col_widths=[1.5] + [1] * len(cols))
 
         cfg_rows = []
-        keys = ["algo", "opponent", "games", "alpha", "epsilon_start", "epsilon_end", "epsilon_decay",
-                "reward_mode", "reward_scale", "seed"]
+        keys = ["algo", "opponent", "games", "alpha", "alpha_end", "lam", "average", "shaping", "epsilon_start",
+                "epsilon_end", "reward_mode", "seed"]
         for k in keys:
             cfg_rows.append([k] + [str(r.config.get(k, "")) for r in self.runs])
         cfg_rows.append(["training time"] + [f"{r.history[-1]['seconds']:.0f} s" if r.history else "—"
