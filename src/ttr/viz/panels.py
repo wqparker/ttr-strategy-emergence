@@ -434,14 +434,26 @@ def _ticket_line(s, t: TicketFact, pos, k: float, width: float,
         text(s, "?" if t.pending else "·", (x, y), size, color)
     points = str(t.points)
     room = width - TICKET_LEAD * k - 8 * k - _text_w(points, size, bold=True)
-    label, label_size = _ticket_label(t), size
-    while _text_w(label, label_size) > room and label_size > 8.5 * k:
-        label_size -= 0.5 * k
-    while _text_w(label, label_size) > room and len(label) > 4:
-        label = label[:-2] + "…"
-    # Smaller type sits a little lower so its baseline stays with the points.
-    text(s, label, (x + TICKET_LEAD * k, y + (size - label_size) * 0.7), label_size, color)
+    fitted_text(s, _ticket_label(t), (x + TICKET_LEAD * k, y), room, size, color, k)
     text(s, points, (x + width, y), size, color, bold=True, right=True)
+
+
+def fit_label(label: str, room: float, size: float, k: float = 1.0,
+              bold: bool = False) -> Tuple[str, float]:
+    """`label` in at most `room` pixels: smaller type first (down to 8.5k),
+    then cut with an ellipsis. Returns the text and its type size."""
+    while _text_w(label, size, bold) > room and size > 8.5 * k:
+        size -= 0.5 * k
+    while _text_w(label, size, bold) > room and len(label) > 4:
+        label = label[:-2] + "…"
+    return label, size
+
+
+def fitted_text(s, label: str, pos, room: float, size: float, color, k: float = 1.0) -> None:
+    """Draw `label` fitted to `room` (see fit_label). Smaller type sits a little
+    lower, so its baseline stays level with full-size text on the same line."""
+    fitted, fitted_size = fit_label(label, room, size, k)
+    text(s, fitted, (pos[0], pos[1] + (size - fitted_size) * 0.7), fitted_size, color)
 
 
 def _tickets_header(s, facts: SeatFacts, pos, k: float, label: str) -> bool:

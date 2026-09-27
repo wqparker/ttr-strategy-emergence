@@ -25,8 +25,7 @@ import pygame
 from ttr.analysis import STATS, PlayerSummary, Summary
 from ttr.board import Board
 from ttr.viz import theme
-from ttr.viz.panels import text
-from ttr.viz.perspective import code_map
+from ttr.viz.panels import _text_w, fit_label, fitted_text, text
 
 # Least to most significant: dark blue, light blue, light yellow, light red, dark
 # red (ColorBrewer RdYlBu / RdBu stops).
@@ -78,6 +77,7 @@ TOP_TITLES = {
     "contested": "DOUBLES IT CLOSED",
 }
 TOP_N = 8
+TOP_GAP = 12.0  # canvas units after a top-routes column
 
 
 @dataclass(frozen=True)
@@ -146,13 +146,12 @@ def make_overlay(summary: Summary, stat: str, agent: Optional[str] = None,
     if hi - lo < 1e-9:
         hi = lo + 1.0
     overlay = Overlay(stat, agent, seat, values, lo, hi, summary.games_for(agent, seat))
-    codes = code_map(summary.board)
     for s in summary.seats:
-        overlay.players[s] = player_panel(summary, overlay, s, codes)
+        overlay.players[s] = player_panel(summary, overlay, s)
     return overlay
 
 
-def player_panel(summary: Summary, overlay: Overlay, seat: int, codes: Dict[str, str]) -> PlayerPanel:
+def player_panel(summary: Summary, overlay: Overlay, seat: int) -> PlayerPanel:
     """Seat `seat` under the overlay's agent filter (a seat filter only marks
     the panel as selected; every seat keeps its own numbers)."""
     agent = overlay.agent
@@ -164,18 +163,18 @@ def player_panel(summary: Summary, overlay: Overlay, seat: int, codes: Dict[str,
          if v is not None and (overlay.stat not in RATES or v > 0)),
         key=lambda vr: (vr[0] if overlay.reversed else -vr[0], vr[1]),
     )[:TOP_N]
-    top = tuple((route_code(summary.board, rid, codes), overlay.fmt(v).replace("turn ", ""))
+    top = tuple((route_name(summary.board, rid), overlay.fmt(v).replace("turn ", ""))
                 for v, rid in ranked)
     return PlayerPanel(seat, " / ".join(names), player, TOP_TITLES[overlay.stat], top,
                        selected=overlay.seat == seat)
 
 
-def route_code(board: Board, route_id: int, codes: Dict[str, str]) -> str:
-    """"DEN–OMA", plus the color for one side of a double route."""
+def route_name(board: Board, route_id: int) -> str:
+    """"Omaha – Kansas City", plus the color for one side of a double route."""
     r = board.routes[route_id]
-    name = f"{codes.get(r.a, r.a)}–{codes.get(r.b, r.b)}"
+    name = f"{r.a} – {r.b}"
     if r.sibling is not None:
-        name += f" {r.color.value if r.color else 'gray'}"
+        name += f" ({r.color.value if r.color else 'gray'})"
     return name
 
 
@@ -192,11 +191,11 @@ def legend_rect(board_view, origin: Tuple[int, int] = (0, 0), hover: bool = Fals
                        round(LEGEND_W * k), round(height * k))
 
 
-def hover_label(board: Board, overlay: Overlay, route_id: int, codes: Dict[str, str]) -> str:
-    """"DEN–OMA 4 gray: 62%" for the route under the cursor."""
+def hover_label(board: Board, overlay: Overlay, route_id: int) -> str:
+    """"Denver – Omaha, 4 gray: 62%" for the route under the cursor."""
     r = board.routes[route_id]
     color = r.color.value if r.color else "gray"
-    return f"{codes.get(r.a, r.a)}–{codes.get(r.b, r.b)} {r.length} {color}: {overlay.fmt(overlay.values[route_id])}"
+    return f"{r.a} – {r.b}, {r.length} {color}: {overlay.fmt(overlay.values[route_id])}"
 
 
 def draw_legend(s: pygame.Surface, rect: pygame.Rect, overlay: Overlay, k: float = 1.0,
@@ -227,17 +226,16 @@ def draw_legend(s: pygame.Surface, rect: pygame.Rect, overlay: Overlay, k: float
     text(s, f"{overlay.games} games", (swatch.left, below), 9 * k, theme.PANEL_DIM)
 
     if hover:
-        text(s, hover, (left, rect.bottom - 18 * k), 11 * k, theme.HIGHLIGHT, bold=True)
+        label, size = fit_label(hover, rect.width - 2 * pad, 11 * k, k, bold=True)
+        text(s, label, (left, rect.bottom - 18 * k), size, theme.HIGHLIGHT, bold=True)
 
 
 def draw_board_overlay(s: pygame.Surface, board_view, overlay: Overlay,
-                       origin: Tuple[int, int] = (0, 0), hover_route: Optional[int] = None,
-                       codes: Optional[Dict[str, str]] = None) -> None:
+                       origin: Tuple[int, int] = (0, 0), hover_route: Optional[int] = None) -> None:
     """The board with the overlay's colors and no claimed trains, plus the legend."""
     board_view.draw(s, None, origin=origin, route_tint=overlay.tint,
                     highlight_routes=[hover_route] if hover_route is not None else [])
-    hover = (hover_label(board_view.board, overlay, hover_route, codes or {})
-             if hover_route is not None else None)
+    hover = hover_label(board_view.board, overlay, hover_route) if hover_route is not None else None
     draw_legend(s, legend_rect(board_view, origin, hover=hover is not None), overlay,
                 k=board_view.scale, hover=hover)
 
@@ -289,13 +287,18 @@ def draw_player_panel(s: pygame.Surface, rect: pygame.Rect, panel: Optional[Play
         return
     if wide:
         col_w, gap = 74 * k, 34 * k
-        top_w = 2 * 118 * k
-        left = max(x, rect.centerx - (len(items) * col_w + gap + top_w) / 2)
+        stats_w = len(items) * col_w
+        # Two columns of top routes beside the stats, as wide as their longest
+        # line unless that would pass the panel's right edge.
+        room = rect.right - pad - (x + stats_w + gap)
+        top_w = min(2 * top_col_w(panel, k), room)
+        left = max(x, rect.centerx - (stats_w + gap + top_w) / 2)
+        left = min(left, rect.right - pad - (stats_w + gap + top_w))
         for i, (name, value) in enumerate(items):
             cx = left + i * col_w
             text(s, name, (cx, y), 9 * k, theme.PANEL_LABEL, bold=True)
             text(s, value, (cx, y + 11 * k), 17 * k, theme.PANEL_TEXT, bold=True)
-        _top_routes(s, panel, (left + len(items) * col_w + gap, y), k, per_col=4, col_w=118 * k)
+        _top_routes(s, panel, (left + stats_w + gap, y), k, per_col=4, col_w=top_w / 2)
         return
     # One column in a default side panel; two once full screen has widened it.
     inner = rect.width - 2 * pad
@@ -312,7 +315,7 @@ def draw_player_panel(s: pygame.Surface, rect: pygame.Rect, panel: Optional[Play
     y += rows * row_h + 8 * k
     room = int((rect.bottom - pad - y - 14 * k) // (15 * k))
     _top_routes(s, panel, (x, y), k, per_col=max(0, min(TOP_N, room)),
-                col_w=rect.width - 2 * pad + 12 * k, cols=1)
+                col_w=rect.width - 2 * pad + TOP_GAP * k, cols=1)
 
 
 def _top_routes(s, panel: PlayerPanel, pos, k: float, per_col: int, col_w: float,
@@ -323,8 +326,17 @@ def _top_routes(s, panel: PlayerPanel, pos, k: float, per_col: int, col_w: float
         text(s, "none", (x, y + 13 * k), 11 * k, theme.PANEL_DIM)
         return
     shown = panel.top[:per_col * cols] if per_col else ()
+    size = 11 * k
     for i, (route, value) in enumerate(shown):
         col, row = i // per_col, i % per_col
         lx, ly = x + col * col_w, y + 14 * k + row * 15 * k
-        text(s, route, (lx, ly), 11 * k, theme.PANEL_TEXT)
-        text(s, value, (lx + col_w - 12 * k, ly), 11 * k, theme.PANEL_TEXT, bold=True, right=True)
+        room = col_w - TOP_GAP * k - 8 * k - _text_w(value, size, bold=True)
+        fitted_text(s, route, (lx, ly), room, size, theme.PANEL_TEXT, k)
+        text(s, value, (lx + col_w - TOP_GAP * k, ly), size, theme.PANEL_TEXT, bold=True, right=True)
+
+
+def top_col_w(panel: PlayerPanel, k: float) -> float:
+    """Width one top-routes column needs for its longest line at full size."""
+    size = 11 * k
+    return max((_text_w(route, size) + 8 * k + _text_w(value, size, bold=True)
+                for route, value in panel.top), default=0.0) + TOP_GAP * k

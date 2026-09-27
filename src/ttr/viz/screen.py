@@ -260,7 +260,7 @@ class Screen:
         marks: Optional[Dict[int, Mark]] = None
         if overlay is not None:
             draw_board_overlay(target, self.board_view, overlay, origin=self.board_origin,
-                               hover_route=overlay_hover, codes=self.codes)
+                               hover_route=overlay_hover)
             result = None
             marked = None
         else:
