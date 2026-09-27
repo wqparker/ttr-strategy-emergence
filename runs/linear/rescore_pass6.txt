@@ -1,0 +1,17 @@
+vs greedy, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p6a_q_random_decay       final  -15.9 (-13, -26, -21, -10, -10)  win  31%  tickets 1.59/0.41
+p6a_q_random_decay       best    -5.9 (+1, -12, -8, -10, -0)  win  40%  tickets 1.65/0.35
+p6b_sarsa_random_decay   final  -16.0 (-23, -22, -11, +3, -28)  win  32%  tickets 1.64/0.44
+p6b_sarsa_random_decay   best    -4.6 (-7, -7, +4, +2, -14)  win  42%  tickets 1.56/0.47
+p6c_q_greedy_decay       final  -11.5 (-5, -10, -13, -20, -9)  win  35%  tickets 1.31/0.69
+p6c_q_greedy_decay       best    +7.4 (+9, +6, +9, +6, +7)  win  59%  tickets 1.17/0.83
+p6d_sarsa_greedy_decay   final  -36.0 (-52, -15, -32, -43, -38)  win  11%  tickets 1.28/0.72
+p6d_sarsa_greedy_decay   best    -5.4 (-8, -1, -3, -2, -13)  win  43%  tickets 1.20/0.80
+p6e_q_self_decay         final  -35.0 (-35, -31, -3, -82, -24)  win  19%  tickets 1.72/0.28
+p6e_q_self_decay         best    +3.3 (+6, +7, +4, -6, +6)  win  53%  tickets 1.58/0.42
+p6f_sarsa_self_decay     final  -66.7 (-75, -81, -65, -78, -34)  win   2%  tickets 1.60/0.40
+p6f_sarsa_self_decay     best    +0.0 (+9, +8, +6, -15, -8)  win  49%  tickets 1.28/0.72
+p6g_sarsa_greedy         final  -31.6 (-37, -40, -23, -28, -30)  win  12%  tickets 1.30/0.70
+p6g_sarsa_greedy         best    -7.8 (-9, -5, -3, -7, -15)  win  39%  tickets 1.24/0.76
+p6h_sarsa_self           final  -51.0 (-72, -27, -50, -76, -30)  win   5%  tickets 1.67/0.33
+p6h_sarsa_self           best    -2.8 (-7, +2, -6, +3, -7)  win  45%  tickets 1.48/0.52

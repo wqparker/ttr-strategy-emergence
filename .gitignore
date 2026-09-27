@@ -32,6 +32,9 @@ runs/linear/*
 !runs/linear/pass5/
 !runs/linear/pass6/
 !runs/linear/pass7/
+# Overnight logs and fresh-game re-scores (analysis behind PLAN.md)
+!runs/linear/overnight-*.md
+!runs/linear/rescore_*
 runs/linear/pass*/dash/
 runs/linear/pass*/*.err
 runs/linear/pass*/*.tmp

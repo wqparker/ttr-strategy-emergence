@@ -1,0 +1,9 @@
+vs greedy, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p7a_q_lam98_random       final  -23.9 (-13, -88, -16, -2, -0)  win  33%  tickets 0.90/1.72
+p7a_q_lam98_random       best    +3.8 (+5, +6, +5, +3, -0)  win  55%  tickets 1.32/0.69
+p7b_sarsa_lam98_random   final  -30.4 (-21, -8, -11, -39, -73)  win  22%  tickets 1.18/0.83
+p7b_sarsa_lam98_random   best    +6.9 (+12, +5, +1, +17, -2)  win  59%  tickets 1.15/0.85
+p7c_q_lam98_greedy       final   -7.6 (-30, +15, +1, -7, -19)  win  44%  tickets 1.06/1.41
+p7c_q_lam98_greedy       best   +11.3 (+12, +15, +15, +10, +4)  win  64%  tickets 1.15/1.20
+p7d_q_lam98_self         final  -14.8 (-6, -9, +4, -59, -4)  win  37%  tickets 1.82/0.69
+p7d_q_lam98_self         best   +10.0 (+12, +12, +15, +5, +7)  win  63%  tickets 0.65/1.37
