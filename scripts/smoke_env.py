@@ -17,7 +17,8 @@ from collections import Counter
 
 import numpy as np
 
-from ttr.env.aec import REWARD_MODES, env
+from ttr.env.aec import env
+from ttr.env.reward import REWARD_MODES
 
 
 def main() -> None:

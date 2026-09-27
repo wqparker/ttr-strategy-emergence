@@ -45,9 +45,9 @@ from pettingzoo.utils import wrappers
 from ttr.board import Board, load_board
 from ttr.env import actions as A
 from ttr.env.observation import ObservationEncoder
+from ttr.env.reward import REWARD_MODES, reward_values
 from ttr.game import Game
 
-REWARD_MODES = ("score", "margin", "win")
 OBS_HIGH = 3.0  # scaled counts are about [0, 1]; a 105-card hand is 2.1
 
 
@@ -156,23 +156,10 @@ class raw_env(AECEnv):
         if self.render_mode == "human":
             self.render()
 
-    def _reward_values(self) -> List[float]:
-        """Per seat, the quantity whose change is the reward."""
-        game = self.game
-        result = game.result
-        if self.reward_mode == "win":
-            if result is None:
-                return [0.0] * self.num_players
-            win = 0.0 if len(result.winners) > 1 else 1.0
-            return [win if p in result.winners else -1.0 for p in range(self.num_players)]
-        scores = [r.total for r in result.players] if result else [p.route_points for p in game.players]
-        if self.reward_mode == "score":
-            return [float(s) for s in scores]
-        total = sum(scores)
-        others = self.num_players - 1
-        return [s - (total - s) / others for s in scores]
-
     # ------------------------------------------------------------ observe
+
+    def _reward_values(self) -> List[float]:
+        return reward_values(self.game, self.reward_mode)
 
     def _mask(self) -> np.ndarray:
         mask = np.zeros(A.N_ACTIONS, dtype=np.int8)

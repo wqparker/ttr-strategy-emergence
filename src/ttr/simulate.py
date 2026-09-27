@@ -21,23 +21,18 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from rich.console import Console
 from rich.table import Table
 
 from ttr.actions import Action
-from ttr.agents import Agent, GreedyAgent, RandomAgent
+from ttr.agents import Agent
+from ttr.agents.registry import agent_spec, make_agent
 from ttr.board import Board, load_board
 from ttr.game import Game, GameResult
 from ttr.record import GameRecord
 from ttr.render import describe_event, render_board_view, render_game, render_result, render_routes
-
-AGENTS: Dict[str, Callable[[int], Agent]] = {
-    "random": lambda seed: RandomAgent(seed),
-    "greedy": lambda seed: GreedyAgent(seed),
-}
-
 
 def seating(num_agents: int, seed: int, game: int = 0) -> List[int]:
     """Which agent slot (position in --agents) sits in each seat for one game:
@@ -111,7 +106,7 @@ def run_matches(
         # Random seats and a random first seat (drawn from the game's seed).
         slot_of = seating(n, seed, g)  # agent slot by seat
         seat_of = [slot_of.index(slot) for slot in range(n)]
-        agents_by_seat = [AGENTS[agent_names[slot]](seed * 1000 + g * 10 + slot) for slot in slot_of]
+        agents_by_seat = [make_agent(agent_names[slot], seed * 1000 + g * 10 + slot) for slot in slot_of]
         names_by_seat = [agent_names[slot] for slot in slot_of]
         game_seed = seed * 100000 + g
         game = Game(board, num_players=n, seed=game_seed, max_turns=max_turns)
@@ -162,7 +157,7 @@ def show_game(console: Console, board: Board, args: argparse.Namespace) -> None:
     n = len(args.agents)
     slot_of = seating(n, args.seed)
     names = [args.agents[slot] for slot in slot_of]
-    agents = [AGENTS[args.agents[slot]](args.seed + slot) for slot in slot_of]
+    agents = [make_agent(args.agents[slot], args.seed + slot) for slot in slot_of]
     game = Game(board, num_players=n, seed=args.seed, max_turns=args.max_turns)
     seen = [0]  # log entries already shown
     last_turn = [-1]
@@ -197,7 +192,8 @@ def show_game(console: Console, board: Board, args: argparse.Namespace) -> None:
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--agents", nargs="+", default=["greedy", "random"], choices=sorted(AGENTS))
+    parser.add_argument("--agents", nargs="+", default=["greedy", "random"], type=agent_spec,
+                        help="random, greedy, or linear:PATH (trained weights)")
     parser.add_argument("--games", type=int, default=100)
     parser.add_argument("--board", default="usa")
     parser.add_argument(

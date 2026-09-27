@@ -182,11 +182,11 @@ class Series:
         """Game g's timeline, its seat names (human seats named "human") and
         its agent slot per seat (for colors)."""
         if g not in self._games:
-            from ttr.simulate import AGENTS
+            from ttr.agents.registry import make_agent
 
             slots = self.slots(g)
             names = [self.agents[slot] for slot in slots]
-            agents = [AGENTS[self.agents[slot]](self.seed + g * 10 + slot) for slot in slots]
+            agents = [make_agent(self.agents[slot], self.seed + g * 10 + slot) for slot in slots]
             game = Game(self.board, num_players=len(names), seed=self.seed + g, max_turns=self.max_turns)
             shown = [("human" if seat in self.human else name) for seat, name in enumerate(names)]
             self._games[g] = (live_timeline(game, agents, self.human), shown, slots)
@@ -688,7 +688,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--record", type=Path, help="replay a saved game instead of one played live")
     parser.add_argument("--agents", nargs="+", default=["greedy", "random"],
-                        help="live mode: one agent per seat")
+                        help="live mode: one agent per seat: random, greedy, or linear:PATH")
     parser.add_argument("--board", default="usa")
     parser.add_argument("--seed", type=int, default=None,
                         help="live mode: fix the seed to replay a game (default: random, printed at start)")
