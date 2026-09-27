@@ -175,6 +175,7 @@ python -m pytest                     # the whole suite
 python -m pytest tests/test_game.py  # one file
 python scripts/stress.py             # long random-play invariant run (~1 min)
 python scripts/bench_env.py          # env speed: engine, + mask, + observation
+python scripts/smoke_env.py          # random agents through the PettingZoo env (--players, --board, --reward)
 ```
 
 ```
@@ -183,12 +184,12 @@ py -3.11 -m venv .venv
 python -m pip install -e ".[dev]"    # engine + pytest
 python -m pip install -e ".[viz]"    # pygame-ce, for the viewer
 python -m pip install -e ".[analysis]"  # pandas, for ttr.analysis rows
-python -m pip install -e ".[env]"    # numpy, for the RL env (ttr.env.observation)
+python -m pip install -e ".[env]"    # numpy, PettingZoo, Gymnasium: the RL env (ttr.env)
 python -m pip install -e ".[photo]"  # numpy + OpenCV, board-data tools only
 ```
 
 Any install creates the three commands; re-run one only after changing `[project.scripts]`. The
-viz tests render headlessly and skip without pygame; the observation tests skip without numpy. Testing an old commit needs `PYTHONPATH` —
+viz tests render headlessly and skip without pygame; the env tests skip without the `[env]` extra. Testing an old commit needs `PYTHONPATH` —
 see the note at the end of PLAN.md.
 
 ## Board data tools

@@ -79,7 +79,7 @@ development or tuning.
     space (flat 168 with sub-step masks), no final-turn guard for trained agents, the
     observation (flat vector, about 760 numbers), and reward (a setting, default dense
     score margin).
-- **Just completed: Phase 3, visualization.** A proper Pygame viewer before any training
+- **Earlier: Phase 3, visualization.** A proper Pygame viewer before any training
   (see "Visualization"). All seven milestones done; the viewer backlog stays open.
   - Done: milestone 1, game records and replay (`record.py`, `Game.clone()`,
     `simulate.py --record DIR`).
@@ -112,7 +112,7 @@ development or tuning.
   - Since then (viewer backlog): ticket markers and yellow ticket cities, full city
     names in panels, full screen, `--games N`, random default seed in `ttr-view`,
     random seating with colors that follow the agent.
-- **Current: Phase 4, the PettingZoo environment.**
+- **Just completed: Phase 4, the PettingZoo environment.**
   - Done: step 1, the action space (`src/ttr/env/actions.py`): `encode` / `decode`
     between engine actions and Discrete(168) indices, and `legal_mask`. A test walks
     random games on both boards at 2–5 players and checks at every state that each
@@ -129,8 +129,24 @@ development or tuning.
     and that the cached encoder matches a fresh one across random games at 2–5 players.
     Speed: about 4.4k sub-steps/s with mask and observation (random play, which hoards
     tickets, is the worst case for the Dijkstra cache). New `[env]` extra (numpy).
-  - Next: step 4, the AEC wrapper with reward modes, then `api_test` and a
-    random-agent smoke test. PettingZoo and Gymnasium join the `[env]` extra.
+  - Done: step 4, the AEC env (`src/ttr/env/aec.py`, `env()` / `raw_env`). Agents
+    `player_0..N-1` by seat; one agent step per engine sub-step. Observations are
+    `{"observation", "action_mask"}` (mask all 0 for a waiting seat); an illegal index
+    raises. Reward modes `score` / `margin` (default) / `win`, `reward_scale` 1/100 for
+    the score modes; `max_turns` (default 1000) ends a game as a truncation. Final
+    scores, winner and ticket counts go in `infos` at the end. `human` / `ansi` render
+    via the `rich` board view. Passes PettingZoo's `api_test` and `seed_test`; tests
+    check that score and margin rewards sum to the final score and margin at 2–5
+    players. `scripts/smoke_env.py` plays random agents through it: about 2.3k agent
+    steps/s (USA, 2 players), no seat bias over 200 4-player games. PettingZoo and
+    Gymnasium are in the `[env]` extra.
+  - The env refuses a board with fewer than 3 tickets per player: a seat dealt an
+    empty opening offer could only "keep nothing", which has no action index. Only
+    the toy map (12 tickets) at 5 players hits this.
+- **Next: Phase 5, training and search agents.** Order of the methods is not yet
+  decided. Likely first: an adapter that plays a policy over (observation, mask)
+  through the existing `Agent.act(game, player)` interface and match runner, then
+  the first method smoke-tested on the toy map.
 
 ## Roadmap
 
@@ -488,7 +504,7 @@ not just to find the strongest one. Each tier teaches something different:
   | Mode | Signal | Rewards blocking? |
   | --- | --- | --- |
   | Own score | + route points on each claim; tickets and longest route at game end | No |
-  | **Score margin (default)** | my points − opponents' points, same schedule | Yes |
+  | **Score margin (default)** | my points − mean of opponents' points, same schedule | Yes |
   | Win/loss | +1 / −1 at game end, 0 for a shared win | Yes |
 
   - **Dense isn't shaping:** in the score modes, rewards summed over a game equal exactly
@@ -496,6 +512,8 @@ not just to find the strongest one. Each tier teaches something different:
   - **Default is margin** because it rewards blocking, learns faster than sparse win/loss,
     and suits every tier (DQN and linear TD struggle with win/loss alone). Scale by about
     1/100.
+  - **Margin with 3+ players** uses the mean of the opponents' scores, so the margins of
+    all seats sum to 0 and the scale doesn't grow with the player count.
   - **Win/loss** cares only about winning, so once safely ahead it has no reason to push
     the margin. Comparing it with margin speaks to the risk-tolerance question.
   - **Experiment:** train in all three modes. "Does blocking only emerge when the reward

@@ -22,9 +22,8 @@ dev = ["pytest>=7"]
 viz = ["pygame-ce>=2.5"]
 # Strategy analysis: ttr.analysis rows into DataFrames (PLAN.md Phase 6)
 analysis = ["pandas>=2"]
-# The RL environment (PLAN.md Phase 4): observation vectors; PettingZoo and
-# Gymnasium join when the AEC wrapper lands
-env = ["numpy>=1.24"]
+# The RL environment (PLAN.md Phase 4): the PettingZoo AEC env and its spaces
+env = ["numpy>=1.24", "pettingzoo>=1.24", "gymnasium>=0.28"]
 # scripts/fit_tiles.py: fitting board tiles to the board photo
 photo = ["numpy>=1.24", "opencv-python-headless>=4.8"]
 
