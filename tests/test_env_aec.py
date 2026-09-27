@@ -32,29 +32,29 @@ def play(e, rng, seed=0):
 
 
 @pytest.mark.parametrize("kwargs", [
-    {"num_players": 2, "board": "usa"},
-    {"num_players": 3, "board": "toy", "reward_mode": "win"},
+    {"num_players": 2},
+    {"num_players": 3, "reward_mode": "win"},
 ])
 def test_pettingzoo_api(kwargs):
     api_test(env(**kwargs), num_cycles=300)
 
 
 def test_seeded_resets_repeat():
-    seed_test(lambda: env(board="toy"), num_cycles=200)
+    seed_test(env, num_cycles=200)
 
 
-@pytest.mark.parametrize("board,players", [("usa", 2), ("toy", 3), ("usa", 5)])
-def test_score_rewards_sum_to_the_final_score(board, players):
-    e = env(num_players=players, board=board, reward_mode="score", reward_scale=1.0)
+@pytest.mark.parametrize("players", [2, 3, 5])
+def test_score_rewards_sum_to_the_final_score(players):
+    e = env(num_players=players, reward_mode="score", reward_scale=1.0)
     totals, infos = play(e, random.Random(1), seed=1)
     assert set(infos) == set(e.possible_agents)
     for a in e.possible_agents:
         assert totals[a] == pytest.approx(infos[a]["score"])
 
 
-@pytest.mark.parametrize("board,players", [("usa", 2), ("toy", 4)])
-def test_margin_rewards_sum_to_the_final_margin(board, players):
-    e = env(num_players=players, board=board)  # margin, scaled by 1/100
+@pytest.mark.parametrize("players", [2, 4])
+def test_margin_rewards_sum_to_the_final_margin(players):
+    e = env(num_players=players)  # margin, scaled by 1/100
     totals, infos = play(e, random.Random(2), seed=2)
     scores = {a: infos[a]["score"] for a in e.possible_agents}
     for a in e.possible_agents:
@@ -64,8 +64,8 @@ def test_margin_rewards_sum_to_the_final_margin(board, players):
 
 
 def test_win_rewards():
-    e = env(board="toy", reward_mode="win")
-    for seed in range(10):
+    e = env(reward_mode="win")
+    for seed in range(5):
         totals, infos = play(e, random.Random(seed), seed=seed)
         winners = [a for a in infos if infos[a]["winner"]]
         for a in e.possible_agents:
@@ -98,14 +98,14 @@ def test_illegal_action_raises():
 
 
 def test_max_turns_truncates():
-    e = env(board="toy", max_turns=6)
+    e = env(max_turns=6)
     _, infos = play(e, random.Random(0))
     assert e.unwrapped.game.result.truncated
     assert len(infos) == 2
 
 
 def test_ansi_render():
-    e = raw_env(board="toy", render_mode="ansi")
+    e = raw_env(render_mode="ansi")
     e.reset(seed=0)
     text = e.render()
     assert "Face up" in text
@@ -116,5 +116,3 @@ def test_bad_settings():
         raw_env(reward_mode="points")
     with pytest.raises(ValueError):
         raw_env(render_mode="rgb_array")
-    with pytest.raises(ValueError, match="too few tickets"):
-        raw_env(num_players=5, board="toy")

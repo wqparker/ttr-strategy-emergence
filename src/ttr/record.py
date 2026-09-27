@@ -76,7 +76,7 @@ def action_from_dict(d: Dict[str, Any]) -> Action:
 
 @dataclass
 class GameRecord:
-    board: str  # bundled board name ("usa", "toy") or a path to a board JSON
+    board: str  # bundled board name ("usa") or a path to a board JSON
     num_players: int
     seed: int
     first_player: int

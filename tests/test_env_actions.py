@@ -77,7 +77,7 @@ BLOCKS = {
 
 
 @pytest.mark.parametrize("board,players,seed", [
-    ("usa", 2, 1), ("usa", 3, 2), ("usa", 5, 3), ("toy", 2, 4), ("toy", 4, 5),
+    ("usa", 2, 1), ("usa", 3, 2), ("usa", 4, 4), ("usa", 5, 3),
 ])
 def test_every_legal_action_round_trips_through_random_games(board, players, seed):
     """At every state of random games: each legal action has a distinct index

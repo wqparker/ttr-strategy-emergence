@@ -78,10 +78,6 @@ class raw_env(AECEnv):
         self.board = load_board(board) if isinstance(board, str) else board
         if len(self.board.routes) > A.MAX_ROUTES:
             raise A.ActionIndexError(f"board {self.board.name!r} has more than {A.MAX_ROUTES} routes")
-        if len(self.board.tickets) < A.OFFER * num_players:
-            # A seat dealt an empty opening offer could only "keep nothing", which
-            # has no index. Only the toy map (12 tickets) at 5 players gets here.
-            raise ValueError(f"board {self.board.name!r} has too few tickets to deal {num_players} players")
         self.num_players = num_players
         self.reward_mode = reward_mode
         self.reward_scale = reward_scale

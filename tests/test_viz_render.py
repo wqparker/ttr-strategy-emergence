@@ -131,10 +131,6 @@ def test_scales(scale):
     assert surface.get_size() == (round(w * scale), round(h * scale))
 
 
-def test_toy_board_renders():
-    game = started_game(board="toy")
-    view = BoardView(game.board)
-    surface = view.render(game)
 
 
 def test_screenshot_cli(tmp_path):

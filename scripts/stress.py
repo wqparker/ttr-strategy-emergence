@@ -1,4 +1,4 @@
-"""Engine stress test: many random/greedy games across boards and player counts,
+"""Engine stress test: many random/greedy games on the USA map across player counts,
 checking invariants after every step. Slower than the unit tests (~1 min).
 
     .venv/Scripts/python scripts/stress.py
@@ -7,11 +7,9 @@ import time
 from ttr import Game, load_board, Color
 from ttr.agents import GreedyAgent, RandomAgent
 L = Color.LOCOMOTIVE
-boards = {n: load_board(n) for n in ("usa", "toy")}
+b = load_board("usa")
 t0 = time.time(); games = 0; steps = 0; guard_hits = 0; passes = 0; trunc = 0
 for seed in range(1500):
-    bname = "usa" if seed % 3 else "toy"
-    b = boards[bname]
     n = 2 + seed % 4
     mix = seed % 3  # 0 random, 1 greedy, 2 mixed
     agents = [RandomAgent(seed+i) if (mix == 0 or (mix == 2 and i % 2)) else GreedyAgent(seed+i) for i in range(n)]

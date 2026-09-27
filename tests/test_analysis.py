@@ -1,10 +1,13 @@
 """Per-route statistics over game records (ttr.analysis)."""
 
+import json
+from importlib import resources
+
 import pytest
 
 from ttr.actions import ClaimRoute, Pay
 from ttr.analysis import STATS, AnalysisError, Summary, analyze, record_paths, summarize
-from ttr.board import load_board
+from ttr.board import board_from_dict, load_board
 from ttr.cards import Color
 from ttr.record import GameRecord
 from ttr.simulate import run_matches
@@ -121,8 +124,15 @@ def test_unknown_stat_is_rejected():
         summary.value(0, "nonsense")
 
 
+def _usa_data(name):
+    """The USA board data under another name: a stand-in for a second board."""
+    data = json.loads(resources.files("ttr").joinpath("data", "usa.json").read_text(encoding="utf-8"))
+    data["name"] = name
+    return data
+
+
 def test_game_on_another_board_is_rejected():
-    summary = Summary(load_board("toy"))
+    summary = Summary(board_from_dict(_usa_data("other")))
     with pytest.raises(AnalysisError):
         summary.add(started_game(), ["a", "b"])
 
@@ -218,7 +228,10 @@ def test_empty_or_missing_folder(tmp_path):
 
 def test_mixed_boards_are_rejected(records, tmp_path):
     usa = GameRecord.load(record_paths(records)[0])
-    run_matches(["random", "random"], 1, load_board("toy"), seed=0, record_dir=tmp_path, board_ref="toy")
-    toy = GameRecord.load(record_paths(tmp_path)[0])
+    other = tmp_path / "other.json"
+    other.write_text(json.dumps(_usa_data("other")), encoding="utf-8")
+    games = tmp_path / "games"
+    run_matches(["random", "random"], 1, load_board(other), seed=0, record_dir=games, board_ref=str(other))
+    renamed = GameRecord.load(record_paths(games)[0])
     with pytest.raises(AnalysisError):
-        summarize([usa, toy])
+        summarize([usa, renamed])

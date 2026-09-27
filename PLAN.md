@@ -61,10 +61,11 @@ that work there but fail in the real game. Simplifying the board and mechanics w
 keeping the core gameplay intact is also a hard design problem of its own. The time is
 better spent on the real thing.
 
-**Toy map only as a smoke test:** a tiny map exists only to check that the engine, the
-environment and the training loop run end to end. The board is loaded from data files,
-so the toy map is just another data file with the same rules. It gets no separate
-development or tuning.
+**No small test map.** A tiny 6-city map used to exist for smoke tests. It was removed
+on 2026-09-26: it only caught problems of its own (e.g. too few tickets to deal 5
+players) and needed its own viewer layout code. Smoke tests, stress tests and first
+training runs all use the USA map; USA games are short enough (about 200 sub-steps
+for 2 players).
 
 ## Current progress
 
@@ -140,19 +141,18 @@ development or tuning.
     players. `scripts/smoke_env.py` plays random agents through it: about 2.3k agent
     steps/s (USA, 2 players), no seat bias over 200 4-player games. PettingZoo and
     Gymnasium are in the `[env]` extra.
-  - The env refuses a board with fewer than 3 tickets per player: a seat dealt an
-    empty opening offer could only "keep nothing", which has no action index. Only
-    the toy map (12 tickets) at 5 players hits this.
+  - Removed the 6-city test map (data, tests, the viewer's automatic layout); every test and
+    script uses the USA map.
 - **Next: Phase 5, training and search agents.** Order of the methods is not yet
   decided. Likely first: an adapter that plays a policy over (observation, mask)
   through the existing `Agent.act(game, player)` interface and match runner, then
-  the first method smoke-tested on the toy map.
+  the first method.
 
 ## Roadmap
 
 0. **Scaffolding**: package layout, `pyproject.toml`, test runner, `.gitignore`.
-1. **Game engine**: pure Python with no RL dependencies. It covers board data (USA map plus
-   the toy map), game state, legal-move generation, rule enforcement, and scoring,
+1. **Game engine**: pure Python with no RL dependencies. It covers board data (USA map),
+   game state, legal-move generation, rule enforcement, and scoring,
    including the longest route. Unit tests cover the rule edge cases.
 2. **Debugging tools and baselines**: `rich` terminal rendering of the game state.
    Random and simple greedy/heuristic agents serve as sanity checks and as evaluation
@@ -163,8 +163,7 @@ development or tuning.
 4. **PettingZoo environment**: an AEC wrapper around the engine, with action masking and
    the observation design (see "Agent design decisions").
 5. **Training and search agents**: the method roster (see "Methods to compare"), each
-   plugged into the same agent interface and evaluated the same way. Smoke-test each on
-   the toy map first, then train on the full map.
+   plugged into the same agent interface and evaluated the same way, on the USA map.
 6. **Strategy analysis**: metrics that capture play style (blocking rate — a route claimed
    by an opponent while on a player's ticket path — route-length
    distribution, ticket draw/keep behavior, tempo), compared across methods, plus
@@ -383,9 +382,9 @@ not just to find the strongest one. Each tier teaches something different:
 | D. Search | **MCTS** with determinization (sample hidden hands and tickets, then search) | Planning with no training, as a contrast to the learned agents | Hand-rolled |
 | Stretch | AlphaZero-style (MCTS guided by learned policy/value networks) | Combines C and D | Later |
 
-- **Why linear rather than tabular for tier A:** tabular methods are only feasible on the
-  toy map, which is a smoke test only. Linear features keep the same update rules and
-  the same Q-learning vs. SARSA comparison on the full map.
+- **Why linear rather than tabular for tier A:** tabular methods are only feasible on a
+  tiny map, and there is none. Linear features keep the same update rules and the same
+  Q-learning vs. SARSA comparison on the full map.
 - **Why no expectiminimax:** with 100+ legal moves per turn, chance nodes on every
   draw and hidden hands, it could only search 1–2 plies deep. MCTS with
   determinization handles all three better.

@@ -94,50 +94,62 @@ def test_route_open_needs_trains_left():
         assert open_[r.id] == (r.length <= 3)
 
 
-def test_trains_to_finish_on_the_toy_board():
-    # Ticket 0 is A-D: A-C-D or A-B-C-D, 5 trains.
-    game = started_game("toy")
-    game.players[0].tickets = [0]
-    enc = O.ObservationEncoder(2)
-    assert enc.trains_to_finish(game, 0, 0) == 5
-    trains = block(enc, enc.encode(game, 0), "tickets_trains")
-    assert trains[0] == pytest.approx(5 / 12) and trains[30] == 0
+DENVER_EL_PASO = 24  # 4 points
 
-    # My claim of C-D leaves A-C (3) or A-B-C (3).
-    set_hand(game, 0, yellow=2)
-    game.step(ClaimRoute(route_id(game, "C", "D")))
-    game.step(Pay(Color.YELLOW, 0))
-    assert enc.trains_to_finish(game, 0, 0) == 3
-    # The opponent sees C-D as closed: their A-D path is now 6 (A-B-D).
-    assert enc.trains_to_finish(game, 1, 0) == 6
+
+def test_trains_to_finish():
+    # Denver-Santa Fe-El Paso is 2 + 2 trains; the next best, via Phoenix, is 5 + 3.
+    game = started_game()
+    game.players[0].tickets = [DENVER_EL_PASO]
+    enc = O.ObservationEncoder(2)
+    assert enc.trains_to_finish(game, 0, DENVER_EL_PASO) == 4
+    trains = block(enc, enc.encode(game, 0), "tickets_trains")
+    assert trains[DENVER_EL_PASO] == pytest.approx(4 / 45) and trains[30 + DENVER_EL_PASO] == 0
+
+    # My claim of Denver-Santa Fe leaves Santa Fe-El Paso (2).
+    set_hand(game, 0, red=2)
+    game.step(ClaimRoute(route_id(game, "Denver", "Santa Fe")))
+    game.step(Pay(Color.RED, 0))
+    assert enc.trains_to_finish(game, 0, DENVER_EL_PASO) == 2
+    # The opponent sees Denver-Santa Fe as closed: their path is via Phoenix.
+    assert enc.trains_to_finish(game, 1, DENVER_EL_PASO) == 8
+
+
+def _own(game, player, *pairs):
+    for a, b in pairs:
+        rid = route_id(game, a, b)
+        game.route_owner[rid] = player
+        game.players[player].routes.append(rid)
 
 
 def test_completed_and_impossible_tickets():
-    game = started_game("toy")
-    game.players[0].tickets = [7, 0]  # C-D, A-D
-    set_hand(game, 0, yellow=2)
-    game.step(ClaimRoute(route_id(game, "C", "D")))
-    game.step(Pay(Color.YELLOW, 0))
+    game = started_game()
+    game.players[0].tickets = [DENVER_EL_PASO]
+    _own(game, 0, ("Denver", "Santa Fe"), ("Santa Fe", "El Paso"))
     enc = O.ObservationEncoder(2)
     obs = enc.encode(game, 0)
-    assert block(enc, obs, "tickets_done")[7] == 1 and block(enc, obs, "tickets_done")[0] == 0
-    assert block(enc, obs, "tickets_trains")[7] == 0
+    assert block(enc, obs, "tickets_done")[DENVER_EL_PASO] == 1
+    assert block(enc, obs, "tickets_trains")[DENVER_EL_PASO] == 0
 
-    # Too few trains left for the 3 still needed: impossible, but the count stays.
-    game.players[0].trains = 2
+    # Too few trains left for the 2 still needed: impossible, but the count stays.
+    game = started_game()
+    game.players[0].tickets = [DENVER_EL_PASO]
+    _own(game, 0, ("Denver", "Santa Fe"))
+    game.players[0].trains = 1
     enc.reset()
     trains = block(enc, enc.encode(game, 0), "tickets_trains")
-    assert trains[0] == pytest.approx(3 / 12) and trains[30 + 0] == 1
+    assert block(enc, enc.encode(game, 0), "tickets_done")[DENVER_EL_PASO] == 0
+    assert trains[DENVER_EL_PASO] == pytest.approx(2 / 45) and trains[30 + DENVER_EL_PASO] == 1
 
-    # Every route out of A claimed by the opponent: no path at all.
-    game.players[0].trains = 10
+    # Every route into El Paso claimed by the opponent: no path at all.
+    game.players[0].trains = 40
     for r in game.board.routes:
-        if "A" in (r.a, r.b):
+        if "El Paso" in (r.a, r.b):
             game.route_owner[r.id] = 1
     enc.reset()
     trains = block(enc, enc.encode(game, 0), "tickets_trains")
-    assert enc.trains_to_finish(game, 0, 0) is None
-    assert trains[0] == 1 and trains[30] == 1
+    assert enc.trains_to_finish(game, 0, DENVER_EL_PASO) is None
+    assert trains[DENVER_EL_PASO] == 1 and trains[30 + DENVER_EL_PASO] == 1
 
 
 def test_endgame_flags():
@@ -195,7 +207,7 @@ def test_hidden_information_does_not_leak():
 
 
 @pytest.mark.parametrize("board,players,seed", [
-    ("usa", 2, 1), ("usa", 3, 2), ("usa", 5, 3), ("toy", 2, 4), ("toy", 4, 5),
+    ("usa", 2, 1), ("usa", 3, 2), ("usa", 4, 4), ("usa", 5, 3),
 ])
 def test_random_games_stay_in_range_and_match_a_fresh_encoder(board, players, seed):
     """Over whole random games, for every seat: values are finite and in [0, 1]

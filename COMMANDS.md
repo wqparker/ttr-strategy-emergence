@@ -13,7 +13,7 @@ each command with `.venv/Scripts/`. Roadmap and reasoning: [PLAN.md](PLAN.md).
 ## ttr-view
 
 ```
-ttr-view [--record FILE] [--agents NAME ...] [--human SEAT] [--board usa|toy]
+ttr-view [--record FILE] [--agents NAME ...] [--human SEAT]
          [--perspective all|SEAT] [--memory-level 0|1|2] [--seed N]
          [--max-turns N] [--scale F] [--paused] [--overlay DIR] [--fullscreen]
          [--games N [--advance S]]
@@ -142,7 +142,7 @@ artwork and needed locally.
 ## ttr-sim
 
 ```
-ttr-sim [--agents {greedy,random} ...] [--games N] [--board usa|toy] [--seed N]
+ttr-sim [--agents {greedy,random} ...] [--games N] [--seed N]
         [--max-turns N] [--show [log|board]] [--step] [--delay S] [--record DIR]
 ```
 

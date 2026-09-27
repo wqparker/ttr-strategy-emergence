@@ -39,9 +39,9 @@ The roadmap, settled decisions (with rationale), and open questions live in
 `PLAN.md` — check there before proposing design changes. Settled so far:
 
 - **2 players first**, scaling to 3–5 later (engine should support N players).
-- **Full USA map and full ruleset** for bulk development. Don't propose a
-  simplified ruleset — a tiny toy map exists only as a smoke test, loaded as a
-  different board data file with the same rules.
+- **Full USA map and full ruleset, and nothing else.** Don't propose a simplified
+  ruleset or a smaller map. The old 6-city smoke-test map was removed (2026-09-26);
+  smoke tests run on the USA map too.
 
 - **Trained agents get Level 2 memory of public information**: known opponent cards
   plus unseen-pool counts, computed by the env. Memory level is a configurable knob

@@ -57,9 +57,8 @@ def test_unknown_action_type_rejected():
         action_from_dict({"type": "teleport"})
 
 
-@pytest.mark.parametrize("board", ["usa", "toy"])
-def test_save_load_replay_reproduces_game(tmp_path, board):
-    game, record = recorded_game(board=board)
+def test_save_load_replay_reproduces_game(tmp_path):
+    game, record = recorded_game()
     path = record.save(tmp_path / "g.json")
     loaded = GameRecord.load(path)
     assert loaded.actions == record.actions

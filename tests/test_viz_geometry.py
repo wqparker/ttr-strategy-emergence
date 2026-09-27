@@ -22,7 +22,6 @@ def dist(p, q):
 
 def test_usa_uses_display_file(usa):
     _, layout = usa
-    assert layout.source == "display file"
     assert layout.canvas == (1151, 764)
 
 
@@ -175,10 +174,3 @@ def test_hit_testing(usa):
     assert layout.route_at(layout.cities["Denver"]) is None
 
 
-def test_toy_board_gets_automatic_layout():
-    board = load_board("toy")
-    layout = load_layout(board)
-    assert layout.source == "auto"
-    assert set(layout.cities) == set(board.cities)
-    for r in board.routes:
-        assert len(layout.routes[r.id].cars) == r.length

@@ -26,12 +26,11 @@ def test_cheapest_path_uses_own_routes_free_and_avoids_blocked():
     assert cost3 == 0 and path3 == []
 
 
-@pytest.mark.parametrize("board", ["toy", "usa"])
 @pytest.mark.parametrize("num_players", [2, 4])
-def test_agents_play_full_games(board, num_players):
+def test_agents_play_full_games(num_players):
     for seed in range(3):
         agents = [GreedyAgent(seed), RandomAgent(seed)] * 2
-        game = Game(load_board(board), num_players=num_players, seed=seed, max_turns=2000)
+        game = Game(load_board("usa"), num_players=num_players, seed=seed, max_turns=2000)
         result = play_game(game, agents[:num_players])  # step() rejects illegal moves
         assert result.winners
 
@@ -64,10 +63,10 @@ def test_render_does_not_crash():
     assert "Final scores" in console.file.getvalue()
 
 
-@pytest.mark.parametrize("board,num_players", [("usa", 2), ("usa", 5), ("toy", 3)])
+@pytest.mark.parametrize("num_players", [2, 3, 5])
 @pytest.mark.parametrize("width", [100, 160, 240])
-def test_board_view_renders(board, num_players, width):
-    game = Game(load_board(board), num_players=num_players, seed=1)
+def test_board_view_renders(num_players, width):
+    game = Game(load_board("usa"), num_players=num_players, seed=1)
     play_game(game, [GreedyAgent(i) for i in range(num_players)])
     lines = [t for t in (describe_event(game, e) for e in game.log) if t]
     assert any("claimed" in t for t in lines)

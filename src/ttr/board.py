@@ -169,7 +169,7 @@ def _check_connected(board: Board) -> None:
 
 
 def load_board(name_or_path: Union[str, Path] = "usa") -> Board:
-    """Load a bundled board by name ("usa", "toy") or a JSON file by path."""
+    """Load a bundled board by name ("usa") or a JSON file by path."""
     path = Path(name_or_path)
     if path.suffix == ".json":
         text = path.read_text(encoding="utf-8")

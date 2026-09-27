@@ -46,7 +46,7 @@ def test_initial_returns_go_to_bottom_after_everyone_chooses():  # §9 #7
 
 
 def test_first_player_is_seeded_random():
-    firsts = {Game(load_board("toy"), num_players=4, seed=s).first_player for s in range(40)}
+    firsts = {Game(load_board("usa"), num_players=4, seed=s).first_player for s in range(40)}
     assert firsts == {0, 1, 2, 3}
 
 
@@ -416,22 +416,23 @@ def test_longest_path_tie_both_get_bonus_and_full_tie_is_shared_win():
 
 
 def test_tiebreak_most_completed_tickets():
-    game = started_game(board="toy")
-    _give_route(game, route_id(game, "A", "B", "red"), 0, 4)
-    _give_route(game, route_id(game, "C", "D"), 1, 2)
-    t_cd = next(t for t in game.board.tickets if {t.a, t.b} == {"C", "D"})  # 2 pts
+    game = started_game()
+    _give_route(game, route_id(game, "Denver", "Oklahoma City"), 0, 8)  # length 4
+    _give_route(game, route_id(game, "Denver", "Santa Fe"), 1, 2)
+    _give_route(game, route_id(game, "Santa Fe", "El Paso"), 1, 4)
+    denver_el_paso = next(t for t in game.board.tickets if {t.a, t.b} == {"Denver", "El Paso"})  # 4 pts
     game.players[0].tickets = []
-    game.players[1].tickets = [t_cd.id]
+    game.players[1].tickets = [denver_el_paso.id]
     result = _force_finish(game)
-    # Both: longest path 2 -> both get the bonus. p0: 4 + 10 = 14; p1: 2 + 2 + 10 = 14.
-    assert result.players[0].total == result.players[1].total == 14
+    # Both: longest path 4 -> both get the bonus. p0: 8 + 10 = 18; p1: 4 + 4 + 10 = 18.
+    assert result.players[0].total == result.players[1].total == 18
     assert result.winners == [1]
 
 
 def test_tiebreak_longest_path_holder():
-    game = started_game(board="toy")
-    _give_route(game, route_id(game, "B", "D"), 0, 17)  # length 4 -> bonus
-    _give_route(game, route_id(game, "C", "D"), 1, 27)  # length 2
+    game = started_game()
+    _give_route(game, route_id(game, "Seattle", "Helena"), 0, 17)  # length 6 -> bonus
+    _give_route(game, route_id(game, "Boston", "New York", "yellow"), 1, 27)  # length 2
     game.players[0].tickets = []
     game.players[1].tickets = []
     result = _force_finish(game)
@@ -442,11 +443,11 @@ def test_tiebreak_longest_path_holder():
 # ------------------------------------------------------- whole-game invariants
 
 
-@pytest.mark.parametrize("board,num_players", [("toy", 2), ("usa", 2), ("usa", 3), ("usa", 5)])
-def test_random_games_terminate_and_conserve_cards(board, num_players):
+@pytest.mark.parametrize("num_players", [2, 3, 4, 5])
+def test_random_games_terminate_and_conserve_cards(num_players):
     rng = random.Random(123)
     for seed in range(5):
-        game = Game(load_board(board), num_players=num_players, seed=seed, max_turns=3000)
+        game = Game(load_board("usa"), num_players=num_players, seed=seed, max_turns=3000)
 
         def check(g):
             assert total_cards(g) == 110

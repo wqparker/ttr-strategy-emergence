@@ -32,13 +32,6 @@ def test_usa_every_city_is_used():
     assert used == set(board.cities)
 
 
-def test_toy_board_loads():
-    board = load_board("toy")
-    assert board.verified
-    assert any(r.sibling is not None and r.is_gray for r in board.routes)
-    assert any(r.sibling is not None and not r.is_gray for r in board.routes)
-
-
 def _minimal(**overrides):
     data = {
         "name": "t",
@@ -66,11 +59,10 @@ def test_invalid_boards_rejected(overrides):
         board_from_dict(_minimal(**overrides))
 
 
-def test_layout_loaded_for_bundled_boards():
-    for name in ("usa", "toy"):
-        board = load_board(name)
-        assert set(board.layout) == set(board.cities)
-    codes = [p.code for p in load_board("usa").layout.values()]
+def test_layout_loaded_for_usa():
+    board = load_board("usa")
+    assert set(board.layout) == set(board.cities)
+    codes = [p.code for p in board.layout.values()]
     assert len(set(codes)) == len(codes)
 
 
