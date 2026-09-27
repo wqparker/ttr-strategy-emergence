@@ -159,3 +159,23 @@ def test_live_dashboard_waits_then_follows_the_file(tmp_path):
         dash.page = page
         dash.draw()
     plt.close(dash.fig)
+
+
+def test_wildcards_are_expanded_and_followed(run_file, tmp_path):
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from ttr.learn.dashboard import SERIES, Dashboard, expand, load_run
+
+    pattern = str(tmp_path / "q_*.json")
+    assert expand([pattern]) == []
+    (tmp_path / "q_a_s0.json").write_text(run_file.read_text(encoding="utf-8"), encoding="utf-8")
+    assert expand([pattern]) == [tmp_path / "q_a_s0.json"]
+
+    loader = lambda: [load_run(p, SERIES[i]) for i, p in enumerate(expand([pattern]))]
+    dash = Dashboard(loader(), loader=loader, sources=[pattern])
+    assert len(dash.runs) == 1 and not dash.poll()
+    (tmp_path / "q_a_s1.json").write_text(run_file.read_text(encoding="utf-8"), encoding="utf-8")
+    assert dash.poll() and len(dash.runs) == 2  # a new seed file matching the pattern
+    plt.close(dash.fig)

@@ -36,6 +36,7 @@ Needs the `[analysis]` extra (matplotlib).
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import re
 import textwrap
@@ -171,6 +172,20 @@ def load_run(path: Path, color: str) -> Run:
     return Run(name=Path(path).stem, path=Path(path), data=data, color=color)
 
 
+def expand(patterns: Sequence) -> List[Path]:
+    """Paths from the command line, with wildcards expanded here: PowerShell
+    passes `*.json` through unexpanded. A pattern that matches nothing yet is
+    dropped (a live view picks its files up once they exist)."""
+    out: List[Path] = []
+    for pat in patterns:
+        text = str(pat)
+        if any(ch in text for ch in "*?["):
+            out.extend(sorted(Path(m) for m in glob.glob(text)))
+        else:
+            out.append(Path(text))
+    return list(dict.fromkeys(out))
+
+
 def _mean_tree(items: Sequence):
     """Elementwise mean of equally shaped JSON values (dicts, lists, numbers);
     anything else is taken from the first."""
@@ -297,7 +312,7 @@ class Dashboard:
             raise ValueError("no runs to show")
         self.runs = list(runs)
         self.loader = loader
-        self.sources = [Path(p) for p in sources]
+        self.sources = [str(p) for p in sources]  # paths or wildcard patterns
         self._stamps = self._source_stamps()
         self.updated = ""
         self.fig = figure if figure is not None else plt.figure(figsize=(19.2, 10.8), dpi=100)
@@ -323,7 +338,7 @@ class Dashboard:
         if self.runs:
             self.pages[self.page]()
         else:
-            self.fig.text(0.5, 0.5, "waiting for " + ", ".join(p.name for p in self.sources)
+            self.fig.text(0.5, 0.5, "waiting for " + ", ".join(self.sources)
                           + "\n(start ttr-train-linear with --live and the same --out)",
                           ha="center", va="center", fontsize=12, color=INK_2)
         names = "   ".join(f"{i + 1} {n}" for i, n in enumerate(self.PAGE_NAMES))
@@ -340,13 +355,15 @@ class Dashboard:
     # ------------------------------------------------------------ live
 
     def _source_stamps(self) -> Tuple:
+        """(path, mtime, size) of every file the sources name now; a new file
+        matching a wildcard changes it too."""
         stamps = []
-        for p in self.sources:
+        for p in expand(self.sources):
             try:
                 st = p.stat()
-                stamps.append((st.st_mtime_ns, st.st_size))
+                stamps.append((str(p), st.st_mtime_ns, st.st_size))
             except OSError:
-                stamps.append(None)
+                stamps.append((str(p), None))
         return tuple(stamps)
 
     def poll(self) -> bool:
@@ -704,7 +721,8 @@ def _shared_prefix(lists: Sequence[Sequence[str]]) -> int:
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("runs", nargs="+", type=Path, help="training run JSON files (ttr-train-linear --out)")
+    parser.add_argument("runs", nargs="+", help="training run JSON files (ttr-train-linear --out); "
+                                                "wildcards like runs/linear/pass3/*.json are expanded here")
     parser.add_argument("--opponent", choices=OPPONENTS, default="greedy", help="evaluation opponent shown first")
     parser.add_argument("--page", type=int, default=1, help="page to open on (1-7)")
     parser.add_argument("--save", type=Path, metavar="DIR", help="write every page as PNG to DIR and exit")
@@ -728,7 +746,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     import matplotlib.pyplot as plt
 
     def load_all() -> List[Run]:
-        paths = [p for p in args.runs if p.exists()] if args.live else args.runs
+        paths = expand(args.runs)
+        if args.live:
+            paths = [p for p in paths if p.exists()]
+        elif not paths:
+            sys.exit(f"no run files match {' '.join(map(str, args.runs))}")
         loaded = [load_run(p, SERIES[i % len(SERIES)]) for i, p in enumerate(paths)]
         return group_runs(loaded) if args.group else loaded
 

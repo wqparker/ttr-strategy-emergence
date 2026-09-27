@@ -227,8 +227,26 @@ cost of 200 evaluation games each time).
 ```
 ttr-train-linear --algo q --opponent random --seed 0 --live --out runs/linear/pass3/q_random_s0.json
 ttr-dash --live runs/linear/pass3/q_random_s0.json
-ttr-dash --live --group runs/linear/pass3/q_random_s0.json runs/linear/pass3/q_random_s1.json   # seeds in parallel
 ```
+
+Several seeds at once (PowerShell). Terminal 1 starts three seeds in the background, each logging
+to its own file, and waits for them; terminal 2 follows them as one averaged line (drop `--group`
+to see each seed):
+
+```powershell
+# terminal 1
+New-Item -ItemType Directory -Force runs\linear\pass3 | Out-Null
+$p = 0..2 | ForEach-Object { Start-Process -NoNewWindow -PassThru -FilePath .venv\Scripts\ttr-train-linear.exe `
+    -ArgumentList "--algo q --opponent random --seed $_ --games 2000 --live --out runs\linear\pass3\q_random_s$_.json" `
+    -RedirectStandardOutput "runs\linear\pass3\q_random_s$_.log" }
+$p | Wait-Process
+
+# terminal 2
+.venv\Scripts\ttr-dash.exe --live --group "runs/linear/pass3/q_random_s*.json"
+```
+
+`ttr-dash` expands wildcards itself (PowerShell passes `*.json` through unexpanded), and in live
+mode re-expands them on every poll, so seed files that appear later are picked up.
 
 A live save of a full 2000-game run takes about 20 ms, so `--live 25` adds about 1–2 s to a
 5-minute run.
