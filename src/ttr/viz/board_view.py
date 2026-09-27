@@ -62,9 +62,11 @@ class BoardView:
         route_tint: Optional[Dict[int, theme.RGB]] = None,
         highlight_routes: Iterable[int] = (),
         highlight_cities: Iterable[str] = (),
+        city_fill: Optional[Dict[str, theme.RGB]] = None,
     ) -> None:
         """Draw the board onto `target` at `origin`. `route_tint` recolors routes
-        (analysis overlays); highlights outline routes and ring cities."""
+        (analysis overlays); highlights outline routes and ring cities;
+        `city_fill` recolors city dots (the marked seat's ticket cities)."""
         if self._static is None:
             self._static = self._supersampled(self._paint_static, alpha=False)
             self._labels = self._render_labels()
@@ -74,6 +76,7 @@ class BoardView:
             tuple(sorted(route_tint.items())) if route_tint else (),
             tuple(highlight_routes),
             tuple(highlight_cities),
+            tuple(sorted(city_fill.items())) if city_fill else (),
         )
         if key != self._overlay_key:
             self._overlay_key = key
@@ -159,16 +162,19 @@ class BoardView:
             s.blit(pts, ((x + w - 5) * k - pts.get_width(), cy * k - pts.get_height() / 2))
 
     def _cities(self, s: pygame.Surface, k: float) -> None:
+        for city in self.layout.cities:
+            self._city(s, k, city, theme.CITY_FILL, theme.CITY_SHINE)
+
+    def _city(self, s: pygame.Surface, k: float, city: str, fill: theme.RGB, shine: theme.RGB) -> None:
         r = self.layout.city_radius * k
-        for pos in self.layout.cities.values():
-            x, y = pos[0] * k, pos[1] * k
-            pygame.draw.circle(s, theme.CITY_RING, (x, y), r + 1.5 * k)
-            pygame.draw.circle(s, theme.CITY_FILL, (x, y), r)
-            pygame.draw.circle(s, theme.CITY_SHINE, (x - r * 0.3, y - r * 0.3), r * 0.3)
+        x, y = (v * k for v in self.layout.cities[city])
+        pygame.draw.circle(s, theme.CITY_RING, (x, y), r + 1.5 * k)
+        pygame.draw.circle(s, fill, (x, y), r)
+        pygame.draw.circle(s, shine, (x - r * 0.3, y - r * 0.3), r * 0.3)
 
     # ---------------------------------------------------------- claims layer
 
-    def _paint_overlay(self, s, k, owners, tint, highlight_routes, highlight_cities) -> None:
+    def _paint_overlay(self, s, k, owners, tint, highlight_routes, highlight_cities, city_fill) -> None:
         for rid, color in tint:
             for car in self.layout.routes[rid].cars:
                 _car(s, car, k, color, theme.darker(color, 0.5))
@@ -176,6 +182,8 @@ class BoardView:
             color = theme.seat_color(owner)
             for car in self.layout.routes[rid].cars:
                 _train(s, car, k, color)
+        for city, fill in city_fill:  # over any train that reaches the dot
+            self._city(s, k, city, fill, theme.lighter(fill, 0.6))
         for rid in highlight_routes:
             for car in self.layout.routes[rid].cars:
                 pygame.draw.polygon(s, theme.HIGHLIGHT, _pts(car.corners(inset=-1.5), k), max(2, round(2 * k)))

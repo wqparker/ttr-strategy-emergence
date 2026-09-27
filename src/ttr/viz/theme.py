@@ -48,6 +48,7 @@ COAST_LINE = (150, 170, 180)
 CITY_FILL = (206, 86, 38)
 CITY_RING = (70, 30, 20)
 CITY_SHINE = (250, 190, 150)
+CITY_TICKET = (250, 205, 30)  # a city on one of the marked seat's open tickets
 LABEL = (54, 34, 30)
 LABEL_HALO = (236, 238, 234)
 OUTLINE = (60, 60, 64)

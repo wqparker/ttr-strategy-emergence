@@ -264,6 +264,10 @@ class Screen:
             result = None
             marked = None
         else:
+            if marked is not None and vm.seats[marked].tickets is not None:
+                marks = self._marks(game, marked, ticket_selection)
+            # Cities on a marked ticket turn yellow.
+            ticket_cities = {c: theme.CITY_TICKET for m in (marks or {}).values() for c in (m.a, m.b)}
             self.board_view.draw(
                 target,
                 game,
@@ -271,9 +275,9 @@ class Screen:
                 route_tint=route_tint,
                 highlight_routes=highlight_routes,
                 highlight_cities=highlight_cities,
+                city_fill=ticket_cities,
             )
-            if marked is not None and vm.seats[marked].tickets is not None:
-                marks = self._marks(game, marked, ticket_selection)
+            if marks:
                 draw_ticket_markers(target, self.board_view, list(marks.values()), origin=self.board_origin)
         r = self.table_rect
         legend = panels.controls_layout(controls or (), r, k=k)[3]

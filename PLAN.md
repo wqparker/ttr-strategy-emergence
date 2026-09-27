@@ -289,6 +289,7 @@ Noticed while using the viewer; none of them blocks Phase 4.
   shapes with colors rotated: 25 pairs, never two open tickets on the same one. A ticket
   keeps its pair until completed, which removes its markers and frees the pair. An offer
   reserves pairs as it is dealt, so ticked tickets show (hollow) the pair they will keep.
+  Cities on marked tickets have their dots turned yellow (`BoardView.draw(city_fill=)`).
   Assignment is rebuilt from the game log; for that the engine now logs each player's
   initial ticket deal (`deal_initial_tickets`, private), as it already did later draws.
 - **Better ticket display.** Tickets are city codes plus points (`MTL–ATL 9`). Either

@@ -195,3 +195,26 @@ def test_markers_are_drawn_for_the_marked_seat():
     star = next(t for t, i in assign_markers(game, 0).held.items() if i == 1)  # yellow star
     surface, _ = screen.render(game)
     assert surface.get_at(marker_pixel(screen, game, 0, star))[:3] == COLORS[1]
+
+
+def city_pixel(screen, city):
+    """A point on the city dot's lower right, clear of the highlight."""
+    x, y = screen.board_view.layout.cities[city]
+    r = screen.board_view.layout.city_radius * 0.5
+    sx, sy = screen.board_view.to_screen((x + r, y + r))
+    ox, oy = screen.board_origin
+    return round(ox + sx), round(oy + sy)
+
+
+def test_ticket_cities_turn_yellow():
+    from ttr.viz import theme
+
+    game = started_game(seed=4)
+    screen = Screen(game.board, scale=2.0)
+    surface, _ = screen.render(game)
+    marked = {c for m in visible_marks(game, 0).values() for c in (m.a, m.b)}
+    other = next(c for c in game.board.cities if c not in marked)
+    near = lambda got, want: all(abs(g - w) <= 6 for g, w in zip(got, want))  # noqa: E731
+    for city in marked:  # the overlay layer is alpha-blended, so allow rounding
+        assert near(surface.get_at(city_pixel(screen, city))[:3], theme.CITY_TICKET)
+    assert near(surface.get_at(city_pixel(screen, other))[:3], theme.CITY_FILL)

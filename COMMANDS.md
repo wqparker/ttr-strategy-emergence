@@ -47,6 +47,7 @@ the `--perspective` seat, else the `--human` seat, else P0. Hidden while an over
   free for the next ticket.
 - While choosing tickets, ticked ones show hollow markers in the pair they will keep; unticked
   ones show none.
+- Every city on a marked ticket (open or ticked) has its dot turned from red to yellow.
 
 Full screen scales the viewer to the display's height and widens the side panels to fill the
 width (1920x1080: scale 1.07, no bars).
