@@ -65,8 +65,8 @@ the env (Phase 4).
 
 ## Conventions
 
-- Setup: `py -3.11 -m venv .venv` then `.venv/Scripts/python -m pip install -e ".[dev]"`
-  (Python 3.11+).
+- Setup: `py -3.14 -m venv .venv` then `.venv/Scripts/python -m pip install -e ".[dev]"`
+  (Python 3.14+).
 - Tests: `.venv/Scripts/python -m pytest`.
 - Layout: engine in `src/ttr/` (`game.py` rules/state, `board.py` + `data/*.json`
   board data, `scoring.py`, `actions.py`), tests in `tests/`. Code comments like

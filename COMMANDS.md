@@ -179,7 +179,7 @@ python scripts/smoke_env.py          # random agents through the PettingZoo env 
 ```
 
 ```
-py -3.11 -m venv .venv
+py -3.14 -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"    # engine + pytest
 python -m pip install -e ".[viz]"    # pygame-ce, for the viewer

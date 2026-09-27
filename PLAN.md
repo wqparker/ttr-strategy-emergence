@@ -143,6 +143,8 @@ for 2 players).
     Gymnasium are in the `[env]` extra.
   - Removed the 6-city test map (data, tests, the viewer's automatic layout); every test and
     script uses the USA map.
+  - Moved to Python 3.14.3: `.venv` rebuilt, `requires-python >= 3.14`. Every
+    dependency has 3.14 wheels.
 - **Next: Phase 5, training and search agents.** Order of the methods is not yet
   decided. Likely first: an adapter that plays a policy over (observation, mask)
   through the existing `Agent.act(game, player)` interface and match runner, then
@@ -367,7 +369,7 @@ Noticed while using the viewer; none of them blocks Phase 4.
   around. When the deck is spent the row closes up instead (§9 #3).
 
 **Library:** `pygame-ce` (decided), the actively maintained drop-in fork of Pygame
-(same `import pygame`), with Python 3.11 wheels.
+(same `import pygame`), with Python 3.14 wheels.
 
 ## Methods to compare
 
