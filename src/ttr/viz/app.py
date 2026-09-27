@@ -213,6 +213,14 @@ class HumanControl:
             out.append(("pass", False, True))
         return out
 
+    def ticket_selection(self, game: Game) -> Optional[set]:
+        """The offered tickets ticked so far while this seat chooses, for the
+        map markers; None when no human is choosing tickets right now."""
+        if not self.acts_now(game) or game.phase not in (Phase.KEEP_TICKETS, Phase.CHOOSE_INITIAL_TICKETS):
+            return None
+        self._sync_keep(game)
+        return set(self.keep)
+
     def _keep_action(self, game: Game) -> KeepTickets:
         return KeepTickets(frozenset(self.keep))
 
@@ -449,6 +457,7 @@ class Viewer:
         claimable = self.human.claimable(game)
         highlight = [self.hover] if self.hover in claimable else []
         overlay = self.overlay
+        choices = self.human.choices(game)  # also syncs the human's ticket selection
         self.screen.draw(
             target,
             game,
@@ -456,12 +465,13 @@ class Viewer:
             buttons=self._buttons,
             active=("play",) if self.playing else (),
             highlight_routes=highlight,
-            choices=self.human.choices(game),
+            choices=choices,
             choices_title=self.human.title(game),
             result=game.result,
             overlay=overlay,
             overlay_hover=self.hover if overlay is not None else None,
             ticket_seat=min(self.human.seats) if self.human.seats else None,
+            ticket_selection=self.human.ticket_selection(game),
         )
 
 

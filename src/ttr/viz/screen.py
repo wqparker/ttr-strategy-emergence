@@ -18,7 +18,7 @@ decides what each panel may show. Side slots exist for seats in play only.
 
 from __future__ import annotations
 
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Collection, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pygame
 
@@ -28,7 +28,7 @@ from ttr.viz import panels, theme
 from ttr.viz.board_view import BoardView
 from ttr.viz.geometry import BoardLayout, Point
 from ttr.viz.overlay import Overlay, draw_board_overlay, draw_player_panel
-from ttr.viz.tickets import draw_ticket_markers
+from ttr.viz.tickets import Mark, draw_ticket_markers, visible_marks
 from ttr.viz.perspective import Perspective, ViewModel, code_map
 
 SIDE_W = 200.0  # each side panel column
@@ -81,6 +81,8 @@ class Screen:
         self.perspective = perspective or Perspective()
         self.board_view = BoardView(board, scale=scale, layout=layout)
         self.side_w = SIDE_W  # canvas units; `fit` widens it to fill a wide display
+        self._marks_key: object = None
+        self._marks_value: Dict[int, Mark] = {}
         self.codes = code_map(board)
         self._num_players = 2
         # Where the last draw put the things a human can click.
@@ -240,19 +242,22 @@ class Screen:
         overlay: Optional[Overlay] = None,
         overlay_hover: Optional[int] = None,
         ticket_seat: Optional[int] = None,
+        ticket_selection: Optional[Collection[int]] = None,
     ) -> ViewModel:
         """Draw everything and return the view model that was drawn. An
         `overlay` replaces the board's claims with its colors and legend, the
         seat panels with each seat's results over the records, and hides the
         end-of-game scoreboard; the table strip and ticker still show `game`.
 
-        One seat's tickets are marked on the map (viz/tickets.py): the viewing
-        seat, else `ticket_seat`, else P0."""
+        One seat's open tickets are marked on the map (viz/tickets.py): the
+        viewing seat, else `ticket_seat`, else P0. `ticket_selection` is the
+        offered tickets a human has ticked (None: show every offered ticket)."""
         self._num_players = game.num_players
         vm = self.perspective.view(game, names=self.names, events=events)
         k = self.scale
         target.fill(theme.PANEL_BG)
         marked = self.marked_seat(game, ticket_seat)
+        marks: Optional[Dict[int, Mark]] = None
         if overlay is not None:
             draw_board_overlay(target, self.board_view, overlay, origin=self.board_origin,
                                hover_route=overlay_hover, codes=self.codes)
@@ -267,9 +272,9 @@ class Screen:
                 highlight_routes=highlight_routes,
                 highlight_cities=highlight_cities,
             )
-            tickets = vm.seats[marked].tickets if marked is not None else None
-            if tickets:
-                draw_ticket_markers(target, self.board_view, tickets, origin=self.board_origin)
+            if marked is not None and vm.seats[marked].tickets is not None:
+                marks = self._marks(game, marked, ticket_selection)
+                draw_ticket_markers(target, self.board_view, list(marks.values()), origin=self.board_origin)
         r = self.table_rect
         legend = panels.controls_layout(controls or (), r, k=k)[3]
         self.hits = panels.draw_table(target, r, vm, k=k,
@@ -286,7 +291,7 @@ class Screen:
         else:
             for seat, rect in self.seat_rects(game.num_players).items():
                 panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0), codes=self.codes,
-                                 markers=(seat == marked))
+                                 markers=marks if seat == marked else None)
         if buttons:
             panels.draw_buttons(target, buttons, k=k, active=active)
         self.hits["choices"] = (
@@ -304,6 +309,15 @@ class Screen:
         if seat is None:
             seat = preferred if preferred is not None else 0
         return seat if 0 <= seat < game.num_players else None
+
+    def _marks(self, game: Game, seat: int, selection: Optional[Collection[int]]) -> Dict[int, Mark]:
+        """visible_marks, cached per state: the log replay behind it would
+        otherwise run every frame."""
+        key = (id(game), len(game.log), seat, None if selection is None else frozenset(selection))
+        if self._marks_key != key:
+            self._marks_key = key
+            self._marks_value = visible_marks(game, seat, selection)
+        return self._marks_value
 
     def render(self, game: Game, **kw) -> Tuple[pygame.Surface, ViewModel]:
         """A fresh surface with everything drawn on it (screenshots, tests)."""

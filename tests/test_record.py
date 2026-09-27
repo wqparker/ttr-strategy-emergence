@@ -72,7 +72,9 @@ def test_replay_states_cover_every_step():
     game, record = recorded_game()
     states = record.replay_states()
     assert len(states) == len(record.actions) + 1
-    assert states[0].turn == 0 and not states[0].log  # fresh setup, nothing logged yet
+    # Fresh setup: only the initial ticket deals are logged, no action yet.
+    assert states[0].turn == 0
+    assert {e.kind for e in states[0].log} == {"deal_initial_tickets"}
     assert_same_state(states[-1], game)
     # Each snapshot is independent: stepping one leaves the next unchanged.
     before = states[1].clone()

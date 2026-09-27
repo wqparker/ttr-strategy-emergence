@@ -143,8 +143,11 @@ class Game:
                 p.hand[self._draw_from_deck()] += 1
         self._refill_market()
         # §9 #7: everyone is dealt from the same deck up front, then chooses in turn.
-        for p in self.players:
+        for i, p in enumerate(self.players):
             p.pending_tickets = self._draw_tickets(TICKETS_DEALT)
+            # Logged like a later ticket draw, so the offer's order can be rebuilt.
+            self._log(i, "deal_initial_tickets", count=len(p.pending_tickets),
+                      private={"tickets": list(p.pending_tickets)})
         self._initial_returns: List[int] = []
         self.current_player = self.first_player
         self._initial_choices_left = self.num_players

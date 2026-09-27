@@ -1,4 +1,4 @@
-"""Ticket markers: one seat's tickets drawn as shapes beside their cities."""
+"""Ticket markers: one seat's open tickets drawn as shapes beside their cities."""
 
 import math
 
@@ -6,24 +6,48 @@ import pytest
 
 pygame = pytest.importorskip("pygame")
 
+from ttr.actions import DrawTickets, KeepTickets  # noqa: E402
 from ttr.viz.board_view import BoardView  # noqa: E402
-from ttr.viz.perspective import Perspective, TicketFact  # noqa: E402
+from ttr.viz.perspective import Perspective  # noqa: E402
 from ttr.viz.screen import Screen  # noqa: E402
-from ttr.viz.tickets import MARKER_SIZE, MARKERS, icon, marker, placements  # noqa: E402
+from ttr.viz.tickets import (  # noqa: E402
+    COLORS, MARKER_SIZE, MARKERS, SHAPES, Mark, assign_markers, icon, placements, visible_marks,
+)
 
 from helpers import started_game  # noqa: E402
+from test_analysis import claim  # noqa: E402
 
 
-def fact(i, a, b, pending=False):
-    return TicketFact(id=i, a=a, b=b, points=10, done=False, pending=pending)
+def dealt_game(seed=0):
+    """A fresh game, still in the initial ticket choice, P0 to choose."""
+    from ttr.board import load_board
+    from ttr.game import Game
+
+    return Game(load_board("usa"), num_players=2, seed=seed, first_player=0)
 
 
-def test_markers_cycle_in_the_asked_order():
-    assert [shape for shape, _ in MARKERS] == ["moon", "star", "square", "circle", "triangle"]
-    assert marker(0) == marker(len(MARKERS)) == MARKERS[0]
+def keep(game, tickets):
+    game.step(KeepTickets(frozenset(tickets)))
 
 
-@pytest.mark.parametrize("shape,fill", MARKERS)
+def pass_turn(game):
+    """The current player draws two blind cards, ending the turn."""
+    from ttr.actions import DrawBlind
+
+    game.step(DrawBlind())
+    game.step(DrawBlind())
+
+
+# ------------------------------------------------------------------- order
+
+
+def test_base_pairs_first_then_rotated_colors():
+    assert MARKERS[:5] == tuple(zip(SHAPES, COLORS))
+    assert MARKERS[5] == ("moon", COLORS[1]) and MARKERS[6] == ("star", COLORS[2])  # yellow moon, green star
+    assert len(set(MARKERS)) == len(MARKERS) == 25
+
+
+@pytest.mark.parametrize("shape,fill", MARKERS[:5])
 def test_every_icon_draws_filled_and_hollow(shape, fill):
     solid = icon(shape, fill, 24)
     ring = icon(shape, fill, 24, hollow=True)
@@ -32,11 +56,105 @@ def test_every_icon_draws_filled_and_hollow(shape, fill):
     assert count(solid) > count(ring) > 20
 
 
+# -------------------------------------------------------------- assignment
+
+
+def test_offer_reserves_markers_and_kept_tickets_keep_them():
+    game = dealt_game()
+    offer = list(game.players[0].pending_tickets)
+    a = assign_markers(game, 0)
+    assert a.held == {} and a.offered == {t: i for i, t in enumerate(offer)}
+    keep(game, [offer[0], offer[2]])  # return the middle one
+    a = assign_markers(game, 0)
+    assert a.held == {offer[0]: 0, offer[2]: 2} and a.offered == {}
+
+
+def test_new_tickets_fill_the_first_free_markers_without_repeats():
+    game = dealt_game()
+    offer = list(game.players[0].pending_tickets)
+    keep(game, [offer[0], offer[2]])  # markers 0 and 2; 1 is free
+    keep(game, game.players[1].pending_tickets)
+    game.step(DrawTickets())
+    new = list(game.players[0].pending_tickets)
+    assert assign_markers(game, 0).offered == dict(zip(new, [1, 3, 4]))
+    keep(game, new)
+    held = assign_markers(game, 0).held
+    assert sorted(held.values()) == [0, 1, 2, 3, 4]
+    pass_turn(game)
+    game.step(DrawTickets())  # all five base pairs taken: rotated colors next
+    assert sorted(assign_markers(game, 0).offered.values()) == [5, 6, 7]
+
+
+def path_routes(board, a, b):
+    """Route ids along a fewest-hops path from a to b (breadth-first)."""
+    from collections import deque
+
+    prev = {a: None}
+    queue = deque([a])
+    while queue:
+        city = queue.popleft()
+        for r in board.routes:
+            if city in (r.a, r.b):
+                nxt = r.b if city == r.a else r.a
+                if nxt not in prev:
+                    prev[nxt] = (city, r.id)
+                    queue.append(nxt)
+    out, city = [], b
+    while prev[city] is not None:
+        city, rid = prev[city]
+        out.append(rid)
+    return out
+
+
+def test_completing_a_ticket_frees_its_marker_for_the_next_offer():
+    game = started_game(seed=1)
+    tid, index = min(assign_markers(game, 0).held.items(), key=lambda kv: kv[1])
+    t = game.board.tickets[tid]
+    for rid in path_routes(game.board, t.a, t.b):
+        claim(game, rid)  # P0 claims
+        pass_turn(game)  # P1 draws
+    a = assign_markers(game, 0)
+    assert tid not in a.held and index not in a.held.values()
+    assert tid not in visible_marks(game, 0)  # no marker once completed
+    game.step(DrawTickets())
+    assert min(assign_markers(game, 0).offered.values()) == min(
+        i for i in range(len(MARKERS)) if i not in a.held.values()
+    )
+
+
+def test_selection_hides_unticked_offers():
+    game = dealt_game()
+    offer = list(game.players[0].pending_tickets)
+    assert set(visible_marks(game, 0)) == set(offer)  # no selection given: all shown
+    marks = visible_marks(game, 0, selected={offer[1]})
+    assert set(marks) == {offer[1]} and marks[offer[1]].hollow
+    assert marks[offer[1]].index == 1  # the same pair it keeps once confirmed
+    keep(game, [offer[1], offer[2]])
+    marks = visible_marks(game, 0)
+    assert marks[offer[1]].index == 1 and not marks[offer[1]].hollow
+
+
+def test_markers_survive_stepping_through_a_replay():
+    game = started_game(seed=3)
+    before = assign_markers(game, 0).held
+    copy = game.clone()
+    pass_turn(copy)
+    assert assign_markers(copy, 0).held == before
+    assert assign_markers(game, 0).held == before  # the earlier state is unchanged
+
+
+# -------------------------------------------------------------- placement
+
+
+def mark(i, a, b, index=0):
+    return Mark(i, a, b, index, hollow=False)
+
+
 def test_each_ticket_marks_both_cities_and_shared_cities_fan_out():
     game = started_game()
     view = BoardView(game.board, scale=1.0)
-    tickets = [fact(0, "Los Angeles", "Miami"), fact(1, "Los Angeles", "New York")]
-    spots = placements(view, tickets)
+    marks = [mark(0, "Los Angeles", "Miami"), mark(1, "Los Angeles", "New York", 1)]
+    spots = placements(view, marks)
     assert sorted((i, c) for i, c, _ in spots) == [
         (0, "Los Angeles"), (0, "Miami"), (1, "Los Angeles"), (1, "New York"),
     ]
@@ -47,13 +165,7 @@ def test_each_ticket_marks_both_cities_and_shared_cities_fan_out():
         assert math.dist(p, city) == pytest.approx(view.layout.city_radius + 2 + MARKER_SIZE / 2)
 
 
-def star_pixel(screen, game, seat):
-    """The window pixel at the center of seat's second ticket's first marker (a star)."""
-    tickets = screen.perspective.view(game).seats[seat].tickets
-    _, _, center = next(s for s in placements(screen.board_view, tickets) if s[0] == 1)
-    x, y = screen.board_view.to_screen(center)
-    ox, oy = screen.board_origin
-    return round(ox + x), round(oy + y)
+# ------------------------------------------------------------------ screen
 
 
 @pytest.mark.parametrize("viewer,preferred,expected", [
@@ -68,12 +180,18 @@ def test_marked_seat(viewer, preferred, expected):
     assert screen.marked_seat(game, preferred) == expected
 
 
-def test_markers_are_drawn_for_the_marked_seat_only():
+def marker_pixel(screen, game, seat, tid):
+    marks = list(visible_marks(game, seat).values())
+    i = next(i for i, m in enumerate(marks) if m.ticket == tid)
+    _, _, center = next(s for s in placements(screen.board_view, marks) if s[0] == i)
+    x, y = screen.board_view.to_screen(center)
+    ox, oy = screen.board_origin
+    return round(ox + x), round(oy + y)
+
+
+def test_markers_are_drawn_for_the_marked_seat():
     game = started_game(seed=4)
     screen = Screen(game.board, scale=1.0)
-    star = MARKERS[1][1]
+    star = next(t for t, i in assign_markers(game, 0).held.items() if i == 1)  # yellow star
     surface, _ = screen.render(game)
-    assert surface.get_at(star_pixel(screen, game, 0))[:3] == star
-    plain, _ = screen.render(game, ticket_seat=1)  # P1's tickets now, not P0's
-    assert plain.get_at(star_pixel(screen, game, 0))[:3] != star or \
-        star_pixel(screen, game, 0) == star_pixel(screen, game, 1)
+    assert surface.get_at(marker_pixel(screen, game, 0, star))[:3] == COLORS[1]

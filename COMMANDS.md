@@ -36,11 +36,17 @@ ttr-view [--record FILE] [--agents NAME ...] [--human SEAT] [--board usa|toy]
 | --- | --- | --- | --- | --- | --- | --- |
 | play / pause | step fwd / back | faster / slower | perspective | jump to end / start | quit | full screen |
 
-**Ticket markers:** one seat's tickets are drawn on the map as a shape beside both of each
-ticket's cities, with the same shape leading the ticket in that seat's panel: pink moon, yellow
-star, light green square, light blue circle, orange triangle (then repeating). The marked seat is
-the `--perspective` seat, else the `--human` seat, else P0. Tickets still on offer are hollow;
-completed ones are green in the panel. Hidden while an overlay is on.
+**Ticket markers:** one seat's open tickets are drawn on the map as a shape beside both of each
+ticket's cities, with the same shape leading the ticket in that seat's panel. The marked seat is
+the `--perspective` seat, else the `--human` seat, else P0. Hidden while an overlay is on.
+
+- Pairs go out in order: pink moon, yellow star, light green square, light blue circle, orange
+  triangle; then the same shapes with colors rotated (yellow moon, light green star, …). No two
+  open tickets share a pair.
+- A ticket keeps its pair until it is completed; then its markers disappear and the pair is
+  free for the next ticket.
+- While choosing tickets, ticked ones show hollow markers in the pair they will keep; unticked
+  ones show none.
 
 Full screen scales the viewer to the display's height and widens the side panels to fill the
 width (1920x1080: scale 1.07, no bars).
