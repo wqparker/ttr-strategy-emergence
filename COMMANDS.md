@@ -142,7 +142,7 @@ artwork and needed locally.
 ## ttr-sim
 
 ```
-ttr-sim [--agents {greedy,random} ...] [--games N] [--seed N]
+ttr-sim [--agents AGENT ...] [--games N] [--seed N]
         [--max-turns N] [--show [log|board]] [--step] [--delay S] [--record DIR]
 ```
 
@@ -152,6 +152,10 @@ ttr-sim [--agents {greedy,random} ...] [--games N] [--seed N]
 | `ttr-sim --show` | one game, `rich` text log |
 | `ttr-sim --show board --step` | one game, ASCII map, Enter between turns |
 | `ttr-sim --games 20 --record runs/records` | save replayable games |
+| `ttr-sim --agents linear:runs/linear/q_greedy.json greedy --games 200` | a trained agent vs greedy |
+
+An agent is `random`, `greedy`, or `linear:PATH` (trained linear Q / SARSA weights, needs the
+`[env]` extra). `ttr-view --agents` takes the same names.
 
 Each game deals the agents into random seats and starts at a random seat, so every order of play comes up and first-player advantage averages out. The seed is printed at the
 start of every run; `--seed N` replays that batch exactly. A record is a seed plus a list of
@@ -167,6 +171,30 @@ from ttr.analysis import analyze
 df = pd.DataFrame(analyze("runs/records").rows())
 df.sort_values("claim_rate", ascending=False).head(10)
 ```
+
+## Training
+
+Linear Q-learning / SARSA on hand-made features (`ttr.learn`, `[env]` extra). One learner seat
+against a scripted bot, random seat each game; evaluates greedy play against random and
+greedy every `--eval-every` games and prints a line per evaluation.
+
+```
+ttr-train-linear --algo q --opponent random --games 2000 --out runs/linear/q_random.json
+ttr-train-linear --algo sarsa --opponent greedy --games 2000 --out runs/linear/sarsa_greedy.json
+ttr-train-linear ... --init runs/linear/q_random.json    # continue from saved weights
+```
+
+| Option | Default | |
+| --- | --- | --- |
+| `--algo` | `q` | `q` (Q-learning) or `sarsa` |
+| `--opponent` | `random` | `random` or `greedy` |
+| `--alpha` | `0.05` | step size (normalized by the feature vector's squared length) |
+| `--epsilon-start` / `--epsilon-end` / `--epsilon-decay` | `0.2` / `0.02` / `0.5` | exploration, falling linearly over that share of the games |
+| `--reward` | `margin` | `score`, `margin` or `win` |
+| `--eval-every` / `--eval-games` | `200` / `100` | evaluation schedule |
+
+The output JSON holds the weights by action type with feature names, the config, and the
+evaluation history. Feature definitions: `src/ttr/learn/features.py`.
 
 ## Tests and setup
 

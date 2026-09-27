@@ -145,10 +145,48 @@ for 2 players).
     script uses the USA map.
   - Moved to Python 3.14.3: `.venv` rebuilt, `requires-python >= 3.14`. Every
     dependency has 3.14 wheels.
-- **Next: Phase 5, training and search agents.** Order of the methods is not yet
-  decided. Likely first: an adapter that plays a policy over (observation, mask)
-  through the existing `Agent.act(game, player)` interface and match runner, then
-  the first method.
+- **Current: Phase 5, training and search agents.** Order decided: tier A (linear
+  Q-learning / SARSA) first, as a first pass at hand-made features; the deep methods
+  follow, then a second pass on tier A with what they reveal about which features
+  matter.
+  - Done: the policy adapter (`src/ttr/agents/policy.py`): `PolicyAgent` wraps any
+    `policy(observation, mask) -> index` as an `Agent`, seeing exactly what the env
+    shows that seat. Agent registry (`src/ttr/agents/registry.py`): `ttr-sim` and
+    `ttr-view` take `random`, `greedy` or `linear:PATH`. Reward modes moved to
+    `src/ttr/env/reward.py`, shared by the env and the hand-rolled learners.
+  - Done: tier A, first pass (`src/ttr/learn/`, `ttr-train-linear`). Features in
+    "Tier A features" below. The learner drives the engine directly, one seat against a
+    scripted bot, reward = score margin / 100 between its decisions, γ = 1,
+    normalized-LMS step α = 0.05, ε 0.2 → 0.02 over the first half.
+  - Results, 2000 games each (~3 min), evaluated greedy over 100 games:
+
+    | Run | vs random | vs greedy (win, margin) |
+    | --- | --- | --- |
+    | untrained (= random play) | 52% | 0%, −194 |
+    | Q-learning vs random | 99% | 0%, −85 (best eval 9%, −53) |
+    | Q-learning vs greedy | 100% | 0%, −83 |
+    | SARSA vs greedy | 100% | 0%, −84 |
+
+    It learns: random is beaten within ~100 games and the margin against greedy
+    halves. It never beats greedy. Against greedy (60 games): about 21 claims a game
+    with mean length 1.8 (greedy: 15.5 claims, 2.7), 0.9 tickets done / 1.1 failed
+    (greedy 4.7 / 0.2), total 37 vs greedy's 108. Q-learning and SARSA end up nearly
+    identical against greedy. Training against random was unstable: at 500 games it
+    collapsed to 0% against random, then recovered.
+  - Found and fixed during the first pass: route points are scored at the payment
+    step, whose features first didn't describe the route, so Q(claim) could not tell
+    routes apart; and nothing marked tickets kept on the last turn as lost (it drew
+    tickets in the final round about once a game). Both fixed; the greedy-trained
+    agents no longer draw tickets late.
+  - Why it plateaus (read from the weights): the state features (the same in every
+    action block) take nearly all the weight and fit V(s); the action features that
+    rank one claim against another stay near 0 (route points ≈ 0.00, completes ticket
+    ≈ +0.06). Ticket points arrive only at game end, about 100 decisions later.
+- **Next:** second-pass ideas for tier A, to try when we return to it: learn V(s)
+  once, shared, and give each action type only an advantage over it, so the action
+  features get the gradient; features for the claim itself relative to alternatives
+  (e.g. trains to finish my tickets after this claim); smaller α with more games.
+  Then DQN / PPO (needs PyTorch).
 
 ## Roadmap
 
@@ -384,6 +422,18 @@ not just to find the strongest one. Each tier teaches something different:
 | D. Search | **MCTS** with determinization (sample hidden hands and tickets, then search) | Planning with no training, as a contrast to the learned agents | Hand-rolled |
 | Stretch | AlphaZero-style (MCTS guided by learned policy/value networks) | Combines C and D | Later |
 
+- **Tier A features (first pass, `src/ttr/learn/features.py`).** Q(s, a) =
+  w[type(a)] · φ(s, a), one weight vector per action type (claim, pay, draw a color,
+  draw a Locomotive, draw blind, draw tickets, keep tickets, pass), each over the same
+  state features plus that type's action features. State: trains left (mine, fewest
+  opponent's), final round, hand size, incomplete tickets, trains to finish them,
+  tickets that can no longer be finished, route-point margin. Claim / pay: route
+  points and length, on the cheapest path of one of my tickets, those tickets'
+  points, completes a ticket, triggers the end (pay adds Locomotives spent and
+  cards other path routes still need). Draws: color needed by my paths, second draw,
+  a useful face-up card on offer. Ticket choice: count, points, trains to finish,
+  fits the uncommitted trains, unreachable, opening choice, points lost if kept on
+  the last turn. All from the acting seat's view.
 - **Why linear rather than tabular for tier A:** tabular methods are only feasible on a
   tiny map, and there is none. Linear features keep the same update rules and the same
   Q-learning vs. SARSA comparison on the full map.

@@ -34,12 +34,19 @@ from ttr.scoring import connected
 INF = float("inf")
 
 
+_ADJACENCY: Dict[int, Tuple[Board, Dict[str, List[Route]]]] = {}
+
+
 def _adjacency(board: Board) -> Dict[str, List[Route]]:
-    adj: Dict[str, List[Route]] = defaultdict(list)
-    for r in board.routes:
-        adj[r.a].append(r)
-        adj[r.b].append(r)
-    return adj
+    """City -> routes touching it, built once per board object."""
+    hit = _ADJACENCY.get(id(board))
+    if hit is None or hit[0] is not board:
+        adj: Dict[str, List[Route]] = defaultdict(list)
+        for r in board.routes:
+            adj[r.a].append(r)
+            adj[r.b].append(r)
+        hit = _ADJACENCY[id(board)] = (board, adj)
+    return hit[1]
 
 
 def cheapest_path(game: Game, p: int, a: str, b: str) -> Tuple[float, List[int]]:

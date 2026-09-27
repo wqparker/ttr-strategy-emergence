@@ -16,6 +16,8 @@ dependencies = [
 ttr-sim = "ttr.simulate:main"
 ttr-view = "ttr.viz.app:main"
 ttr-shot = "ttr.viz.screenshot:main"
+# Needs the [env] extra (numpy)
+ttr-train-linear = "ttr.learn.linear:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
