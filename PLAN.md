@@ -69,7 +69,7 @@ for 2 players).
 
 ## Current progress
 
-*Updated at the end of each session. Last updated: 2026-09-26.*
+*Updated at the end of each session. Last updated: 2026-09-27.*
 
 - **Earlier: engine ready, and every RL design question settled.**
   - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view,
