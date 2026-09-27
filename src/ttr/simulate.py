@@ -7,7 +7,9 @@
 
 (or `python -m ttr.simulate ...`, which is the same entry point)
 
-Seats are rotated across games (§9 #8) so first-player advantage averages out.
+Each game deals the agents into seats in a random order and starts at a random
+seat (§9 #8), so every order of play between the agents comes up and
+first-player advantage averages out.
 """
 
 from __future__ import annotations
@@ -37,6 +39,16 @@ AGENTS: Dict[str, Callable[[int], Agent]] = {
 }
 
 
+def seating(num_agents: int, seed: int, game: int = 0) -> List[int]:
+    """Which agent slot (position in --agents) sits in each seat for one game:
+    a random permutation, fixed by the batch seed and the game's number. Play
+    then goes around the seats from a random first seat, so any agent can end
+    up following any other."""
+    slots = list(range(num_agents))
+    random.Random(seed * 100_003 + game).shuffle(slots)
+    return slots
+
+
 def play_game(
     game: Game,
     agents: Sequence[Agent],
@@ -59,11 +71,11 @@ def play_game(
 
 def _save_record(
     record_dir: Optional[Path], game: Game, actions: List[Action], agents: Sequence[str],
-    seed: int, board: str, name: str,
+    seed: int, board: str, name: str, slots: Optional[Sequence[int]] = None,
 ) -> None:
     if record_dir is None:
         return
-    GameRecord.from_game(game, actions, agents=agents, board=board, seed=seed).save(
+    GameRecord.from_game(game, actions, agents=agents, board=board, seed=seed, slots=slots).save(
         record_dir / f"{name}.json"
     )
 
@@ -96,20 +108,18 @@ def run_matches(
     turns: List[int] = []
     truncated = 0
     for g in range(games):
-        # Rotate seats: agent slot i sits in seat (i + g) % n and seat 0 goes first.
-        seat_of = [(i + g) % n for i in range(n)]
-        agents_by_seat: List[Optional[Agent]] = [None] * n
-        names_by_seat: List[str] = [""] * n
-        for slot, seat in enumerate(seat_of):
-            agents_by_seat[seat] = AGENTS[agent_names[slot]](seed * 1000 + g * 10 + slot)
-            names_by_seat[seat] = agent_names[slot]
+        # Random seats and a random first seat (drawn from the game's seed).
+        slot_of = seating(n, seed, g)  # agent slot by seat
+        seat_of = [slot_of.index(slot) for slot in range(n)]
+        agents_by_seat = [AGENTS[agent_names[slot]](seed * 1000 + g * 10 + slot) for slot in slot_of]
+        names_by_seat = [agent_names[slot] for slot in slot_of]
         game_seed = seed * 100000 + g
-        game = Game(board, num_players=n, seed=game_seed, first_player=0, max_turns=max_turns)
+        game = Game(board, num_players=n, seed=game_seed, max_turns=max_turns)
         actions: List[Action] = []
         result = play_game(game, agents_by_seat, actions_out=actions if record_dir else None)
         _save_record(
             record_dir, game, actions, names_by_seat, game_seed,
-            board_ref or board.name, f"seed{seed}_game{g:04d}",
+            board_ref or board.name, f"seed{seed}_game{g:04d}", slots=slot_of,
         )
         turns.append(game.turn)
         truncated += result.truncated
@@ -150,8 +160,10 @@ def _summary_table(agent_names: Sequence[str], summary: Dict[str, object]) -> Ta
 def show_game(console: Console, board: Board, args: argparse.Namespace) -> None:
     """Play one game, printing each turn as a text log or as the ASCII board view."""
     n = len(args.agents)
-    agents = [AGENTS[name](args.seed + i) for i, name in enumerate(args.agents)]
-    game = Game(board, num_players=n, seed=args.seed, first_player=0, max_turns=args.max_turns)
+    slot_of = seating(n, args.seed)
+    names = [args.agents[slot] for slot in slot_of]
+    agents = [AGENTS[args.agents[slot]](args.seed + slot) for slot in slot_of]
+    game = Game(board, num_players=n, seed=args.seed, max_turns=args.max_turns)
     seen = [0]  # log entries already shown
     last_turn = [-1]
 
@@ -164,7 +176,7 @@ def show_game(console: Console, board: Board, args: argparse.Namespace) -> None:
         if args.show == "board":
             if args.step or args.delay:
                 console.clear()
-            console.print(render_board_view(g, names=args.agents, recent=lines, width=console.width))
+            console.print(render_board_view(g, names=names, recent=lines, width=console.width))
         else:
             console.rule(" · ".join(lines) or f"turn {g.turn}")
             console.print(render_game(g))
@@ -176,10 +188,11 @@ def show_game(console: Console, board: Board, args: argparse.Namespace) -> None:
     frame(game)  # starting position
     actions: List[Action] = []
     result = play_game(game, agents, on_step=frame, actions_out=actions)
-    _save_record(args.record, game, actions, args.agents, args.seed, args.board, f"seed{args.seed}_show")
+    _save_record(args.record, game, actions, names, args.seed, args.board, f"seed{args.seed}_show",
+                 slots=slot_of)
     if args.show == "log":
         console.print(render_routes(game))
-    console.print(render_result(result, names=args.agents))
+    console.print(render_result(result, names=names))
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

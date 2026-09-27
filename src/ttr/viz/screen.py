@@ -75,9 +75,12 @@ class Screen:
         names: Optional[Sequence[str]] = None,
         perspective: Optional[Perspective] = None,
         layout: Optional[BoardLayout] = None,
+        slots: Optional[Sequence[int]] = None,
     ) -> None:
         self.board = board
         self.names = list(names) if names else None
+        # Agent slot by seat: colors follow the agent (theme.seat_colors).
+        self.slots = list(slots) if slots is not None else None
         self.perspective = perspective or Perspective()
         self.board_view = BoardView(board, scale=scale, layout=layout)
         self.side_w = SIDE_W  # canvas units; `fit` widens it to fill a wide display
@@ -258,6 +261,7 @@ class Screen:
         target.fill(theme.PANEL_BG)
         marked = self.marked_seat(game, ticket_seat)
         marks: Optional[Dict[int, Mark]] = None
+        colors = theme.seat_colors(game.num_players, self.slots)
         if overlay is not None:
             draw_board_overlay(target, self.board_view, overlay, origin=self.board_origin,
                                hover_route=overlay_hover)
@@ -276,6 +280,7 @@ class Screen:
                 highlight_routes=highlight_routes,
                 highlight_cities=highlight_cities,
                 city_fill=ticket_cities,
+                seat_colors=colors,
             )
             if marks:
                 draw_ticket_markers(target, self.board_view, list(marks.values()), origin=self.board_origin)
@@ -296,7 +301,8 @@ class Screen:
             for seat, rect in self.seat_rects(game.num_players).items():
                 right = self.choices_rect.left - 12 * k if seat == 0 and choices else None
                 panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0),
-                                 markers=marks if seat == marked else None, right=right)
+                                 markers=marks if seat == marked else None, right=right,
+                                 color=colors[seat])
         if buttons:
             panels.draw_buttons(target, buttons, k=k, active=active)
         self.hits["choices"] = (
@@ -304,7 +310,7 @@ class Screen:
         )
         if result is not None:
             panels.draw_result(target, pygame.Rect(self.board_origin, self.board_view.size),
-                               result, self.names, k=k)
+                               result, self.names, k=k, colors=colors)
         return vm
 
     def marked_seat(self, game: Game, preferred: Optional[int] = None) -> Optional[int]:

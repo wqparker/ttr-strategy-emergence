@@ -261,16 +261,33 @@ def test_single_live_game_keeps_its_old_seeds():
     assert v.timeline.current.players[0].pending_tickets == old.players[0].pending_tickets
 
 
-def test_agents_rotate_seats_between_games():
-    v = series_viewer(games=3)
-    assert v.screen.names == ["greedy", "random"]
-    v.act("next_game")
-    assert v.game_no == 1 and v.screen.names == ["random", "greedy"]
-    v.act("next_game")
-    assert v.screen.names == ["greedy", "random"]
+def test_seats_are_shuffled_per_game_and_colors_follow_the_agent():
+    from ttr.simulate import seating
+    from ttr.viz import theme
+
+    v = series_viewer(games=3, agents=("greedy", "random", "greedy"))
+    for g in range(3):
+        v.show_game(g)
+        slots = seating(3, 5, g)
+        assert v.screen.slots == slots
+        assert v.screen.names == [("greedy", "random", "greedy")[s] for s in slots]
+        # The agent listed first is red wherever it sits, the second blue, ...
+        assert theme.seat_colors(3, v.screen.slots) == [theme.PLAYER[s] for s in slots]
     assert not v.next_game()  # no fourth game
     v.act("prev_game")
     assert v.game_no == 1
+
+
+def test_replay_colors_come_from_the_record(tmp_path):
+    from ttr.simulate import run_matches
+
+    run_matches(["greedy", "random"], 1, load_board("usa"), seed=2, record_dir=tmp_path, board_ref="usa")
+    path = next(tmp_path.glob("*.json"))
+    args = Namespace(record=path, overlay=None, agents=["greedy"], board="usa", seed=0, max_turns=1000,
+                     perspective="all", memory_level=2, human=None, games=1)
+    _, screen, _, _, _ = build(args)
+    assert screen.slots == GameRecord.load(path).slots
+    assert sorted(screen.slots) == [0, 1]
 
 
 def test_finished_game_hands_over_after_the_delay():

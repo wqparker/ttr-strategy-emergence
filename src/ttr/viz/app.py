@@ -147,10 +147,12 @@ def replay_timeline(record: GameRecord, board: Optional[Board] = None) -> Timeli
 
 
 class Series:
-    """Live games one after another (`--games N`). Game g uses seed + g, and the
-    agents move one seat along each game, as `ttr-sim` batches rotate them (not
-    with a human seat, which stays put). Games are built when first shown and
-    kept, so going back to an earlier game keeps its history."""
+    """Live games one after another (`--games N`; a single live game is a
+    series of one). Game g uses seed + g. Each game deals the agents into seats
+    in a random order, as `ttr-sim` batches do (`simulate.seating`), and the
+    first seat is drawn from the game's seed, so any agent can follow any other.
+    With a human seat nobody moves: the agents sit in --agents order. Games are
+    built when first shown and kept, so going back to one keeps its history."""
 
     def __init__(self, board: Board, agents: Sequence[str], count: int, seed: int = 0,
                  max_turns: Optional[int] = None, human: Sequence[int] = ()) -> None:
@@ -162,28 +164,32 @@ class Series:
         self.seed = seed
         self.max_turns = max_turns
         self.human = list(human)
-        self._games: Dict[int, Tuple[Timeline, List[str]]] = {}
+        self._games: Dict[int, Tuple[Timeline, List[str], List[int]]] = {}
+
+    def slots(self, g: int) -> List[int]:
+        """Agent slot (position in --agents) per seat in game g."""
+        from ttr.simulate import seating  # local: keeps the viewer out of the engine's import path
+
+        if self.human:
+            return list(range(len(self.agents)))
+        return seating(len(self.agents), self.seed, g)
 
     def names(self, g: int) -> List[str]:
         """Agent name per seat in game g."""
-        n = len(self.agents)
-        if self.human:
-            return list(self.agents)
-        by_seat = [""] * n
-        for slot, name in enumerate(self.agents):
-            by_seat[(slot + g) % n] = name
-        return by_seat
+        return [self.agents[slot] for slot in self.slots(g)]
 
-    def game(self, g: int) -> Tuple[Timeline, List[str]]:
-        """Game g's timeline and its seat names (human seats named "human")."""
+    def game(self, g: int) -> Tuple[Timeline, List[str], List[int]]:
+        """Game g's timeline, its seat names (human seats named "human") and
+        its agent slot per seat (for colors)."""
         if g not in self._games:
-            from ttr.simulate import AGENTS  # local: keeps the viewer out of the engine's import path
+            from ttr.simulate import AGENTS
 
-            names = self.names(g)
-            agents = [AGENTS[name](self.seed + g * 10 + seat) for seat, name in enumerate(names)]
+            slots = self.slots(g)
+            names = [self.agents[slot] for slot in slots]
+            agents = [AGENTS[self.agents[slot]](self.seed + g * 10 + slot) for slot in slots]
             game = Game(self.board, num_players=len(names), seed=self.seed + g, max_turns=self.max_turns)
             shown = [("human" if seat in self.human else name) for seat, name in enumerate(names)]
-            self._games[g] = (live_timeline(game, agents, self.human), shown)
+            self._games[g] = (live_timeline(game, agents, self.human), shown, slots)
         return self._games[g]
 
 
@@ -401,7 +407,7 @@ class Viewer:
         if self.series is None or not 0 <= g < self.series.count:
             return False
         self.game_no = g
-        self.timeline, self.screen.names = self.series.game(g)
+        self.timeline, self.screen.names, self.screen.slots = self.series.game(g)
         self.hover = None
         self._advance_at = None
         self.human.reset()
@@ -651,15 +657,16 @@ def build(args: argparse.Namespace
         record = GameRecord.load(record_path)
         timeline = replay_timeline(record)
         names = record.agents
+        slots = record.slots
         board = timeline.current.board
         human = []  # a replay is fixed; nothing to play
     else:
         board = load_board(args.board)
-        # A single live game is game 0 of a one-game series: same seeds as before.
+        # A single live game is game 0 of a one-game series.
         live = Series(board, args.agents, games, seed=args.seed, max_turns=args.max_turns, human=human)
-        timeline, names = live.game(0)
+        timeline, names, slots = live.game(0)
         series = live if games > 1 else None
-    screen = Screen(board, names=names,
+    screen = Screen(board, names=names, slots=slots,
                     perspective=Perspective(parse_viewer(args.perspective), args.memory_level))
     return timeline, screen, HumanControl(human), summary, series
 

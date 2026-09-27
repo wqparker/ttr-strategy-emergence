@@ -130,7 +130,7 @@ in `PLAN.md`.
 | 5 | The destination ticket deck is empty. | Action C is **illegal**. |
 | 6 | Must a player still keep at least 1 ticket when fewer than 3 are drawn? | **Yes, keep at least 1.** |
 | 7 | Choosing which starting tickets to keep: in turn order or simultaneously? | **Simultaneous.** All players are dealt 3 tickets at once from the single shuffled 30-ticket deck. Dealing is without replacement, so each ticket exists only once across hands and deck. Each player chooses without seeing the others' choices, and returned tickets go to the **bottom** of the ticket deck (as the PDF says) only after everyone has chosen. For the environment, this is modeled as a setup step per player before turn 1. |
-| 8 | Who goes first? ("the most experienced traveler") | **Random seat**, fixed by the game's seed. In evaluation games the first seat **rotates** to remove first-player bias. |
+| 8 | Who goes first? ("the most experienced traveler") | **Random seat**, fixed by the game's seed. In batches (`ttr-sim`, `ttr-view --games`) the agents are also dealt into seats in a **random order** each game, so every order of play between agents comes up and first-player advantage averages out. Play then proceeds in seat order from the first seat (§3). |
 | 9 | Claiming with only Locomotives. | **Allowed.** |
 | 10 | Claiming a route longer than the player's remaining trains. | **Illegal.** |
 | 11 | Must a player choose an action if no legal action exists? | This can't happen in practice, but if it does, the player **passes**. |

@@ -31,7 +31,7 @@ ttr-view [--record FILE] [--agents NAME ...] [--human SEAT] [--board usa|toy]
 | `--overlay DIR` | — | color routes by statistics over the records in `DIR` (see below) |
 | `--fullscreen` | off | start full screen at the display's resolution (`F11` toggles) |
 | `--seed N` | random | live: fix the game; the seed used is printed at start and shown in the legend and title |
-| `--games N` | `1` | live: N games in a row; seeds `--seed`, `+1`, …; agents rotate seats |
+| `--games N` | `1` | live: N games in a row; seeds `--seed`, `+1`, …; agents take random seats each game |
 | `--advance S` | `5` | with `--games`: seconds the final scoreboard stays up before the next game |
 
 **Keys** (the first six are also buttons, bottom-left; the legend is top-left):
@@ -39,6 +39,11 @@ ttr-view [--record FILE] [--agents NAME ...] [--human SEAT] [--board usa|toy]
 | `space` | `.` `,` | `]` `[` | `v` | `end` `home` | `esc` | `F11` |
 | --- | --- | --- | --- | --- | --- | --- |
 | play / pause | step fwd / back | faster / slower | perspective | jump to end / start | quit | full screen |
+
+**Seats and colors:** live games deal the agents into random seats and start at a random seat
+(a `--human` game keeps `--agents` order). Colors follow the agent, not the seat: the first
+agent in `--agents` is red wherever it sits, then blue, green, yellow, black — on its trains,
+panel swatch and the scoreboard. Replays of `ttr-sim` records use the same colors.
 
 **Ticket markers:** one seat's open tickets are drawn on the map as a shape beside both of each
 ticket's cities, with the same shape leading the ticket in that seat's panel. The marked seat is
@@ -57,7 +62,7 @@ the `--perspective` seat, else the `--human` seat, else P0. Hidden while an over
 when a game ends its scoreboard stays up for `--advance` seconds, then the next game starts.
 `n` / `p` jump to the next / previous game (a revisited game is as you left it); pausing on the
 scoreboard holds it, and `space` there moves on. The legend shows `game 2/5`. A `--human` seat
-stays in place instead of rotating. Live games only, not `--record` or `--overlay`.
+keeps its seat and the agents keep theirs. Live games only, not `--record` or `--overlay`.
 
 Full screen scales the viewer to the display's height and widens the side panels to fill the
 width (1920x1080: scale 1.07, no bars).
@@ -148,7 +153,7 @@ ttr-sim [--agents {greedy,random} ...] [--games N] [--board usa|toy] [--seed N]
 | `ttr-sim --show board --step` | one game, ASCII map, Enter between turns |
 | `ttr-sim --games 20 --record runs/records` | save replayable games |
 
-Seats rotate across games so first-player advantage averages out. The seed is printed at the
+Each game deals the agents into random seats and starts at a random seat, so every order of play comes up and first-player advantage averages out. The seed is printed at the
 start of every run; `--seed N` replays that batch exactly. A record is a seed plus a list of
 actions, so `ttr-view --record` and `ttr-shot --record` reproduce the game exactly. A folder of
 records feeds `--overlay`; from Python, `ttr.analysis.analyze(DIR).rows()` gives the same

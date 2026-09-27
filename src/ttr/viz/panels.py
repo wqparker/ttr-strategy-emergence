@@ -281,12 +281,14 @@ def draw_seat(
     wide: bool = False,
     markers: Optional[Dict[int, Mark]] = None,
     right: Optional[float] = None,
+    color: Optional[theme.RGB] = None,
 ) -> None:
     """One seat's box. `wide` is the full-width bottom panel; otherwise a side
     panel column. `markers` (ticket id -> Mark) leads each ticket with its map
     marker, for the seat whose tickets are marked on the board. `right` keeps a
-    wide panel's content left of that x (a human's move chips sit past it)."""
-    accent = theme.seat_color(facts.seat)
+    wide panel's content left of that x (a human's move chips sit past it).
+    `color` is the seat's train color (default: by seat)."""
+    accent = color or theme.seat_color(facts.seat)
     _box(s, rect, theme.PANEL_SLOT, theme.HIGHLIGHT if facts.to_act else theme.PANEL_EDGE)
     pad = 9 * k
     x, y = rect.left + pad, rect.top + pad
@@ -548,7 +550,8 @@ def completion_pct(completed: int, held: int) -> str:
     return f"{100 * completed / held:.0f}%" if held else "–"
 
 
-def draw_result(s: pygame.Surface, area: pygame.Rect, result, names=None, k: float = 1.0) -> None:
+def draw_result(s: pygame.Surface, area: pygame.Rect, result, names=None, k: float = 1.0,
+                colors: Optional[Sequence[theme.RGB]] = None) -> None:
     """The final scoreboard, over the board: winner first, then every seat's
     points. The columns follow render.render_result in the terminal, except that
     tickets completed show as a share of the tickets held, not done/failed."""
@@ -570,7 +573,8 @@ def draw_result(s: pygame.Surface, area: pygame.Rect, result, names=None, k: flo
     for seat, r in enumerate(result.players):
         y = top + 16 * k + seat * 26 * k
         swatch = pygame.Rect(round(left), round(y + 3 * k), round(10 * k), round(10 * k))
-        pygame.draw.rect(s, theme.seat_color(seat), swatch, border_radius=max(1, round(2 * k)))
+        fill = colors[seat] if colors else theme.seat_color(seat)
+        pygame.draw.rect(s, fill, swatch, border_radius=max(1, round(2 * k)))
         pygame.draw.rect(s, theme.PANEL_DIM, swatch, max(1, round(k)), border_radius=max(1, round(2 * k)))
         label = f"P{seat}" + (f" {names[seat]}" if names and names[seat] else "")
         text(s, label, (left + 15 * k, y), 12 * k, theme.PANEL_TEXT, bold=seat in result.winners)

@@ -283,11 +283,20 @@ Noticed while using the viewer; none of them blocks Phase 4.
   for that case: a longest-path / ticket-progress summary, the last few actions in full
   rather than the one-line ticker, or a larger hand and ticket display.
 - **Several live games in a row.** *(Done.)* `ttr-view --games N` (`Series` in
-  `viz/app.py`): game g uses seed + g with agents rotated one seat per game, as `ttr-sim`
-  batches do (a human seat stays put); the scoreboard stays up `--advance` seconds, then
-  the next game starts; `n` / `p` move between games, each kept as left. `--games 1` is
-  the old single game with the same seeds. Still open: `--record DIR` to replay a folder
-  of saved games the same way.
+  `viz/app.py`): game g uses seed + g with the agents dealt into random seats, as `ttr-sim`
+  batches do (with a human seat nobody moves); the scoreboard stays up `--advance`
+  seconds, then the next game starts; `n` / `p` move between games, each kept as left.
+  Still open: `--record DIR` to replay a folder of saved games the same way.
+- **Random seating, and colors that follow the agent.** *(Done.)* `simulate.seating`
+  deals the agents into a random seat order per game (seeded by batch seed and game
+  number) and the first seat is drawn from the game's seed, for `ttr-sim` batches,
+  `ttr-sim --show` and `ttr-view` live games. Rotation only ever produced the cyclic
+  orders (with 3 agents, A→B→C but never A→C→B); now every order comes up. A seat's
+  color is its agent's position in `--agents` (first red, then blue, green, yellow,
+  black) on its trains, panel and scoreboard, wherever it sits; records store the
+  seating (`slots`). Records also store `first_player_drawn`: drawing the first seat
+  uses one random number before the shuffle, so a replay has to draw it again rather
+  than pass the seat in. Older records lack both fields and replay as before.
 - **Ticket markers on the map.** *(Done.)* One seat's open tickets (the viewed seat, else
   the human seat, else P0) get a (shape, color) pair each, drawn beside both cities and
   leading the ticket in the panel (`viz/tickets.py`). The five base pairs (pink moon,

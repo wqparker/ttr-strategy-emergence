@@ -64,6 +64,30 @@ def test_unclaimed_and_claimed_routes_drawn():
     assert close(seen.most_common(1)[0][0], theme.PLAYER[0]), seen.most_common(3)
 
 
+def test_claims_take_their_agents_color():
+    """With seat colors given (agent slot by seat), P0's trains are drawn in its
+    agent's color, not seat 0's."""
+    game = started_game(seed=4)
+    rid = route_id(game, "Seattle", "Helena")
+    set_hand(game, 0, yellow=6)
+    game.step(ClaimRoute(rid))
+    game.step(Pay(Color.YELLOW, 0))
+    view = BoardView(game.board)
+    colors = theme.seat_colors(2, slots=[1, 0])  # the second agent sits in seat 0
+    assert colors == [theme.PLAYER[1], theme.PLAYER[0]]
+    surface = view.render(game, seat_colors=colors)
+    seen = car_colors(surface, view, view.layout.routes[rid].cars[2])
+    total = sum(seen.values())
+    share = lambda rgb: sum(n for c, n in seen.items() if close(c, rgb)) / total  # noqa: E731
+    # Shares, not the top color: on blue the white track pattern covers much of the car.
+    assert share(theme.PLAYER[1]) > 0.2 and share(theme.PLAYER[0]) < 0.05, seen.most_common(3)
+
+
+def test_seat_colors_without_slots_follow_the_seat():
+    assert theme.seat_colors(3) == list(theme.PLAYER[:3])
+    assert theme.seat_colors(3, slots=[0, 1]) == list(theme.PLAYER[:3])  # wrong length: ignored
+
+
 @pytest.mark.parametrize("pattern", ["plain", "track", "bars", "diagonal", "cross"])
 def test_claimed_cars_are_patterned(pattern, monkeypatch):
     """A claimed space carries a contrasting pattern, so it never reads as an

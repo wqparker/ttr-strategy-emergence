@@ -86,6 +86,13 @@ class GameRecord:
     # Summary of the recorded outcome; replay checks it to catch engine changes
     # that would make an old record replay differently.
     result: Optional[Dict[str, Any]] = None
+    # Each seat's agent slot (its place in --agents), for display: the viewer
+    # colors an agent by slot. None in records made before seats were shuffled.
+    slots: Optional[List[int]] = None
+    # The game drew its own first seat from the seed (Game(first_player=None)).
+    # That draw comes before the shuffle, so replay has to repeat it. False in
+    # records made when batches always fixed the first seat.
+    first_player_drawn: bool = False
 
     @classmethod
     def from_game(
@@ -95,6 +102,7 @@ class GameRecord:
         agents: Sequence[str] = (),
         board: Optional[str] = None,
         seed: Optional[int] = None,
+        slots: Optional[Sequence[int]] = None,
     ) -> "GameRecord":
         """Record a game played from a fresh Game. `seed` must be the seed the
         game was created with (the Game doesn't keep it)."""
@@ -109,18 +117,23 @@ class GameRecord:
             actions=list(actions),
             agents=list(agents),
             result=_summarize(game) if game.game_over else None,
+            slots=list(slots) if slots is not None else None,
+            first_player_drawn=game.first_player_drawn,
         )
 
     # --------------------------------------------------------------- replay
 
     def new_game(self, board: Optional[Board] = None) -> Game:
-        return Game(
+        game = Game(
             board if board is not None else load_board(self.board),
             num_players=self.num_players,
             seed=self.seed,
-            first_player=self.first_player,
+            first_player=None if self.first_player_drawn else self.first_player,
             max_turns=self.max_turns,
         )
+        if game.first_player != self.first_player:
+            raise RecordError("replay drew a different first seat; the record may predate an engine change")
+        return game
 
     def replay(self, board: Optional[Board] = None) -> Game:
         """The final state, after every recorded action."""
@@ -157,8 +170,10 @@ class GameRecord:
             "num_players": self.num_players,
             "seed": self.seed,
             "first_player": self.first_player,
+            "first_player_drawn": self.first_player_drawn,
             "max_turns": self.max_turns,
             "agents": self.agents,
+            "slots": self.slots,
             "result": self.result,
             "actions": [action_to_dict(a) for a in self.actions],
         }
@@ -178,6 +193,8 @@ class GameRecord:
             actions=[action_from_dict(a) for a in d["actions"]],
             agents=list(d.get("agents", [])),
             result=d.get("result"),
+            slots=d.get("slots"),
+            first_player_drawn=bool(d.get("first_player_drawn", False)),
         )
 
     def save(self, path: Union[str, Path]) -> Path:

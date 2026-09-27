@@ -10,7 +10,7 @@ drawn at the display scale (text is already anti-aliased).
 from __future__ import annotations
 
 import math
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import pygame
 
@@ -63,14 +63,20 @@ class BoardView:
         highlight_routes: Iterable[int] = (),
         highlight_cities: Iterable[str] = (),
         city_fill: Optional[Dict[str, theme.RGB]] = None,
+        seat_colors: Optional[Sequence[theme.RGB]] = None,
     ) -> None:
         """Draw the board onto `target` at `origin`. `route_tint` recolors routes
         (analysis overlays); highlights outline routes and ring cities;
-        `city_fill` recolors city dots (the marked seat's ticket cities)."""
+        `city_fill` recolors city dots (the marked seat's ticket cities);
+        `seat_colors` colors each seat's trains (default: by seat)."""
         if self._static is None:
             self._static = self._supersampled(self._paint_static, alpha=False)
             self._labels = self._render_labels()
-        owners = tuple(sorted(game.route_owner.items())) if game is not None else ()
+        if game is not None:
+            colors = tuple(seat_colors) if seat_colors else tuple(theme.seat_colors(game.num_players))
+            owners = tuple(sorted((rid, colors[seat]) for rid, seat in game.route_owner.items()))
+        else:
+            owners = ()
         key = (
             owners,
             tuple(sorted(route_tint.items())) if route_tint else (),
@@ -178,8 +184,7 @@ class BoardView:
         for rid, color in tint:
             for car in self.layout.routes[rid].cars:
                 _car(s, car, k, color, theme.darker(color, 0.5))
-        for rid, owner in owners:
-            color = theme.seat_color(owner)
+        for rid, color in owners:  # each claim with its owner's color
             for car in self.layout.routes[rid].cars:
                 _train(s, car, k, color)
         for city, fill in city_fill:  # over any train that reaches the dot

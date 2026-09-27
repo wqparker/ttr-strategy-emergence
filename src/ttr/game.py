@@ -127,10 +127,13 @@ class Game:
         self.consecutive_passes = 0
         self.result: Optional[GameResult] = None
 
-        # §9 #8: random first seat unless the caller fixes it (evaluation rotates it).
+        # §9 #8: random first seat unless the caller fixes it.
         self.first_player = (
             first_player if first_player is not None else self.rng.randrange(num_players)
         )
+        # Drawing the first seat uses one random number before the shuffle, so a
+        # replay must draw it again rather than pass it in (record.py).
+        self.first_player_drawn = first_player is None
         self._setup()
 
     # ------------------------------------------------------------------ setup

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import pygame
 
@@ -24,7 +24,8 @@ CARD: Dict[Optional[Color], RGB] = {
     Color.LOCOMOTIVE: (160, 160, 160),  # drawn as a rainbow stripe where it matters
 }
 
-# Plastic train colors, by seat.
+# Plastic train colors, in order: by agent slot (position in --agents) when the
+# seating is known, else by seat.
 PLAYER: Tuple[RGB, ...] = (
     (200, 30, 30),    # red
     (30, 90, 200),    # blue
@@ -82,6 +83,15 @@ def chip_text(c: RGB) -> RGB:
 def seat_color(seat: int) -> RGB:
     """The seat's train color, wrapping if a board ever seats more than five."""
     return PLAYER[seat % len(PLAYER)]
+
+
+def seat_colors(num_players: int, slots: Optional[Sequence[int]] = None) -> List[RGB]:
+    """Each seat's color. With `slots` (agent slot by seat) the color follows the
+    agent: the first agent in --agents is red wherever it sits, the second blue,
+    and so on. Without, seat order."""
+    if slots is None or len(slots) != num_players:
+        return [seat_color(s) for s in range(num_players)]
+    return [PLAYER[slot % len(PLAYER)] for slot in slots]
 
 
 # ------------------------------------------------------------------- fonts
