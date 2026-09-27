@@ -19,7 +19,18 @@ venv/
 .ipynb_checkpoints/
 
 # Training outputs
-runs/
+runs/*
+# Linear-agent training runs (weights, per-game rows, evaluations) are kept, so
+# analysis and best checkpoints travel with the repo. Dashboard PNGs and empty
+# error logs are regenerable; the pre-pass-1 runs (v0, v1) are obsolete.
+!runs/linear/
+runs/linear/*
+!runs/linear/pass1/
+!runs/linear/pass2/
+!runs/linear/pass3/
+runs/linear/pass*/dash/
+runs/linear/pass*/*.err
+runs/linear/pass*/*.tmp
 checkpoints/
 models/
 wandb/

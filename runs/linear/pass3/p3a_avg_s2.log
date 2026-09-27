@@ -1,0 +1,14 @@
+training q vs random: 2000 games, alpha 0.02, epsilon 0.2 -> 0.02, reward margin; average 100
+(best checkpoint kept by margin vs greedy; play it as linear:runs\linear\pass3\p3a_avg_s2.json@best)
+live: runs\linear\pass3\p3a_avg_s2.json rewritten every 25 games (watch with ttr-dash --live runs\linear\pass3\p3a_avg_s2.json)
+   200 games  eps 0.164  train win 0.74 margin  +31.7  |td| 0.027  eval vs random win 0.85 (+48.7)  vs greedy win 0.00 (-140.3)  [30s]
+   400 games  eps 0.128  train win 0.99 margin +101.7  |td| 0.021  eval vs random win 1.00 (+127.5)  vs greedy win 0.00 (-58.2)  [92s]
+   600 games  eps 0.092  train win 0.99 margin +119.9  |td| 0.018  eval vs random win 1.00 (+123.8)  vs greedy win 0.00 (-57.3)  [151s]
+   800 games  eps 0.056  train win 0.69 margin   +3.7  |td| 0.028  eval vs random win 0.00 (-285.4)  vs greedy win 0.00 (-381.1)  [216s]
+  1000 games  eps 0.020  train win 0.63 margin  +21.2  |td| 0.034  eval vs random win 0.97 (+92.2)  vs greedy win 0.00 (-97.5)  [313s]
+  1200 games  eps 0.020  train win 0.97 margin  +97.5  |td| 0.027  eval vs random win 0.99 (+98.9)  vs greedy win 0.17 (-34.0)  [347s]
+  1400 games  eps 0.020  train win 1.00 margin +131.6  |td| 0.024  eval vs random win 1.00 (+123.1)  vs greedy win 0.21 (-35.4)  [388s]
+  1600 games  eps 0.020  train win 1.00 margin +139.7  |td| 0.017  eval vs random win 1.00 (+143.1)  vs greedy win 0.29 (-17.3)  [431s]
+  1800 games  eps 0.020  train win 1.00 margin +131.4  |td| 0.014  eval vs random win 1.00 (+133.0)  vs greedy win 0.08 (-41.4)  [479s]
+  2000 games  eps 0.020  train win 1.00 margin +126.4  |td| 0.014  eval vs random win 1.00 (+125.8)  vs greedy win 0.12 (-34.3)  [520s]
+saved runs\linear\pass3\p3a_avg_s2.json  (ttr-dash runs\linear\pass3\p3a_avg_s2.json to analyze)

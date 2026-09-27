@@ -281,9 +281,27 @@ for 2 players).
   - Found while building it: a game is about 85–100 of the learner's decisions, so
     traces need λ ≈ 0.97–0.99 to carry the final score back to the opening
     (0.9^100 ≈ 3·10⁻⁵, 0.99^100 ≈ 0.37); λ 0.8–0.9 would not reach it.
-- **Next:** run the third-pass ladder (COMMANDS.md "Live view while training"): average
-  → + λ 0.98 → + shaping → + self-play, 3 seeds each, against the pass-2 `q_random`
-  reference. DQN / PPO (needs PyTorch) after tier A settles. The race-to-the-end
+  - Third-pass ladder run (2026-09-27; `runs/linear/pass3/`, now in the repo with
+    pass 1 and 2). Raw numbers, analysis not finished. Against greedy, each seed's
+    last 5 evaluations, mean over 3 seeds (pass-2 `q_random` reference: −35, 10% wins,
+    within-run sd 7.7):
+
+    | Setting | Margin (seeds) | Win | Within-run sd | Tickets done / failed | Claims × length |
+    | --- | --- | --- | --- | --- | --- |
+    | p3a avg (α 0.02, average 100) | −57 (−72, −66, −33) | 10% | 20.7 | 0.10 / 2.56 | 14.7 × 3.4 |
+    | p3b + λ 0.98 | −164 (−174, −146, −172) | 0% | 14.0 | 0.00 / 3.78 | 0.2 × 0.5 |
+    | p3c + shaping 1 | −98 (−100, −95, −101) | 2% | 23.7 | 0.15 / 2.71 | 6.6 × 4.3 |
+    | p3d + self-play | −125 (−137, −96, −141) | 1% | 20.0 | 0.02 / 2.04 | 4.6 × 1.8 |
+
+    First reading: every setting is worse than pass 2, and λ 0.98 collapsed — the
+    agent almost stops claiming (0.2 claims a game, route points 3). Shaping recovers
+    part of it; its curve was still rising at 2000 games (−142 → −79). Best
+    checkpoints: p3a −50/−19/−17; p3d s1 −44. To check next: whether λ's collapse is
+    the step scaling ((1 − λ) with accumulating traces) or credit reaching the wrong
+    actions; λ 0.98 with a larger α; and whether α 0.02 alone (p3a) is simply slower
+    than pass 2's 0.05.
+- **Next:** finish the pass-3 analysis (re-score best and final weights on fresh
+  games, per-seed curves), then the next ladder. DQN / PPO (needs PyTorch) after tier A settles. The race-to-the-end
   strategy is a finding for the tempo question either way.
 
 ## Roadmap

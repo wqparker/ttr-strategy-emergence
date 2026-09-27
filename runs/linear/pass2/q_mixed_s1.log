@@ -1,0 +1,13 @@
+(best checkpoint kept by margin vs greedy; play it as linear:runs\linear\pass2\q_mixed_s1.json@best)
+training q vs mixed: 2000 games, alpha 0.05, epsilon 0.2 -> 0.02, reward margin
+   200 games  eps 0.164  train win 0.46 margin  -10.6  |td| 0.030  eval vs random win 0.99 (+125.3)  vs greedy win 0.04 (-69.9)  [16s]
+   400 games  eps 0.128  train win 0.53 margin  +18.5  |td| 0.028  eval vs random win 1.00 (+142.1)  vs greedy win 0.32 (-19.2)  [42s]
+   600 games  eps 0.092  train win 0.51 margin  +10.2  |td| 0.032  eval vs random win 0.98 (+107.0)  vs greedy win 0.00 (-84.7)  [72s]
+   800 games  eps 0.056  train win 0.47 margin   +0.6  |td| 0.032  eval vs random win 0.99 (+105.6)  vs greedy win 0.00 (-99.5)  [100s]
+  1000 games  eps 0.020  train win 0.52 margin  +18.1  |td| 0.034  eval vs random win 0.99 (+104.7)  vs greedy win 0.00 (-60.6)  [133s]
+  1200 games  eps 0.020  train win 0.47 margin  +12.2  |td| 0.037  eval vs random win 1.00 (+116.2)  vs greedy win 0.00 (-96.4)  [168s]
+  1400 games  eps 0.020  train win 0.49 margin  +14.8  |td| 0.036  eval vs random win 1.00 (+107.0)  vs greedy win 0.01 (-61.4)  [202s]
+  1600 games  eps 0.020  train win 0.45 margin   -4.0  |td| 0.038  eval vs random win 0.99 (+116.6)  vs greedy win 0.00 (-93.9)  [238s]
+  1800 games  eps 0.020  train win 0.47 margin   +5.6  |td| 0.036  eval vs random win 1.00 (+100.9)  vs greedy win 0.00 (-79.0)  [271s]
+  2000 games  eps 0.020  train win 0.56 margin  +36.4  |td| 0.039  eval vs random win 0.91 (+74.3)  vs greedy win 0.00 (-85.1)  [308s]
+saved runs\linear\pass2\q_mixed_s1.json  (ttr-dash runs\linear\pass2\q_mixed_s1.json to analyze)
