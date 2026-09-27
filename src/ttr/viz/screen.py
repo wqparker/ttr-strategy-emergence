@@ -294,8 +294,9 @@ class Screen:
                 draw_player_panel(target, rect, overlay.players.get(seat), seat, k=k, wide=(seat == 0))
         else:
             for seat, rect in self.seat_rects(game.num_players).items():
-                panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0), codes=self.codes,
-                                 markers=marks if seat == marked else None)
+                right = self.choices_rect.left - 12 * k if seat == 0 and choices else None
+                panels.draw_seat(target, rect, vm.seats[seat], k=k, wide=(seat == 0),
+                                 markers=marks if seat == marked else None, right=right)
         if buttons:
             panels.draw_buttons(target, buttons, k=k, active=active)
         self.hits["choices"] = (

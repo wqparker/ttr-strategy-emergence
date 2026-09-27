@@ -292,10 +292,13 @@ Noticed while using the viewer; none of them blocks Phase 4.
   Cities on marked tickets have their dots turned yellow (`BoardView.draw(city_fill=)`).
   Assignment is rebuilt from the game log; for that the engine now logs each player's
   initial ticket deal (`deal_initial_tickets`, private), as it already did later draws.
-- **Better ticket display.** Tickets are city codes plus points (`MTL–ATL 9`). Either
-  write the full city names, or draw them as small ticket cards with the route drawn on
-  them — closer to the physical card, and easier to read at a glance. Points are the
-  weakest part of the current row: they look like a card count.
+- **Better ticket display.** *(Partly done.)* Seat panels write full city names
+  (`Montreal – New Orleans 13`); P0's wide panel lists tickets in columns of three rows,
+  each as wide as its longest line, narrowing (smaller type, then an ellipsis) only when
+  the columns would pass the panel's edge or a human's move chips. Side panels fit each
+  line to the panel width the same way. Completed tickets get a drawn check mark (the
+  panel font has no ✓ glyph). Still open: small ticket cards with the route drawn on
+  them, and points that don't read as a card count.
 - **End-of-game results popup.** *(Done, milestone 6.)* `panels.draw_result` overlays the
   scoreboard on the board: winner, then every seat's route points, ticket points with
   completed/failed counts, longest path, bonus and total.

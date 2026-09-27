@@ -279,12 +279,13 @@ def draw_seat(
     facts: SeatFacts,
     k: float = 1.0,
     wide: bool = False,
-    codes: Optional[Dict[str, str]] = None,
     markers: Optional[Dict[int, Mark]] = None,
+    right: Optional[float] = None,
 ) -> None:
     """One seat's box. `wide` is the full-width bottom panel; otherwise a side
     panel column. `markers` (ticket id -> Mark) leads each ticket with its map
-    marker, for the seat whose tickets are marked on the board."""
+    marker, for the seat whose tickets are marked on the board. `right` keeps a
+    wide panel's content left of that x (a human's move chips sit past it)."""
     accent = theme.seat_color(facts.seat)
     _box(s, rect, theme.PANEL_SLOT, theme.HIGHLIGHT if facts.to_act else theme.PANEL_EDGE)
     pad = 9 * k
@@ -304,10 +305,11 @@ def draw_seat(
     y += 20 * k
 
     if wide:
-        _wide_body(s, rect, facts, y, k, codes, markers)
+        body = rect if right is None else pygame.Rect(rect.left, rect.top, round(right) - rect.left, rect.height)
+        _wide_body(s, body, facts, y, k, markers)
     else:
         y = _stats(s, facts, (x, y), k, wide=False)
-        _narrow_body(s, facts, (x, y), k, codes, markers)
+        _narrow_body(s, rect, facts, (x, y), k, markers)
 
 
 def _stats(s, facts: SeatFacts, pos, k: float, wide: bool) -> float:
@@ -382,6 +384,22 @@ def _hand_w(facts: SeatFacts, k: float, chip_w: float, per_row: int) -> float:
     return max(widths)
 
 
+TICKET_SIZE = 11.0  # type size of a ticket line, before scaling
+TICKET_LEAD = 15.0  # the marker / status column before the city names
+TICKET_ROWS = 3  # rows per column in seat 0's wide panel
+
+
+def _ticket_label(t: TicketFact) -> str:
+    return f"{t.a} – {t.b}"  # full city names
+
+
+def _ticket_line_w(t: TicketFact, k: float) -> float:
+    """Width a ticket line needs at full type size: lead, names, gap, points."""
+    size = TICKET_SIZE * k
+    return (TICKET_LEAD * k + _text_w(_ticket_label(t), size) + 10 * k
+            + _text_w(str(t.points), size, bold=True))
+
+
 def _tickets_w(facts: SeatFacts, k: float, label: str, per_col: int, col_w: float) -> float:
     label_w = _text_w(label, 9 * k, True)
     if facts.tickets is None:
@@ -389,31 +407,41 @@ def _tickets_w(facts: SeatFacts, k: float, label: str, per_col: int, col_w: floa
     if not facts.tickets:
         return max(label_w, _text_w("none", 11 * k))
     cols = -(-len(facts.tickets) // per_col)
-    return max(label_w, cols * col_w - 12 * k)
+    return max(label_w, cols * col_w - 18 * k)  # no gap after the last column
 
 
-def _ticket_line(s, t: TicketFact, pos, k: float, codes, size: float, width: float,
+def _ticket_line(s, t: TicketFact, pos, k: float, width: float,
                  markers: Optional[Dict[int, Mark]] = None) -> None:
-    """One ticket. For the seat whose tickets are marked on the map (`markers`
-    given), the ticket's marker leads the line; a ticket with none (completed,
-    or offered but not selected) leaves that slot empty. Color still shows done
-    (green) and on offer (dim)."""
+    """One ticket in `width` pixels: its marker or status mark, the full city
+    names, and the points right-aligned. For the seat whose tickets are marked
+    on the map (`markers` given), the marker leads the line; a ticket with none
+    (completed, or offered but not selected) leaves that slot empty. Color shows
+    done (green) and on offer (dim). Names too long for the width are set in
+    smaller type, then shortened with an ellipsis."""
     x, y = pos
-    a = codes.get(t.a, t.a) if codes else t.a
-    b = codes.get(t.b, t.b) if codes else t.b
+    size = TICKET_SIZE * k
     color = theme.DONE if t.done else (theme.PANEL_DIM if t.pending else theme.PANEL_TEXT)
     if markers is not None:
         mark = markers.get(t.id)
         if mark is not None:
             img = mark_icon(mark, round(size * 1.25))
             s.blit(img, img.get_rect(center=(round(x + 5 * k), round(y + size * 0.62))))
-        text(s, f"{a}–{b}", (x + 15 * k, y), size, color)
-        text(s, str(t.points), (x + width, y), size, color, bold=True, right=True)
-        return
-    mark = "✓" if t.done else ("?" if t.pending else "·")
-    text(s, mark, (x, y), size, color, bold=t.done)
-    text(s, f"{a}–{b}", (x + 11 * k, y), size, color)
-    text(s, str(t.points), (x + width, y), size, color, bold=True, right=True)
+    elif t.done:
+        # Drawn, not typed: the panel font has no check-mark glyph.
+        pts = [(x + 1 * k, y + size * 0.62), (x + 4 * k, y + size * 0.92), (x + 10 * k, y + size * 0.25)]
+        pygame.draw.lines(s, color, False, pts, max(2, round(1.6 * k)))
+    else:
+        text(s, "?" if t.pending else "·", (x, y), size, color)
+    points = str(t.points)
+    room = width - TICKET_LEAD * k - 8 * k - _text_w(points, size, bold=True)
+    label, label_size = _ticket_label(t), size
+    while _text_w(label, label_size) > room and label_size > 8.5 * k:
+        label_size -= 0.5 * k
+    while _text_w(label, label_size) > room and len(label) > 4:
+        label = label[:-2] + "…"
+    # Smaller type sits a little lower so its baseline stays with the points.
+    text(s, label, (x + TICKET_LEAD * k, y + (size - label_size) * 0.7), label_size, color)
+    text(s, points, (x + width, y), size, color, bold=True, right=True)
 
 
 def _tickets_header(s, facts: SeatFacts, pos, k: float, label: str) -> bool:
@@ -429,34 +457,53 @@ def _tickets_header(s, facts: SeatFacts, pos, k: float, label: str) -> bool:
     return True
 
 
-def _wide_body(s, rect, facts: SeatFacts, y: float, k: float, codes, markers=None) -> None:
+def _wide_body(s, rect, facts: SeatFacts, y: float, k: float, markers=None) -> None:
     """Seat 0's panel. The stats row, the hand and the tickets are measured and
-    centred together, so the block sits in the middle of the full-width panel."""
-    chip_w, per_row, per_col, col_w = 34 * k, 9, 4, 100 * k
+    centred together, so the block sits in the middle of the full-width panel.
+    Tickets run down columns of TICKET_ROWS, each column as wide as its longest
+    line. When the columns would run past the panel's edge they narrow to fit,
+    and long names get smaller type or an ellipsis (see _ticket_line)."""
+    chip_w, per_row = 34 * k, 9
     left_w = max(_stats_w(facts, k), _hand_w(facts, k, chip_w, per_row))
+    gap, col_gap = 34 * k, 18 * k
+    tickets = facts.tickets or []
+    # The transport buttons sit in the panel's left margin; keep clear of them.
+    left_min = rect.left + (9 + 3 * 51 + 12) * k
+    right_max = rect.right - 9 * k
+    room = right_max - left_min - left_w - gap
+    first_row = y + 34 * k + 14 * k  # below the stats row and the caption
+    # Rows whose line (about 13k tall) ends above the panel's bottom edge.
+    rows = max(1, int((rect.bottom - 4 * k - first_row - 13 * k) // (15 * k)) + 1)
+    per_col = min(TICKET_ROWS, rows)
+    cols = -(-len(tickets) // per_col) if tickets else 0
+    col_w = max((_ticket_line_w(t, k) for t in tickets), default=0.0) + col_gap
+    if cols and cols * col_w - col_gap > room:
+        col_w = (room + col_gap) / cols
     tickets_w = _tickets_w(facts, k, "DESTINATION TICKETS", per_col, col_w)
-    gap = 34 * k
-    x = max(rect.left + 9 * k, rect.centerx - (left_w + gap + tickets_w) / 2)
+    total = left_w + gap + tickets_w
+    x = min(max(left_min, rect.centerx - total / 2), right_max - total)
+    x = max(x, rect.left + 9 * k)
 
     hand_y = _stats(s, facts, (x, y), k, wide=True)
     _hand_block(s, facts, (x, hand_y), k, (chip_w, 46 * k), per_row=per_row)
     tx = x + left_w + gap
     if not _tickets_header(s, facts, (tx, hand_y), k, "DESTINATION TICKETS"):
         return
-    for i, t in enumerate(facts.tickets or ()):
+    for i, t in enumerate(tickets):
         col, row = i // per_col, i % per_col
-        _ticket_line(s, t, (tx + col * col_w, hand_y + 14 * k + row * 15 * k), k, codes, 11 * k, 88 * k,
+        _ticket_line(s, t, (tx + col * col_w, hand_y + 14 * k + row * 15 * k), k, col_w - col_gap,
                      markers=markers)
 
 
-def _narrow_body(s, facts: SeatFacts, pos, k: float, codes, markers=None) -> None:
+def _narrow_body(s, rect, facts: SeatFacts, pos, k: float, markers=None) -> None:
+    """A side panel: the hand, then one ticket per line across the panel."""
     x, y = pos
     y = _hand_block(s, facts, (x, y), k, (30 * k, 19 * k), per_row=5) + 8 * k
     if not _tickets_header(s, facts, (x, y), k, "TICKETS"):
         return
+    width = rect.right - 9 * k - x
     for i, t in enumerate(facts.tickets or ()):
-        _ticket_line(s, t, (x, y + 14 * k + i * 15 * k), k, codes, 11 * k, 84 * k,
-                     markers=markers)
+        _ticket_line(s, t, (x, y + 14 * k + i * 15 * k), k, width, markers=markers)
 
 
 # ------------------------------------------------------------------ choices
