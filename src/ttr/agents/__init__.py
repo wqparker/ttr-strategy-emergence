@@ -5,8 +5,8 @@ seat could see: their own hand/tickets plus public state (see RULES.md §9 #17).
 """
 
 from ttr.agents.base import Agent
-from ttr.agents.greedy import GreedyAgent, WaryAgent
+from ttr.agents.greedy import CollectorAgent, GreedyAgent, WaryAgent
 from ttr.agents.racer import RacerAgent
 from ttr.agents.random_agent import RandomAgent
 
-__all__ = ["Agent", "GreedyAgent", "RacerAgent", "RandomAgent", "WaryAgent"]
+__all__ = ["Agent", "CollectorAgent", "GreedyAgent", "RacerAgent", "RandomAgent", "WaryAgent"]

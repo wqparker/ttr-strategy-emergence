@@ -22,7 +22,7 @@ ttr-view [--record FILE] [--agents NAME ...] [--human SEAT]
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--record FILE` | — | replay a saved game instead of playing one live |
-| `--agents NAME ...` | `greedy random` | one per seat, 2–5 of `greedy`, `wary`, `racer`, `random`, `linear:PATH`, `dqn:PATH` (see ttr-sim) |
+| `--agents NAME ...` | `greedy random` | one per seat, 2–5 of `greedy`, `wary`, `racer`, `collector`, `random`, `linear:PATH`, `dqn:PATH` (see ttr-sim) |
 | `--human SEAT` | — | play that seat yourself (live games only) |
 | `--perspective` | `all` | `all` sees every hand; a seat sees only its own |
 | `--memory-level` | `2` | what a seat's view knows: 0 none, 1 seen cards, 2 + unseen pool |
@@ -256,7 +256,9 @@ win-share matrices and Elo ratings (Bradley-Terry, greedy = 1000); writes `PREFI
 Scripted bots: `greedy` plans its tickets' cheapest paths and ignores the opponent; `wary` is greedy that
 watches the opponents' trains (at 15 or fewer it stops drawing tickets, drops ones it can't finish, and
 cashes cards into routes); `racer` keeps the fewest tickets, claims only 6-routes until it can't, and ends
-the game fast (the strategy the trained agents found).
+the game fast (the strategy the trained agents found); `collector` is greedy for tickets: 2–3 open at a
+time, drawing more as soon as fewer than 2 are far from done, finishing the nearest one first (tempo-aware
+like wary). It completes the most tickets (about 5 a game) and is the weakest of the four.
 
 ## ttr-dash
 

@@ -14,6 +14,9 @@ opponent is down to that many trains, or the final round has started, it draws n
 more tickets, drops the tickets it can't finish in the turns likely left, and
 turns its cards into the longest routes it can claim. Plain greedy never looks at
 the opponent, which is what the racing strategy exploits (PLAN.md).
+
+`CollectorAgent` ("collector") is greedy for tickets: 2-3 open at a time, topped
+up as soon as fewer than 2 are far from done, the nearest one finished first.
 """
 
 from __future__ import annotations
@@ -165,11 +168,11 @@ class GreedyAgent:
         missing = max(0, missing - hand[Color.LOCOMOTIVE])
         return len(path) + (missing + 1) // 2
 
-    def _targets(self, game: Game, p: int) -> Set[int]:
-        """Unclaimed routes on the cheapest paths of reachable incomplete tickets,
-        plus their open double-route siblings (either half will do). Alerted, only
-        tickets that can still be finished in the turns likely left."""
-        targets: Set[int] = set()
+    def _plans(self, game: Game, p: int) -> List[Tuple[float, Ticket, List[int]]]:
+        """(trains still needed, ticket, unclaimed routes on its cheapest path) for
+        each incomplete ticket still worth pursuing, highest points first. Alerted,
+        only tickets that can still be finished in the turns likely left."""
+        plans = []
         alert = self._alert(game, p)
         turns = self._turns_left(game, p) if alert else 0
         for t in sorted(self._open_tickets(game, p), key=lambda t: -t.points):
@@ -178,6 +181,14 @@ class GreedyAgent:
                 continue  # unreachable or unaffordable; stop investing in it
             if alert and self._turns_needed(game, p, path) > turns:
                 continue  # too late for this one
+            plans.append((cost, t, path))
+        return plans
+
+    def _targets(self, game: Game, p: int) -> Set[int]:
+        """Unclaimed routes on the cheapest paths of the tickets in `_plans`, plus
+        their open double-route siblings (either half will do)."""
+        targets: Set[int] = set()
+        for _, _, path in self._plans(game, p):
             targets.update(path)
         for rid in list(targets):
             sib = game.board.routes[rid].sibling
@@ -300,3 +311,58 @@ class WaryAgent(GreedyAgent):
 
     def __init__(self, seed: Optional[int] = None, alert_trains: int = 15, **options) -> None:
         super().__init__(seed, alert_trains=alert_trains, **options)
+
+
+class CollectorAgent(WaryAgent):
+    """Greedy for tickets: finish as many as it can. It keeps a pipeline of open
+    tickets, drawing more whenever fewer than `min_open` are far from done (a ticket
+    within `close_trains` of done doesn't count) and keeping up to `max_open` at a
+    time, cheapest first. It claims for the ticket nearest completion first, so
+    tickets get finished one at a time rather than all left half-built. Tempo-aware
+    like wary: once alerted it draws no more tickets and drops hopeless ones."""
+
+    name = "collector"
+
+    def __init__(self, seed: Optional[int] = None, min_open: int = 2, max_open: int = 3, close_trains: int = 3,
+                 draw_tickets_min_trains: int = 8, **options) -> None:
+        super().__init__(seed, draw_tickets_min_trains=draw_tickets_min_trains, **options)
+        self.min_open = min_open
+        self.max_open = max_open
+        self.close_trains = close_trains
+
+    def _far(self, plans) -> int:
+        return sum(1 for cost, _, _ in plans if cost > self.close_trains)
+
+    def _main_action(self, game: Game, p: int, legal: List[Action]) -> Action:
+        routes = game.board.routes
+        plans = self._plans(game, p)
+        need: Dict[int, float] = {}  # route -> trains still needed by the nearest-done ticket it serves
+        for cost, _, path in plans:
+            for rid in path:
+                sib = routes[rid].sibling
+                for r in (rid, sib) if sib is not None and game.route_open_to(p, routes[sib]) else (rid,):
+                    need[r] = min(need.get(r, INF), cost)
+        claims = [a for a in legal if isinstance(a, ClaimRoute) and a.route_id in need]
+        if claims:
+            return min(claims, key=lambda a: (need[a.route_id], -routes[a.route_id].length))
+        if (DrawTickets() in legal and not self._alert(game, p)
+                and game.players[p].trains >= self.draw_tickets_min_trains and self._far(plans) < self.min_open):
+            return DrawTickets()
+        return super()._main_action(game, p, legal)
+
+    def _choose_tickets(self, game: Game, p: int, legal: List[Action]) -> Action:
+        player = game.players[p]
+        min_keep = min(len(a.ticket_ids) for a in legal)
+        plans = self._plans(game, p)
+        budget = player.trains - sum(min(cost, player.trains) for cost, _, _ in plans)
+        offered = sorted(((cheapest_path(game, p, t.a, t.b)[0], -t.points, t)
+                          for t in (game.board.tickets[i] for i in player.pending_tickets)),
+                         key=lambda x: (x[0], x[1]))
+        room = self.max_open - self._far(plans)
+        keep: List[int] = []
+        for cost, _, t in offered:
+            if len(keep) < min_keep or (len(keep) < room and cost <= budget * 0.6):
+                keep.append(t.id)
+                budget -= cost if cost != INF else 0
+        choice = KeepTickets(frozenset(keep))
+        return choice if choice in legal else legal[0]

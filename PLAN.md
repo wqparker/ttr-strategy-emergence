@@ -507,6 +507,15 @@ for 2 players).
     - Wary doesn't beat racer: alert at 15–30 trains, or grabbing 5- or 6-routes
       itself, all lose −7 to −14. Pure racing beats both simple ticket planners in
       2-player games.
+    - `collector` (`CollectorAgent`, the user's design): greedy for tickets. Keeps 2–3
+      open, draws more as soon as fewer than 2 are far from done (8+ trains left),
+      finishes the nearest ticket first, tempo-aware like wary. It completes the most
+      tickets (about 5 a game) and loses to every bot (200–300 games each: −17 to −19
+      vs greedy, −24 vs wary, −24 to −27 vs racer), failing 1.0 a game. Loosening it
+      toward greedy (1–2 open, draw only with 15+ trains) brings it to parity with
+      greedy and −12 vs racer, where greedy sits. Past the first few tickets, each one
+      costs more trains and turns than it scores in 2-player games. Kept as the
+      ticket-heavy style for the pool and evaluations.
     - `ttr-train-dqn --opponent pool` (`--pool greedy wary racer self`, one per game;
       `self` = the best network or one of the 5 latest evaluated ones), `--shaping`
       (potential-based, Φ = −POINTS × trains still needed for my tickets; sums to 0

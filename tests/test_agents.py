@@ -5,7 +5,7 @@ from rich.console import Console
 
 from helpers import route_id, started_game
 from ttr.actions import DrawTickets
-from ttr.agents import GreedyAgent, RacerAgent, RandomAgent, WaryAgent
+from ttr.agents import CollectorAgent, GreedyAgent, RacerAgent, RandomAgent, WaryAgent
 from ttr.agents.greedy import cheapest_path
 from ttr.board import load_board
 from ttr.game import Game
@@ -55,9 +55,9 @@ def test_greedy_avoids_final_round_ticket_draws():
 
 
 @pytest.mark.parametrize("num_players", [2, 3, 5])
-def test_wary_and_racer_play_full_games(num_players):
+def test_wary_racer_and_collector_play_full_games(num_players):
     for seed in range(2):
-        agents = [WaryAgent(seed), RacerAgent(seed), GreedyAgent(seed), RandomAgent(seed), RacerAgent(seed + 1)]
+        agents = [WaryAgent(seed), RacerAgent(seed), CollectorAgent(seed), RandomAgent(seed), RacerAgent(seed + 1)]
         game = Game(load_board("usa"), num_players=num_players, seed=seed, max_turns=2000)
         assert play_game(game, agents[:num_players]).winners  # step() rejects illegal moves
 
@@ -95,7 +95,26 @@ def test_racer_keeps_the_minimum_and_draws_no_tickets():
         assert sum(n == 6 for n in lengths) >= 3  # it goes for the 6-routes
 
 
-@pytest.mark.parametrize("bot", ["wary", "racer"])
+def test_collector_keeps_a_pipeline_of_tickets():
+    board = load_board("usa")
+    draws = completed = 0
+    for seed in range(4):
+        game = Game(board, seed=seed)
+        bot, other = CollectorAgent(seed), GreedyAgent(seed + 1)
+        while not game.game_over:
+            p = game.current_player
+            agent = bot if p == 0 else other
+            action = agent.act(game, p)
+            if p == 0 and action == DrawTickets():
+                draws += 1
+                assert not bot._alert(game, 0)
+                assert bot._far(bot._plans(game, 0)) < bot.min_open  # only when fewer than 2 are far from done
+            game.step(action)
+        completed += game.result.players[0].tickets_completed
+    assert draws >= 4  # it tops up mid-game, not only when every ticket is done
+    assert completed >= 12  # about 5 a game against greedy over many games
+
+@pytest.mark.parametrize("bot", ["wary", "racer", "collector"])
 def test_new_bots_beat_random(bot):
     summary = run_matches([bot, "random"], games=20, board=load_board("usa"))
     assert summary["stats"][0].wins >= 18
