@@ -161,6 +161,24 @@ def test_live_dashboard_waits_then_follows_the_file(tmp_path):
     plt.close(dash.fig)
 
 
+def test_live_polling_survives_quiet_polls(run_file):
+    matplotlib = pytest.importorskip("matplotlib")
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    from ttr.learn.dashboard import SERIES, Dashboard, load_run, start_polling
+
+    loader = lambda: [load_run(run_file, SERIES[0])]
+    dash = Dashboard(loader(), loader=loader, sources=[run_file])
+    polls = []
+    dash.poll = lambda: polls.append(1) or False  # nothing changed
+    timer = start_polling(dash, 3)
+    for _ in range(3):
+        timer._on_timer()  # what the GUI's timer calls
+    assert len(polls) == 3 and timer.callbacks  # matplotlib drops a callback that returns False
+    plt.close(dash.fig)
+
+
 def test_wildcards_are_expanded_and_followed(run_file, tmp_path):
     matplotlib = pytest.importorskip("matplotlib")
     matplotlib.use("Agg")

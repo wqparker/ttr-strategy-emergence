@@ -204,7 +204,7 @@ def _mean_tree(items: Sequence):
         n = min(len(it) for it in items)
         return [_mean_tree([it[i] for it in items]) for i in range(n)]
     if isinstance(first, (int, float)) and not isinstance(first, bool):
-        return float(np.mean(items))
+        return float(sum(items) / len(items))  # not np.mean: millions of calls for per-game rows
     return first
 
 
@@ -237,6 +237,20 @@ def group_runs(runs: Sequence[Run]) -> List[Run]:
             data["best"] = {"games": "mean", "margin_vs_greedy": float(np.mean([b["margin_vs_greedy"] for b in bests]))}
         out.append(Run(f"{name} x{len(members)}", members[0].path, data, SERIES[i % len(SERIES)]))
     return out
+
+
+def start_polling(dash: "Dashboard", seconds: float):
+    """Call `dash.poll()` every `seconds` on the figure's timer, and return the
+    timer. matplotlib drops a timer callback that returns False or 0, which
+    poll() does whenever nothing changed, so the callback returns None."""
+
+    def tick() -> None:
+        dash.poll()
+
+    timer = dash.fig.canvas.new_timer(interval=int(seconds * 1000))
+    timer.add_callback(tick)
+    timer.start()
+    return timer
 
 
 def rolling(ys: np.ndarray, window: int) -> np.ndarray:
@@ -760,13 +774,22 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
             matplotlib.rcParams[key] = []
     import matplotlib.pyplot as plt
 
+    parsed: Dict[Path, Tuple[Tuple[int, int], Run]] = {}  # path -> ((mtime, size), run): parse only what changed
+
     def load_all() -> List[Run]:
         paths = expand(args.runs)
         if args.live:
             paths = [p for p in paths if p.exists()]
         elif not paths:
             sys.exit(f"no run files match {' '.join(map(str, args.runs))}")
-        loaded = [load_run(p, SERIES[i % len(SERIES)]) for i, p in enumerate(paths)]
+        loaded = []
+        for i, p in enumerate(paths):
+            st = p.stat()
+            stamp = (st.st_mtime_ns, st.st_size)
+            if p not in parsed or parsed[p][0] != stamp:
+                parsed[p] = (stamp, load_run(p, SERIES[0]))
+            run = parsed[p][1]
+            loaded.append(Run(run.name, run.path, run.data, SERIES[i % len(SERIES)]))
         return group_runs(loaded) if args.group else loaded
 
     try:
@@ -790,10 +813,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     dash.fig.canvas.mpl_connect("key_press_event", dash.on_key)
     dash.draw()
     if args.live:
-        timer = dash.fig.canvas.new_timer(interval=int(args.live * 1000))
-        timer.add_callback(dash.poll)
-        timer.start()
-        dash._timer = timer  # keep a reference, or it is garbage-collected
+        dash._timer = start_polling(dash, args.live)  # keep a reference, or it is garbage-collected
     if not args.windowed:
         try:
             dash.fig.canvas.manager.full_screen_toggle()
