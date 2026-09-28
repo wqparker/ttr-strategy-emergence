@@ -281,8 +281,8 @@ for 2 players).
   - Found while building it: a game is about 85–100 of the learner's decisions, so
     traces need λ ≈ 0.97–0.99 to carry the final score back to the opening
     (0.9^100 ≈ 3·10⁻⁵, 0.99^100 ≈ 0.37); λ 0.8–0.9 would not reach it.
-  - Third-pass ladder run (2026-09-27; `runs/linear/pass3/`, now in the repo with
-    pass 1 and 2). Raw numbers, analysis not finished. Against greedy, each seed's
+  - Third-pass ladder run (2026-09-27; `runs/linear/pass3/`). Raw numbers, analysis
+    not finished. Against greedy, each seed's
     last 5 evaluations, mean over 3 seeds (pass-2 `q_random` reference: −35, 10% wins,
     within-run sd 7.7):
 
@@ -952,6 +952,12 @@ not just to find the strongest one. Each tier teaches something different:
 
 ## Notes
 
+- **Run data is local only** (decided 2026-09-28: development is on one machine).
+  `runs/` (run JSON, network `.pt` files, logs) is gitignored; only the small summaries
+  behind this file's tables are tracked (`runs/*/rescore_*`, `runs/round_robin_*`,
+  `runs/linear/overnight-*.md`). Linear passes 1–8 and DQN pass 1 were committed
+  before that and remain in git history (up to commit 4859cc8), so an old run can be
+  restored with `git checkout 4859cc8 -- runs/<path>`.
 - **Testing an old commit needs `PYTHONPATH`.** The venv installs `ttr` editable, so its
   `.pth` entry points at this working tree's `src/` whatever is checked out elsewhere. A
   `git worktree` or a bisected checkout therefore runs its own tests against the *current*

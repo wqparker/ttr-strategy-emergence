@@ -18,37 +18,18 @@ venv/
 # Jupyter
 .ipynb_checkpoints/
 
-# Training outputs
+# Training outputs stay on this machine (development is on one machine; run data is
+# not shared through the repo). Tracked: only the small summaries behind PLAN.md's
+# tables (fresh-game re-scores, round robins, the overnight log).
 runs/*
-# Linear-agent training runs (weights, per-game rows, evaluations) are kept, so
-# analysis and best checkpoints travel with the repo. Dashboard PNGs and empty
-# error logs are regenerable; the pre-pass-1 runs (v0, v1) are obsolete.
 !runs/linear/
+!runs/dqn/
 runs/linear/*
-!runs/linear/pass1/
-!runs/linear/pass2/
-!runs/linear/pass3/
-!runs/linear/pass4/
-!runs/linear/pass5/
-!runs/linear/pass6/
-!runs/linear/pass7/
-!runs/linear/pass8/
-# Overnight logs and fresh-game re-scores (analysis behind PLAN.md)
+runs/dqn/*
 !runs/linear/overnight-*.md
 !runs/linear/rescore_*
-runs/linear/pass*/dash/
-runs/linear/pass*/*.err
-runs/linear/pass*/*.tmp
-# Round robins (scripts/round_robin.py)
-!runs/round_robin_*
-# DQN runs, kept the same way (run JSON + networks in .pt)
-!runs/dqn/
-runs/dqn/*
-!runs/dqn/pass*/
 !runs/dqn/rescore_*
-runs/dqn/pass*/dash/
-runs/dqn/pass*/*.err
-runs/dqn/pass*/*.tmp
+!runs/round_robin_*
 checkpoints/
 models/
 wandb/
