@@ -22,7 +22,7 @@ ttr-view [--record FILE] [--agents NAME ...] [--human SEAT]
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--record FILE` | — | replay a saved game instead of playing one live |
-| `--agents NAME ...` | `greedy random` | one per seat, 2–5 of `greedy`, `random` |
+| `--agents NAME ...` | `greedy random` | one per seat, 2–5 of `greedy`, `wary`, `racer`, `random`, `linear:PATH`, `dqn:PATH` (see ttr-sim) |
 | `--human SEAT` | — | play that seat yourself (live games only) |
 | `--perspective` | `all` | `all` sees every hand; a seat sees only its own |
 | `--memory-level` | `2` | what a seat's view knows: 0 none, 1 seen cards, 2 + unseen pool |
@@ -222,7 +222,9 @@ ttr-sim --agents dqn:runs/dqn/n8_s0.json@best greedy    # the run's best checkpo
 
 | Option | Default | |
 | --- | --- | --- |
-| `--opponent` | `greedy` | `random`, `greedy`, or `self` (greedy or the run's own best checkpoint so far) |
+| `--opponent` | `greedy` | `random`, `greedy`, `wary`, `racer`, `self` (greedy or the run's own best checkpoint so far), or `pool` (one of `--pool` per game) |
+| `--pool SPEC ...` / `--league N` | `greedy wary racer self` / `5` | with `--opponent pool`; `self` = the best network or one of the N latest evaluated ones |
+| `--shaping POINTS` | off | potential-based shaping: POINTS per train still needed for my tickets; sums to 0 over a game |
 | `--n-step` | `1` | n-step returns; the counterpart of the linear `--lambda` |
 | `--hidden UNITS ...` | `512 256` | hidden layer widths |
 | `--no-dueling` | dueling on | a plain Q head instead of value + advantage |
@@ -232,13 +234,29 @@ ttr-sim --agents dqn:runs/dqn/n8_s0.json@best greedy    # the run's best checkpo
 | `--target-every` | `1000` | gradient steps between target-network copies |
 | `--average GAMES` | off | evaluate, checkpoint and save an exponential average of the weights |
 | `--epsilon-start` / `--epsilon-end` / `--epsilon-decay` | `1.0` / `0.02` / `0.05` | exploration |
-| `--eval-linear SPEC` | pass 7's best linear agent | a third evaluation opponent; `none` to skip |
-| `--eval-every` / `--eval-games` | `500` / `100` | evaluation schedule |
+| `--eval-opponents SPEC ...` | `random greedy wary racer` | evaluation opponents; the best checkpoint is picked on the mean margin over all but random |
+| `--eval-linear SPEC` | pass 7's best linear agent | one more evaluation opponent (not in the selection); `none` to skip |
+| `--eval-every` / `--eval-games` | `1000` / `100` | evaluation schedule; games per opponent |
 | `--memory-level`, `--reward`, `--device`, `--threads`, `--live [N]` | | as named |
 
 `RUN.json` has the same layout as a linear run (`ttr-dash` reads it; no weight pages), with
 `"method": "dqn"`; the networks (final, best, raw when averaging) are in `RUN.pt` beside it.
-`scripts/rescore.py` and `scripts/run_status.py` take both kinds of run.
+`scripts/rescore.py` and `scripts/run_status.py` take both kinds of run; `rescore.py --opponents greedy wary racer`
+re-scores against several opponents on the same fresh games.
+
+### Round robin
+
+```
+python scripts/round_robin.py random greedy wary racer linear:PATH@best dqn:PATH@best --out runs/round_robin_DATE
+```
+
+Every pair plays `--games` (400) games on fresh seeds (`--seed` 9101), random seats. Prints the margin and
+win-share matrices and Elo ratings (Bradley-Terry, greedy = 1000); writes `PREFIX.csv` and `PREFIX.txt`.
+
+Scripted bots: `greedy` plans its tickets' cheapest paths and ignores the opponent; `wary` is greedy that
+watches the opponents' trains (at 15 or fewer it stops drawing tickets, drops ones it can't finish, and
+cashes cards into routes); `racer` keeps the fewest tickets, claims only 6-routes until it can't, and ends
+the game fast (the strategy the trained agents found).
 
 ## ttr-dash
 
@@ -321,7 +339,7 @@ A live save of a full 2000-game run takes about 20 ms, so `--live 25` adds about
 | 6 Evaluations | raw table of every evaluation |
 | 7 Games | raw table of every training game, 32 per page |
 
-Keys: `1`-`7` or `←`/`→` pages, `o` evaluation opponent (greedy / random), `r` next run
+Keys: `1`-`7` or `←`/`→` pages, `o` next evaluation opponent (greedy, random, and any others the runs have), `r` next run
 (pages 4-7), `PgUp`/`PgDn`/`Home`/`End` raw games, `s` save the page as PNG, `f` full screen,
 `q` quit. `--opponent`, `--page` and `--windowed` set the start.
 

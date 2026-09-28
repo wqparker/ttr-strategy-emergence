@@ -14,8 +14,9 @@ from ttr.board import load_board
 from ttr.env import actions as A
 from ttr.env.observation import ObservationEncoder
 from ttr.game import Game
-from ttr.learn.dqn import (DQNAgent, DQNConfig, QNetwork, Replay, load_network, n_step_returns, td_step,
-                           train)
+from ttr.agents import GreedyAgent
+from ttr.learn.dqn import (DQNAgent, DQNConfig, QNetwork, Replay, load_network, n_step_returns,
+                           play_training_game, td_step, train)
 from ttr.learn.linear import evaluate
 from ttr.simulate import run_matches
 
@@ -114,7 +115,12 @@ def test_training_records_the_linear_run_layout(dqn_run):
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["method"] == "dqn" and data["progress"] == {"games": 6, "of": 6, "finished": True}
     assert [e["games"] for e in data["history"]] == [3, 6]
-    assert set(data["history"][0]["eval"]) == {"random", "greedy"}
+    assert set(data["history"][0]["eval"]) == {"random", "greedy", "wary", "racer"}
+    best = data["best"]  # picked on the mean margin over the scripted opponents but random
+    assert best["selected_on"] == ["greedy", "wary", "racer"]
+    means = [sum(e["eval"][o]["margin"] for o in best["selected_on"]) / 3 for e in data["history"]]
+    assert best["selection"] == pytest.approx(max(means))
+    assert best["games"] == data["history"][means.index(max(means))]["games"]
     assert len(data["games"]) == 6 and data["games"][-1]["grad_steps"] > 0
     assert data["best"]["games"] in (3, 6)
     nets = torch.load(path.with_suffix(".pt"), weights_only=True)
@@ -149,4 +155,30 @@ def test_dashboard_shows_a_dqn_run(dqn_run, tmp_path):
 
     path, _ = dqn_run
     main([str(path), "--save", str(tmp_path)])
-    assert len(list(tmp_path.glob("*.png"))) == 14  # 7 pages x 2 opponents
+    assert len(list(tmp_path.glob("*.png"))) == 28  # 7 pages x 4 evaluation opponents
+
+
+def test_pool_draws_every_member_and_itself(tmp_path):
+    cfg = DQNConfig(opponent="pool", games=24, hidden=(16,), batch=8, learning_starts=50, device="cpu", seed=5)
+    result = train(cfg, eval_every=4, eval_games=1, eval_linear=None, log=lambda line: None, baselines=False)
+    for name in ("greedy", "wary", "racer", "self"):
+        assert sum(r[f"vs_{name}"] for r in result.games) > 0, name
+    assert sum(r["vs_self"] for r in result.games[:4]) == 0  # no frozen copy before the first evaluation
+    with pytest.raises(ValueError):
+        train(DQNConfig(opponent="pool", pool=("greedy", "nobody"), games=1, device="cpu"), eval_linear=None)
+
+
+def test_shaping_pays_during_the_game_and_sums_to_zero():
+    net = QNetwork(ObservationEncoder(2).size, (16,))
+    episodes = {}
+    for shaping in (0.0, 1.0):
+        game = Game(load_board("usa"), num_players=2, seed=8)
+        agent = DQNAgent(net, epsilon=0.0, seed=3)
+        ep = play_training_game(agent, GreedyAgent(4), game, 0, DQNConfig(shaping=shaping))
+        margin = game.result.players[0].total - game.result.players[1].total
+        assert sum(ep.rewards) == pytest.approx(margin / 100)  # shaping telescopes away
+        assert ep.shaping == pytest.approx(0.0, abs=1e-9)
+        episodes[shaping] = ep
+    plain, shaped = episodes[0.0], episodes[1.0]
+    assert plain.actions == shaped.actions  # shaping changes rewards, not play
+    assert any(abs(a - b) > 1e-9 for a, b in zip(plain.rewards, shaped.rewards))

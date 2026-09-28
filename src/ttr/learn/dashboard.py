@@ -21,7 +21,8 @@ Pages (keys 1-7 or left/right):
     6 Evaluations     raw table: every evaluation
     7 Games           raw table: every training game, a page at a time
 
-    o  evaluation opponent: greedy / random      r  next run (pages 4-7)
+    o  next evaluation opponent (greedy, random, and any others the runs have)
+    r  next run (pages 4-7)
     PgUp / PgDn  page through raw games          s  save this page as PNG
     f  full screen                               q  quit
 
@@ -350,6 +351,17 @@ class Dashboard:
             self.page_weights, self.page_evaluations, self.page_games,
         ]
 
+    def opponents(self) -> List[str]:
+        """Evaluation opponents every shown run has: greedy and random first, then
+        the others in the order the runs recorded them (DQN runs add wary, racer,
+        linear)."""
+        seen = [set(r.history[0]["eval"]) for r in self.runs if r.history]
+        if not seen:
+            return list(OPPONENTS)
+        common = set.intersection(*seen)
+        first = next(r for r in self.runs if r.history).history[0]["eval"]
+        return [o for o in OPPONENTS if o in common] + [o for o in first if o in common and o not in OPPONENTS]
+
     @property
     def run(self) -> Run:
         return self.runs[self.run_index]
@@ -472,7 +484,7 @@ class Dashboard:
         # Final evaluation: every run, then the bots, on the same games.
         cols = [(r.name, r.final(opp), r.color) for r in self.runs]
         base = self.runs[0].data.get("baselines", {})
-        cols += [(f"{bot} bot", base[bot][opp], None) for bot in ("greedy", "random") if bot in base]
+        cols += [(f"{bot} bot", base[bot][opp], None) for bot in ("greedy", "random") if opp in base.get(bot, {})]
         rows = [[label(k)] + [fmt(k, c[1][k]) if k in c[1] else "—" for c in cols] for k in SUMMARY]
         draw_table(self.fig.add_subplot(gs[0:2, 2]), ["metric"] + [c[0] for c in cols], rows,
                    title=f"final evaluation vs {opp} ({self._eval_games()} games each)",
@@ -555,7 +567,8 @@ class Dashboard:
         style_axes(ax, f"actions per game, final evaluation vs {self.opponent}")
         base = run.data.get("baselines", {})
         groups = [(run.name, run.final(self.opponent), run.color)]
-        groups += [(f"{b} bot", base[b][self.opponent], BOT_STYLE[b]["color"]) for b in ("greedy", "random") if b in base]
+        groups += [(f"{b} bot", base[b][self.opponent], BOT_STYLE[b]["color"]) for b in ("greedy", "random")
+                   if self.opponent in base.get(b, {})]
         groups = [g for g in groups if g[1]]  # a live run has no evaluation yet
         if not groups:
             ax.text(0.5, 0.5, "no evaluation yet", ha="center", va="center", color=INK_2, transform=ax.transAxes)
@@ -702,7 +715,9 @@ class Dashboard:
         elif key and key.isdigit() and 1 <= int(key) <= len(self.pages):
             self.page = int(key) - 1
         elif key == "o":
-            self.opponent = OPPONENTS[(OPPONENTS.index(self.opponent) + 1) % len(OPPONENTS)]
+            opponents = self.opponents()
+            at = opponents.index(self.opponent) + 1 if self.opponent in opponents else 0
+            self.opponent = opponents[at % len(opponents)]
         elif key == "r":
             self.run_index = (self.run_index + 1) % len(self.runs)
             self.games_page = 0
@@ -752,7 +767,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("runs", nargs="+", help="training run JSON files (ttr-train-linear --out); "
                                                 "wildcards like runs/linear/pass3/*.json are expanded here")
-    parser.add_argument("--opponent", choices=OPPONENTS, default="greedy", help="evaluation opponent shown first")
+    parser.add_argument("--opponent", default="greedy",
+                        help="evaluation opponent shown first (greedy, random, or any other the runs evaluated against)")
     parser.add_argument("--page", type=int, default=1, help="page to open on (1-7)")
     parser.add_argument("--save", type=Path, metavar="DIR", help="write every page as PNG to DIR and exit")
     parser.add_argument("--windowed", action="store_true", help="don't start full screen")
@@ -804,7 +820,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     dash = Dashboard(runs, opponent=args.opponent, **live)
     dash.page = max(0, min(len(dash.pages), args.page) - 1)
     if args.save:
-        for opp in OPPONENTS:
+        for opp in dash.opponents():
             dash.opponent = opp
             for path in dash.save_all(args.save):
                 print(path)

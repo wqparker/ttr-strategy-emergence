@@ -6,8 +6,12 @@
     ttr-sim --agents dqn:runs/dqn/greedy_s0.json@best greedy       # the best checkpoint
 
 The setting is the linear learner's (ttr.learn.linear): one seat against an
-opponent (random, greedy, or "self" = a coin flip between greedy and the
-learner's own best checkpoint so far), a random seat each game. It decides at
+opponent, a random seat each game. The opponent is a scripted bot (random,
+greedy, wary, racer), "self" (a coin flip between greedy and the learner's own
+best checkpoint so far), or "pool": one of `pool` drawn each game, where "self"
+means a frozen copy of the learner, the best network or one of the `league`
+latest evaluated ones (a small league, so no single trick beats the whole
+pool). It decides at
 every one of its engine sub-steps and sees exactly what the PettingZoo env
 shows that seat: the ObservationEncoder vector (765 numbers for 2 players,
 memory level 2) and the Discrete(168) mask. The reward between two of its
@@ -47,9 +51,18 @@ that many games (updated after each game); evaluations, checkpoints and the
 saved "final" network use it, while the raw network learns and acts in training.
 The linear learner's clearest gain came from this.
 
-Every evaluation that beats the best margin against greedy so far keeps a copy
-of the evaluated network ("best"). The same evaluation picks and scores it, so
-its recorded score is optimistic; scripts/rescore.py re-scores on fresh games.
+`shaping` adds potential-based shaping (Ng et al., 1999): Phi = -shaping x
+reward_scale x the trains still needed for my incomplete tickets (a lost one
+counting a full supply), reward += Phi(next) - Phi(this). Every claim that
+advances a ticket pays at once instead of at the end; a game's shaping sums to
+0, so the best policy doesn't change. Evaluations report the true score.
+
+Evaluations play every opponent in `eval_opponents` (default random, greedy,
+wary, racer) plus the best linear agent. Every evaluation that beats the best
+mean margin so far over the scripted opponents other than random keeps a copy
+of the evaluated network ("best"; DQN pass 1 picked on greedy alone). The same
+evaluation picks and scores it, so its recorded score is optimistic;
+scripts/rescore.py re-scores on fresh games.
 
 Files: `--out RUN.json` holds everything the dashboard reads (ttr-dash: config,
 per-game rows, evaluations, baselines; no weight pages), in the linear run
@@ -68,9 +81,10 @@ import random
 import statistics
 import sys
 import time
+from collections import deque
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Deque, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -79,6 +93,7 @@ from torch.nn import functional as F
 
 from ttr.actions import Action
 from ttr.agents import GreedyAgent
+from ttr.agents.registry import make_agent
 from ttr.board import load_board
 from ttr.env import actions as A
 from ttr.env.observation import ObservationEncoder
@@ -87,7 +102,9 @@ from ttr.game import Game
 from ttr.learn.linear import OPPONENTS, _eval_seed, evaluate, swap_in
 from ttr.learn.metrics import METRICS, game_metrics
 
-TRAIN_OPPONENTS = ("random", "greedy", "self")
+TRAIN_OPPONENTS = ("random", "greedy", "wary", "racer", "self", "pool")
+# Evaluation opponents; the best checkpoint is chosen on the mean margin over all but random.
+EVAL_BOTS = ("random", "greedy", "wary", "racer")
 # The strongest linear agent on fresh games (PLAN.md, pass 7 re-score: +17.4 vs greedy).
 BEST_LINEAR = "linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best"
 
@@ -266,6 +283,9 @@ def td_step(online: QNetwork, target: QNetwork, opt: torch.optim.Optimizer, batc
 @dataclass
 class DQNConfig:
     opponent: str = "greedy"
+    pool: Tuple[str, ...] = ("greedy", "wary", "racer", "self")  # with opponent "pool": one drawn per game
+    league: int = 5  # "self" in a pool: the best network or one of this many latest evaluated ones
+    shaping: float = 0.0  # potential-based shaping, points per train still needed; 0 = off
     games: int = 30000
     hidden: Tuple[int, ...] = (512, 256)
     dueling: bool = True
@@ -312,21 +332,41 @@ class Episode:
     actions: List[int] = field(default_factory=list)
     rewards: List[float] = field(default_factory=list)
     qs: List[float] = field(default_factory=list)
+    shaping: float = 0.0  # the shaping reward summed over the game (0 up to rounding)
+
+
+def ticket_trains(encoder: ObservationEncoder, game: Game, p: int) -> int:
+    """Trains `p` still needs for its incomplete tickets, a ticket that can no
+    longer be finished counting a full supply (ttr.learn.features `ticket_trains`)."""
+    full = game.board.trains_per_player
+    trains = game.players[p].trains
+    total = 0
+    for tid in game.players[p].tickets:
+        d = encoder.trains_to_finish(game, p, tid)
+        total += full if d is None or d > trains else d
+    return total
 
 
 def play_training_game(learner: DQNAgent, opponent, game: Game, seat: int, cfg: DQNConfig) -> Episode:
+    """With `cfg.shaping`, each reward also gets Phi(next) - Phi(this) for
+    Phi = -shaping * reward_scale * ticket_trains (Ng et al., 1999). Phi is 0
+    before any ticket is kept and at the end, so a game's shaping sums to 0 and
+    the best policy doesn't change; `ep.shaping` records the sum."""
     scale = 1.0 if cfg.reward_mode == "win" else cfg.reward_scale
     ep = Episode()
     last = reward_values(game, cfg.reward_mode)[seat]
+    last_phi = 0.0
     while not game.game_over:
         p = game.current_player
         if p != seat:
             game.step(opponent.act(game, p))
             continue
         value = reward_values(game, cfg.reward_mode)[seat]
+        phi = -cfg.shaping * cfg.reward_scale * ticket_trains(learner.encoder, game, p) if cfg.shaping else 0.0
         if ep.actions:
-            ep.rewards.append(scale * (value - last))
-        last = value
+            ep.rewards.append(scale * (value - last) + phi - last_phi)
+            ep.shaping += phi - last_phi
+        last, last_phi = value, phi
         obs, mask, by_index = learner.observe(game, p)
         i, q = learner.choose(obs, mask)
         ep.obs.append(obs)
@@ -335,7 +375,8 @@ def play_training_game(learner: DQNAgent, opponent, game: Game, seat: int, cfg: 
         ep.qs.append(q)
         game.step(by_index[i])
     if ep.actions:
-        ep.rewards.append(scale * (reward_values(game, cfg.reward_mode)[seat] - last))
+        ep.rewards.append(scale * (reward_values(game, cfg.reward_mode)[seat] - last) - last_phi)  # Phi(end) = 0
+        ep.shaping -= last_phi
     return ep
 
 
@@ -411,20 +452,28 @@ def load_network(path: Path, best: bool = False, device: str = "cpu") -> Tuple[Q
 
 
 def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linear: Optional[str] = BEST_LINEAR,
-          log=print, baselines: bool = True, on_progress: Optional[Callable[[DQNResult], None]] = None,
-          progress_every: int = 0) -> DQNResult:
+          eval_opponents: Sequence[str] = EVAL_BOTS, log=print, baselines: bool = True,
+          on_progress: Optional[Callable[[DQNResult], None]] = None, progress_every: int = 0) -> DQNResult:
     """Train for cfg.games games. Every `eval_every` games (0 = only at the end)
-    the evaluated network plays `eval_games` against random, greedy and (if
-    given) the `eval_linear` agent, on the same games the linear runs used
-    (seed 10 000 + k for evaluation k). With `baselines`, the random and greedy
-    bots then play the final evaluation's games too. `on_progress(result)` is
-    called every `progress_every` games and after every evaluation (live runs)."""
+    the evaluated network plays `eval_games` against each of `eval_opponents`
+    and (if given) the `eval_linear` agent, on the same games the linear runs
+    used (seed 10 000 + k for evaluation k). The best checkpoint is the
+    evaluation with the best mean margin over the scripted opponents other than
+    random. With `baselines`, the random and greedy bots then play the final
+    evaluation's games too. `on_progress(result)` is called every
+    `progress_every` games and after every evaluation (live runs)."""
     if cfg.opponent not in TRAIN_OPPONENTS:
         raise ValueError(f"opponent must be one of {TRAIN_OPPONENTS}")
     if cfg.reward_mode not in REWARD_MODES:
         raise ValueError(f"reward mode must be one of {REWARD_MODES}")
     if cfg.n_step < 1:
         raise ValueError("n_step must be at least 1")
+    if "greedy" not in eval_opponents:
+        raise ValueError("the evaluations must include greedy (runs are compared on it)")
+    for name in cfg.pool if cfg.opponent == "pool" else ():
+        if name != "self":
+            make_agent(name, 0)  # an unknown name fails here, not mid-run
+    selected_on = [o for o in eval_opponents if o != "random"]
     device = resolve_device(cfg.device)
     torch.manual_seed(cfg.seed)
     board = load_board(cfg.board)
@@ -444,7 +493,16 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
     learner = DQNAgent(actor, memory_level=cfg.memory_level, seed=cfg.seed, name="dqn")
     evaluated = DQNAgent(eval_net, memory_level=cfg.memory_level, seed=cfg.seed, name="dqn")
     out = DQNResult(cfg, online, policy, eval_games=eval_games, eval_linear=eval_linear)
-    opponents = {"random": "random", "greedy": "greedy", **({"linear": eval_linear} if eval_linear else {})}
+    opponents = {**{o: o for o in eval_opponents}, **({"linear": eval_linear} if eval_linear else {})}
+    league: Deque[QNetwork] = deque(maxlen=cfg.league)  # the latest evaluated networks, on the CPU
+
+    def own_network(seed: int):
+        """A frozen copy of the learner for self-play: the best network or a recent
+        one; greedy until the first evaluation."""
+        nets = [out.best_net, *league] if out.best_net is not None else []
+        if not nets:
+            return GreedyAgent(seed)
+        return DQNAgent(random.Random(seed).choice(nets), memory_level=cfg.memory_level, seed=seed, name="self")
 
     rng = random.Random(cfg.seed)
     window: List[Dict[str, float]] = []
@@ -462,8 +520,11 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
             opponent = DQNAgent(out.best_net, memory_level=cfg.memory_level, seed=opp_seed, name="self")
         elif cfg.opponent == "self":
             opponent = GreedyAgent(opp_seed)
+        elif cfg.opponent == "pool":
+            name = random.Random(opp_seed).choice(cfg.pool)
+            opponent = own_network(opp_seed) if name == "self" else make_agent(name, opp_seed)
         else:
-            opponent = OPPONENTS[cfg.opponent](opp_seed)
+            opponent = make_agent(cfg.opponent, opp_seed)
         seat = rng.randrange(2)
         ep = play_training_game(learner, opponent, game, seat, cfg)
         replay.add_game(ep.obs, ep.masks, ep.actions, ep.rewards)
@@ -487,11 +548,12 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
                     p_avg.lerp_(p, 1.0 / cfg.average)
 
         row = game_metrics(game, seat)
+        opp_name = getattr(opponent, "name", "")
         row.update(
             game=float(g + 1), epsilon=learner.epsilon, lr=lr, seat=float(seat),
-            vs_greedy=float(getattr(opponent, "name", "") == "greedy"),
-            vs_self=float(getattr(opponent, "name", "") == "self"),
+            **{f"vs_{name}": float(opp_name == name) for name in ("random", "greedy", "wary", "racer", "self")},
             decisions=float(len(ep.actions)),
+            shaping=ep.shaping,
             mean_abs_td=float(torch.stack(tds).mean()) if tds else 0.0,
             loss=float(torch.stack(losses).mean()) if losses else 0.0,
             q_mean=statistics.mean(ep.qs) if ep.qs else 0.0,
@@ -514,10 +576,12 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
                          for name, spec in opponents.items()},
             }
             out.history.append(entry)
-            margin = entry["eval"]["greedy"]["margin"]
-            if out.best is None or margin > out.best["margin_vs_greedy"]:
-                out.best = {"games": done, "margin_vs_greedy": margin}
+            selection = statistics.mean(entry["eval"][o]["margin"] for o in selected_on)
+            if out.best is None or selection > out.best["selection"]:
+                out.best = {"games": done, "margin_vs_greedy": entry["eval"]["greedy"]["margin"],
+                            "selection": selection, "selected_on": selected_on}
                 out.best_net = copy.deepcopy(eval_net)  # on the CPU, where the self-play opponent plays
+            league.append(copy.deepcopy(eval_net))
             window = []
             log(_progress_line(entry))
             if on_progress is not None:
@@ -529,18 +593,16 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
         for bot in ("random", "greedy"):
             out.baselines[bot] = {opp: evaluate(OPPONENTS[bot](seed), opp, eval_games, board, seed=seed,
                                                 max_turns=cfg.max_turns)
-                                  for opp in ("random", "greedy")}
+                                  for opp in eval_opponents}
     return out
 
 
 def _progress_line(e: dict) -> str:
     t, ev = e["train"], e["eval"]
     line = (f"{e['games']:6d} games  eps {e['epsilon']:.3f}  steps {e['grad_steps']:7d}  "
-            f"train win {t['won']:.2f} margin {t['margin']:+6.1f}  |td| {t['mean_abs_td']:.3f}  "
-            f"eval vs random win {ev['random']['win_share']:.2f} ({ev['random']['margin']:+.1f})  "
-            f"vs greedy win {ev['greedy']['win_share']:.2f} ({ev['greedy']['margin']:+.1f})")
-    if "linear" in ev:
-        line += f"  vs linear win {ev['linear']['win_share']:.2f} ({ev['linear']['margin']:+.1f})"
+            f"train win {t['won']:.2f} margin {t['margin']:+6.1f}  |td| {t['mean_abs_td']:.3f}  eval")
+    for name, m in ev.items():
+        line += f"  vs {name} win {m['win_share']:.2f} ({m['margin']:+.1f})"
     return line + f"  [{e['seconds']:.0f}s]"
 
 
@@ -549,7 +611,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--opponent", choices=TRAIN_OPPONENTS, default=d.opponent,
                         help="training opponent; self = greedy or the learner's own best checkpoint so far, "
-                             "a coin flip each game")
+                             "a coin flip each game; pool = one of --pool each game")
+    parser.add_argument("--pool", nargs="+", default=list(d.pool), metavar="SPEC",
+                        help="with --opponent pool: agent specs to draw from, one per game; 'self' = the best "
+                             "network or one of the --league latest evaluated ones (greedy until the first evaluation)")
+    parser.add_argument("--league", type=int, default=d.league, help="latest evaluated networks 'self' draws from")
+    parser.add_argument("--shaping", type=float, default=d.shaping, metavar="POINTS",
+                        help="potential-based shaping: POINTS per train still needed for my tickets (0 = off)")
     parser.add_argument("--games", type=int, default=d.games)
     parser.add_argument("--hidden", type=int, nargs="+", default=list(d.hidden), metavar="UNITS",
                         help="hidden layer widths")
@@ -575,8 +643,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--device", default=d.device, help="auto (cuda if available), cpu, cuda, cuda:1, ...")
     parser.add_argument("--threads", type=int, default=1,
                         help="torch CPU threads (default 1: several runs share the CPU)")
-    parser.add_argument("--eval-every", type=int, default=500, help="games between evaluations (0 = at the end)")
-    parser.add_argument("--eval-games", type=int, default=100)
+    parser.add_argument("--eval-every", type=int, default=1000, help="games between evaluations (0 = at the end)")
+    parser.add_argument("--eval-games", type=int, default=100, help="games against each evaluation opponent")
+    parser.add_argument("--eval-opponents", nargs="+", default=list(EVAL_BOTS), metavar="SPEC",
+                        help="evaluation opponents (must include greedy); the best checkpoint is picked on the "
+                             "mean margin over all but random")
     parser.add_argument("--eval-linear", default=BEST_LINEAR, metavar="SPEC",
                         help="also evaluate against this agent (ttr.agents.registry spec); 'none' to skip")
     parser.add_argument("--out", type=Path, required=True,
@@ -589,7 +660,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     torch.set_num_threads(args.threads)
 
     cfg = DQNConfig(
-        opponent=args.opponent, games=args.games, hidden=tuple(args.hidden), dueling=args.dueling,
+        opponent=args.opponent, pool=tuple(args.pool), league=args.league, shaping=args.shaping, games=args.games, hidden=tuple(args.hidden), dueling=args.dueling,
         n_step=args.n_step, lr=args.lr, lr_end=args.lr_end, batch=args.batch, buffer=args.buffer,
         learning_starts=args.learning_starts, train_every=args.train_every, target_every=args.target_every,
         grad_clip=args.grad_clip, average=args.average, epsilon_start=args.epsilon_start,
@@ -601,14 +672,16 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
           f"hidden {list(cfg.hidden)}{' dueling' if cfg.dueling else ''}, n-step {cfg.n_step}, lr {cfg.lr}"
           f"{f' -> {cfg.lr_end}' if cfg.lr_end is not None else ''}, batch {cfg.batch}, "
           f"epsilon {cfg.epsilon_start} -> {cfg.epsilon_end}, reward {cfg.reward_mode}"
-          + (f", average {cfg.average}" if cfg.average else ""))
-    print(f"(best checkpoint kept by margin vs greedy; play it as dqn:{args.out}@best)")
+          + (f", average {cfg.average}" if cfg.average else "") + (f", shaping {cfg.shaping}" if cfg.shaping else "")
+          + (f"; pool {' '.join(cfg.pool)}" if cfg.opponent == "pool" else ""))
+    print(f"(best checkpoint kept by mean margin vs {', '.join(o for o in args.eval_opponents if o != 'random')}; "
+          f"play it as dqn:{args.out}@best)")
     live = None
     if args.live:
         print(f"live: {args.out} rewritten every {args.live} games (watch with ttr-dash --live {args.out})")
         live = lambda result: result.save(args.out, finished=False)
     result = train(cfg, eval_every=args.eval_every, eval_games=args.eval_games, eval_linear=eval_linear,
-                   on_progress=live, progress_every=args.live)
+                   eval_opponents=tuple(args.eval_opponents), on_progress=live, progress_every=args.live)
     result.save(args.out)
     print(f"saved {args.out} and {args.out.with_suffix('.pt')}  (ttr-dash {args.out} to analyze)")
 

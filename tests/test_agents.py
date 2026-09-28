@@ -4,7 +4,8 @@ import pytest
 from rich.console import Console
 
 from helpers import route_id, started_game
-from ttr.agents import GreedyAgent, RandomAgent
+from ttr.actions import DrawTickets
+from ttr.agents import GreedyAgent, RacerAgent, RandomAgent, WaryAgent
 from ttr.agents.greedy import cheapest_path
 from ttr.board import load_board
 from ttr.game import Game
@@ -51,6 +52,53 @@ def test_greedy_avoids_final_round_ticket_draws():
                 final = True
             assert not (final and e.kind == "draw_tickets")
 
+
+
+@pytest.mark.parametrize("num_players", [2, 3, 5])
+def test_wary_and_racer_play_full_games(num_players):
+    for seed in range(2):
+        agents = [WaryAgent(seed), RacerAgent(seed), GreedyAgent(seed), RandomAgent(seed), RacerAgent(seed + 1)]
+        game = Game(load_board("usa"), num_players=num_players, seed=seed, max_turns=2000)
+        assert play_game(game, agents[:num_players]).winners  # step() rejects illegal moves
+
+
+def test_greedy_ignores_the_tempo_and_wary_watches_it():
+    game = started_game()
+    greedy, wary = GreedyAgent(0), WaryAgent(0)
+    game.players[1].trains = 16
+    assert not greedy._alert(game, 0) and not wary._alert(game, 0)
+    game.players[1].trains = 15
+    assert not greedy._alert(game, 0) and wary._alert(game, 0)
+
+
+def test_wary_draws_no_tickets_once_alerted():
+    board = load_board("usa")
+    for seed in range(6):
+        game = Game(board, seed=seed)
+        agents = [WaryAgent(seed), RacerAgent(seed + 1)] if seed % 2 else [RacerAgent(seed + 1), WaryAgent(seed)]
+        seat = 1 - seed % 2  # the wary seat
+        while not game.game_over:
+            p = game.current_player
+            action = agents[p].act(game, p)
+            if p == seat and agents[p]._alert(game, p):
+                assert action != DrawTickets()
+            game.step(action)
+
+
+def test_racer_keeps_the_minimum_and_draws_no_tickets():
+    for seed in range(4):
+        game = Game(load_board("usa"), seed=seed)
+        play_game(game, [RacerAgent(seed), GreedyAgent(seed)])
+        assert not any(e.kind == "draw_tickets" and e.player == 0 for e in game.log)
+        assert len(game.players[0].tickets) == 2
+        lengths = [game.board.routes[r].length for r in game.players[0].routes]
+        assert sum(n == 6 for n in lengths) >= 3  # it goes for the 6-routes
+
+
+@pytest.mark.parametrize("bot", ["wary", "racer"])
+def test_new_bots_beat_random(bot):
+    summary = run_matches([bot, "random"], games=20, board=load_board("usa"))
+    assert summary["stats"][0].wins >= 18
 
 def test_render_does_not_crash():
     game = Game(load_board("usa"), seed=0)

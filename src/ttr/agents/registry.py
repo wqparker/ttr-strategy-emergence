@@ -2,6 +2,8 @@
 
     random                     RandomAgent
     greedy                     GreedyAgent
+    wary                       WaryAgent: greedy that watches the opponents' trains
+    racer                      RacerAgent: minimum tickets, long routes, end fast
     linear:PATH                trained linear Q / SARSA weights (ttr.learn.linear; `[env]` extra)
     linear:PATH@best           the same run's best checkpoint
     dqn:PATH                   a trained DQN run's final network (ttr.learn.dqn; `[deep]` extra)
@@ -18,10 +20,11 @@ from pathlib import Path
 from typing import Dict, Tuple
 
 from ttr.agents.base import Agent
-from ttr.agents.greedy import GreedyAgent
+from ttr.agents.greedy import GreedyAgent, WaryAgent
+from ttr.agents.racer import RacerAgent
 from ttr.agents.random_agent import RandomAgent
 
-KINDS = ("random", "greedy", "linear:PATH", "linear:PATH@best", "dqn:PATH", "dqn:PATH@best")
+KINDS = ("random", "greedy", "wary", "racer", "linear:PATH", "linear:PATH@best", "dqn:PATH", "dqn:PATH@best")
 _linear_weights: Dict[str, dict] = {}
 _dqn_nets: Dict[str, Tuple[object, int]] = {}  # spec argument -> (network, memory level)
 
@@ -32,6 +35,10 @@ def make_agent(spec: str, seed: int) -> Agent:
         return RandomAgent(seed)
     if kind == "greedy" and not arg:
         return GreedyAgent(seed)
+    if kind == "wary" and not arg:
+        return WaryAgent(seed)
+    if kind == "racer" and not arg:
+        return RacerAgent(seed)
     if kind == "linear" and arg:
         from ttr.learn.linear import LinearAgent
 

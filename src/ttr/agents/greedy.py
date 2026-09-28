@@ -8,6 +8,12 @@ points.
 
 Per-bot difficulty option (PLAN.md "Agent design decisions"):
 - avoid_final_ticket_draw: never draw tickets once the final round has started.
+
+`WaryAgent` ("wary") is greedy that watches the tempo (`alert_trains`): once an
+opponent is down to that many trains, or the final round has started, it draws no
+more tickets, drops the tickets it can't finish in the turns likely left, and
+turns its cards into the longest routes it can claim. Plain greedy never looks at
+the opponent, which is what the racing strategy exploits (PLAN.md).
 """
 
 from __future__ import annotations
@@ -97,11 +103,13 @@ class GreedyAgent:
         avoid_final_ticket_draw: bool = True,
         draw_tickets_min_trains: int = 12,
         min_filler_route: int = 3,
+        alert_trains: Optional[int] = None,
     ) -> None:
         self.rng = random.Random(seed)
         self.avoid_final_ticket_draw = avoid_final_ticket_draw
         self.draw_tickets_min_trains = draw_tickets_min_trains
         self.min_filler_route = min_filler_route
+        self.alert_trains = alert_trains  # None: never look at the opponents (plain greedy)
 
     # ------------------------------------------------------------- dispatch
 
@@ -127,14 +135,49 @@ class GreedyAgent:
             if not connected(mine, t.a, t.b)
         ]
 
+    def _alert(self, game: Game, p: int) -> bool:
+        """The end is near: an opponent is down to `alert_trains`, or the final round is on."""
+        if self.alert_trains is None:
+            return False
+        if game.final_turns_remaining is not None:
+            return True
+        return min(pl.trains for q, pl in enumerate(game.players) if q != p) <= self.alert_trains
+
+    def _turns_left(self, game: Game, p: int) -> int:
+        """A rough count of my turns before the game ends, once alerted: the
+        opponent nearest the end places about 3 trains a turn until 2 are left,
+        then everyone gets one more turn."""
+        if game.final_turns_remaining is not None:
+            return 1
+        low = min(pl.trains for q, pl in enumerate(game.players) if q != p)
+        return max(0, low - 2) // 3 + 1
+
+    def _turns_needed(self, game: Game, p: int, path: List[int]) -> int:
+        """Turns to claim `path`: one per route, plus two cards a turn for the
+        cards still missing (Locomotives in hand fill any gap)."""
+        hand = game.players[p].hand
+        missing = 0
+        for rid in path:
+            r = game.board.routes[rid]
+            have = hand[r.color] if r.color is not None else max(
+                (n for c, n in hand.items() if c is not Color.LOCOMOTIVE), default=0)
+            missing += max(0, r.length - have)
+        missing = max(0, missing - hand[Color.LOCOMOTIVE])
+        return len(path) + (missing + 1) // 2
+
     def _targets(self, game: Game, p: int) -> Set[int]:
         """Unclaimed routes on the cheapest paths of reachable incomplete tickets,
-        plus their open double-route siblings (either half will do)."""
+        plus their open double-route siblings (either half will do). Alerted, only
+        tickets that can still be finished in the turns likely left."""
         targets: Set[int] = set()
+        alert = self._alert(game, p)
+        turns = self._turns_left(game, p) if alert else 0
         for t in sorted(self._open_tickets(game, p), key=lambda t: -t.points):
             cost, path = cheapest_path(game, p, t.a, t.b)
             if cost == INF or cost > game.players[p].trains:
                 continue  # unreachable or unaffordable; stop investing in it
+            if alert and self._turns_needed(game, p, path) > turns:
+                continue  # too late for this one
             targets.update(path)
         for rid in list(targets):
             sib = game.board.routes[rid].sibling
@@ -158,6 +201,7 @@ class GreedyAgent:
         claims = [a for a in legal if isinstance(a, ClaimRoute)]
         routes = game.board.routes
         final_round = game.final_turns_remaining is not None
+        alert = self._alert(game, p)
         targets = self._targets(game, p)
 
         target_claims = [a for a in claims if a.route_id in targets]
@@ -168,12 +212,13 @@ class GreedyAgent:
             return max(claims, key=lambda a: routes[a.route_id].length)
 
         if not targets:
-            can_draw_tickets = DrawTickets() in legal and not (
+            can_draw_tickets = DrawTickets() in legal and not alert and not (
                 final_round and self.avoid_final_ticket_draw
             )
             if can_draw_tickets and game.players[p].trains >= self.draw_tickets_min_trains:
                 return DrawTickets()
-            fillers = [a for a in claims if routes[a.route_id].length >= self.min_filler_route]
+            shortest = 1 if alert else self.min_filler_route  # alerted: cash in any route
+            fillers = [a for a in claims if routes[a.route_id].length >= shortest]
             if fillers:
                 return max(fillers, key=lambda a: routes[a.route_id].length)
 
@@ -245,3 +290,13 @@ class GreedyAgent:
                 budget -= cost if cost != INF else 0
         choice = KeepTickets(frozenset(keep))
         return choice if choice in legal else legal[0]
+
+
+class WaryAgent(GreedyAgent):
+    """Greedy that watches the tempo (module docstring): alerted once an opponent
+    is down to `alert_trains` trains."""
+
+    name = "wary"
+
+    def __init__(self, seed: Optional[int] = None, alert_trains: int = 15, **options) -> None:
+        super().__init__(seed, alert_trains=alert_trains, **options)

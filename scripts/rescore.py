@@ -5,8 +5,10 @@
 A run's best checkpoint is picked by the same evaluation that scores it, so its recorded
 margin is optimistic. This plays the final weights and the best checkpoint of every run
 against greedy on the same fresh games (batch seed 9001 by default, never used in
-training), so the numbers are unbiased and paired across agents. One row per agent in
-the CSV; the printed table averages each setting (NAME_s<seed>) over its seeds.
+training), so the numbers are unbiased and paired across agents. One row per agent and
+opponent in the CSV; the printed table averages each setting (NAME_s<seed>) over its
+seeds. `--opponents` plays other opponents too (default greedy alone), each on the same
+fresh games.
 """
 
 from __future__ import annotations
@@ -25,12 +27,13 @@ from ttr.simulate import run_matches
 
 
 def score(task):
-    spec, games, seed = task
-    stats = run_matches([spec, "greedy"], games=games, board=load_board("usa"), seed=seed)["stats"]
+    spec, opponent, games, seed = task
+    stats = run_matches([spec, opponent], games=games, board=load_board("usa"), seed=seed)["stats"]
     me, opp = stats
     margins = [a - b for a, b in zip(me.totals, opp.totals)]
     return {
         "agent": spec,
+        "opponent": opponent,
         "games": games,
         "margin": st.mean(margins),
         "se": st.stdev(margins) / len(margins) ** 0.5,
@@ -46,6 +49,8 @@ def main():
     ap.add_argument("--games", type=int, default=400)
     ap.add_argument("--seed", type=int, default=9001)
     ap.add_argument("--workers", type=int, default=12)
+    ap.add_argument("--opponents", nargs="+", default=["greedy"], metavar="SPEC",
+                    help="opponents to play (agent specs, ttr.agents.registry)")
     ap.add_argument("--out", type=Path, required=True, help="CSV, one row per agent")
     args = ap.parse_args()
 
@@ -56,9 +61,8 @@ def main():
             with open(path) as f:
                 run = json.load(f)
             method = run.get("method", "linear")  # DQN runs say so; linear runs predate the field
-            tasks.append((f"{method}:{path}", args.games, args.seed))
-            if run.get("best"):
-                tasks.append((f"{method}:{path}@best", args.games, args.seed))
+            specs = [f"{method}:{path}"] + ([f"{method}:{path}@best"] if run.get("best") else [])
+            tasks += [(spec, opp, args.games, args.seed) for spec in specs for opp in args.opponents]
     with ProcessPoolExecutor(args.workers) as pool:
         rows = list(pool.map(score, tasks))
 
@@ -68,13 +72,20 @@ def main():
         w.writeheader()
         w.writerows(rows)
 
-    groups = defaultdict(lambda: defaultdict(list))
-    for r in rows:
-        path = r["agent"].split(":", 1)[1]
-        which = "best" if path.endswith("@best") else "final"
-        setting = path.removesuffix("@best").rsplit("/", 1)[-1].removesuffix(".json").rsplit("_s", 1)[0]
-        groups[setting][which].append(r)
-    print(f"vs greedy, {args.games} fresh games each (seed {args.seed}); mean over seeds, per-seed in brackets")
+    for opp in args.opponents:
+        groups = defaultdict(lambda: defaultdict(list))
+        for r in rows:
+            if r["opponent"] != opp:
+                continue
+            path = r["agent"].split(":", 1)[1]
+            which = "best" if path.endswith("@best") else "final"
+            setting = path.removesuffix("@best").rsplit("/", 1)[-1].removesuffix(".json").rsplit("_s", 1)[0]
+            groups[setting][which].append(r)
+        report(opp, groups, args)
+
+
+def report(opp, groups, args):
+    print(f"vs {opp}, {args.games} fresh games each (seed {args.seed}); mean over seeds, per-seed in brackets")
     for setting, by in groups.items():
         for which in ("final", "best"):
             rs = by.get(which)
