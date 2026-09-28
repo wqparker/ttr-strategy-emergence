@@ -69,7 +69,7 @@ for 2 players).
 
 ## Current progress
 
-*Updated at the end of each session. Last updated: 2026-09-27.*
+*Updated at the end of each session. Last updated: 2026-09-28.*
 
 - **Earlier: engine ready, and every RL design question settled.**
   - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view,
@@ -448,15 +448,35 @@ for 2 players).
     greedy by +14 (s3, s4) complete almost no tickets: race to the end again. Strongest
     single agent is still `p7b_sarsa_lam98_random_s3@best` (+17.4); pass 8's best are
     p8b s4@best +14.9, s3@best +14.4, p8a s1@best +14.2.
-  - Tier A looks settled (reading, not yet decided): across passes 7–8 every λ 0.98
+  - Decided (2026-09-28): tier A is settled for now. Across passes 7–8 every λ 0.98
     setting's best checkpoints average +9 to +11 against greedy, the strongest single
     agents +14 to +17, and the remaining changes move noise, not the ceiling. The
-    pass-6 reading stands: linear features cap how good a policy they can hold.
-- **Next:** decide whether tier A is settled (recommended: yes). If so, tier B (DQN,
-  needs PyTorch) on the env's observation vector, evaluated against greedy and the
-  best linear agents. Rerunning p8b s1–s4 to 30000 games only completes the
-  self-play finals row; skip unless wanted. The race-to-the-end strategy is a finding
-  for the tempo question either way.
+    pass-6 reading stands: linear features cap how good a policy they can hold (ticket
+    value is all-or-nothing over a whole path, which a sum of features can't express).
+    Feature work is the untested lever; it waits for what the deep methods show.
+    p8b s1–s4 are not rerun.
+  - Done: tier B, DQN (`src/ttr/learn/dqn.py`, `ttr-train-dqn`; design in "Methods to
+    compare"). PyTorch 2.14 (CUDA 13.0 build, RTX 3080) in a new `[deep]` extra.
+    `dqn:PATH[@best]` in the agent registry, so `ttr-sim`, `ttr-view` and
+    `scripts/rescore.py` play DQN agents; `ttr-dash` and `scripts/run_status.py` read
+    DQN runs (no weight pages). `linear.evaluate` takes any agent spec as the opponent.
+    - Speed: a gradient step costs ~4 ms on the GPU whatever the batch up to 2048
+      (kernel-launch bound), and asking the network about one observation is faster on
+      the CPU (0.16 ms). So games are played by CPU copies of the network and only the
+      gradient steps use the GPU, with batches of 256 every 8 decisions: 120 ms a game
+      alone, ~165 ms with 6 runs at once, plus ~35 s per evaluation (300 games).
+    - Smoke run, 1500 games against greedy, 3 seeds: n-step 8 reaches −13, −20, −43
+      (linear pass 2 was −35 to −66 at 2000 games); n-step 1 −106 to −121. The n = 8
+      agents already race to the end like the best linear ones (2 tickets kept, almost
+      none completed).
+  - First DQN pass started 2026-09-28 13:09 (`scripts/dqn_pass1.ps1`, `runs/dqn/pass1/`):
+    against greedy, averaging 100, n-step 1 / 8 / 32, 3 seeds, 30000 games, all 9 at
+    once (estimated 2.5–3 h). Evaluated against random, greedy and the strongest linear
+    agent (`p7b_sarsa_lam98_random_s3@best`) on the linear passes' paired games.
+- **Next:** read DQN pass 1 and re-score its final and best networks on fresh games
+  (`scripts/rescore.py`), next to the linear re-scores. Then the next DQN ladder
+  (training opponent, network size, learning rate, reward mode) and PPO. The
+  race-to-the-end strategy is a finding for the tempo question either way.
 
 ## Roadmap
 
@@ -704,6 +724,25 @@ not just to find the strongest one. Each tier teaches something different:
   a useful face-up card on offer. Ticket choice: count, points, trains to finish,
   fits the uncommitted trains, unreachable, opening choice, points lost if kept on
   the last turn. All from the acting seat's view.
+- **Tier B design (`src/ttr/learn/dqn.py`).** Double DQN on the env's observation
+  vector (765 numbers, memory level 2), an MLP 765 → 512 → 256 → 168 with a dueling
+  head (value + advantage, the advantage centered over the legal actions: tier A's
+  second pass showed the value/advantage split matters). Illegal actions are −inf when
+  acting and in the target's argmax. The setting is tier A's, so the two compare
+  directly: one seat against an opponent (random, greedy, or self = greedy or its own
+  best checkpoint), reward = margin / 100 between the learner's decisions, γ = 1.
+  - **n-step returns** play λ's part: a game is ~85 decisions and ticket points arrive
+    at the end. γ = 1, uncorrected (exploration at ε 0.02 is rare enough).
+  - Replay: 200k decisions, float16 observations, filled a game at a time (so the
+    n-step returns are known), uniform sampling; target copied every 1000 steps; Adam
+    1e-4, Huber loss, gradient norm clipped at 10; ε 1.0 → 0.02 over the first 5% of
+    games.
+  - Weight averaging (`--average`), the best checkpoint by margin against greedy, and
+    the evaluation schedule all as in tier A. Evaluations add a third opponent, the
+    strongest linear agent.
+  - The learner drives the engine directly, as tier A does, rather than stepping the
+    PettingZoo env: the same encoder, mask and action decoding the env uses, so it sees
+    what the env would show that seat, without an env step for the opponent's moves.
 - **Why linear rather than tabular for tier A:** tabular methods are only feasible on a
   tiny map, and there is none. Linear features keep the same update rules and the same
   Q-learning vs. SARSA comparison on the full map.

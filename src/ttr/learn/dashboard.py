@@ -1,5 +1,5 @@
 """Agent analysis dashboard: one full-screen matplotlib window over one or more
-training runs (the JSON `ttr-train-linear` writes).
+training runs (the JSON `ttr-train-linear` or `ttr-train-dqn` writes).
 
     ttr-dash runs/linear/q_greedy.json
     ttr-dash runs/linear/q_greedy.json runs/linear/sarsa_greedy.json     # compare runs
@@ -17,6 +17,7 @@ Pages (keys 1-7 or left/right):
                       as rolling means
     4 Action mix      what the agent spends its decisions on, over training and at the end
     5 Weights         final weights as heatmaps, and the largest weights over training
+                      (linear runs only)
     6 Evaluations     raw table: every evaluation
     7 Games           raw table: every training game, a page at a time
 
@@ -62,6 +63,13 @@ BOT_STYLE = {  # reference lines for the scripted bots: gray, told apart by dash
 }
 DIVERGING = ["#2a78d6", "#f0efec", "#e34948"]  # blue <- 0 -> red
 OPPONENTS = ("greedy", "random")
+# Settings shown on the overview page, by the run's method ("method" in the run file; linear runs predate it).
+CONFIG_KEYS = {
+    "linear": ("opponent", "games", "alpha", "alpha_end", "lam", "average", "shaping", "epsilon_start",
+               "epsilon_end", "reward_mode", "seed"),
+    "dqn": ("opponent", "games", "hidden", "n_step", "lr", "lr_end", "batch", "average", "epsilon_end",
+            "reward_mode", "seed"),
+}
 
 # Metric -> (label, format). Order is display order.
 FORMATS: Dict[str, Tuple[str, str]] = {
@@ -214,7 +222,9 @@ def group_runs(runs: Sequence[Run]) -> List[Run]:
             continue
         data = {k: _mean_tree([m.data[k] for m in members])
                 for k in ("history", "games", "snapshots", "baselines", "weights") if all(k in m.data for m in members)}
-        data["features"] = members[0].data["features"]
+        for k in ("method", "features"):
+            if k in members[0].data:
+                data[k] = members[0].data[k]
         data["config"] = dict(members[0].data.get("config", {}),
                               seed=", ".join(str(m.config.get("seed")) for m in members))
         data["eval_games"] = members[0].data.get("eval_games", "?")
@@ -339,7 +349,7 @@ class Dashboard:
             self.pages[self.page]()
         else:
             self.fig.text(0.5, 0.5, "waiting for " + ", ".join(self.sources)
-                          + "\n(start ttr-train-linear with --live and the same --out)",
+                          + "\n(start ttr-train-linear or ttr-train-dqn with --live and the same --out)",
                           ha="center", va="center", fontsize=12, color=INK_2)
         names = "   ".join(f"{i + 1} {n}" for i, n in enumerate(self.PAGE_NAMES))
         runs = ", ".join(r.name + (f" [{r.progress}]" if self.loader and r.progress else "") for r in self.runs)
@@ -454,10 +464,10 @@ class Dashboard:
                    title=f"final evaluation vs {opp} ({self._eval_games()} games each)",
                    swatches=[None] + [c[2] for c in cols], col_widths=[1.5] + [1] * len(cols))
 
-        cfg_rows = []
-        keys = ["algo", "opponent", "games", "alpha", "alpha_end", "lam", "average", "shaping", "epsilon_start",
-                "epsilon_end", "reward_mode", "seed"]
-        for k in keys:
+        cfg_rows = [["method"] + [r.config.get("algo", r.data.get("method", "")) for r in self.runs]]
+        keys = [k for m in dict.fromkeys(r.data.get("method", "linear") for r in self.runs)
+                for k in CONFIG_KEYS.get(m, ())]
+        for k in dict.fromkeys(keys):
             cfg_rows.append([k] + [str(r.config.get(k, "")) for r in self.runs])
         cfg_rows.append(["training time"] + [f"{r.history[-1]['seconds']:.0f} s" if r.history else "—"
                                               for r in self.runs])
@@ -553,6 +563,11 @@ class Dashboard:
         from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 
         run = self.run
+        if "weights" not in run.data:
+            self.fig.text(0.5, 0.5, f"{run.name}: no linear weights to show ({run.data.get('method', '?')} run; "
+                          f"its networks are in {run.data.get('weights_file', 'the .pt file')})",
+                          ha="center", va="center", fontsize=12, color=INK_2)
+            return
         feats: Dict[str, List[str]] = run.data["features"]
         weights: Dict[str, List[float]] = run.data["weights"]
         all_blocks = list(feats)

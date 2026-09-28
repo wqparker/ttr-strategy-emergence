@@ -39,6 +39,14 @@ runs/linear/*
 runs/linear/pass*/dash/
 runs/linear/pass*/*.err
 runs/linear/pass*/*.tmp
+# DQN runs, kept the same way (run JSON + networks in .pt)
+!runs/dqn/
+runs/dqn/*
+!runs/dqn/pass*/
+!runs/dqn/rescore_*
+runs/dqn/pass*/dash/
+runs/dqn/pass*/*.err
+runs/dqn/pass*/*.tmp
 checkpoints/
 models/
 wandb/

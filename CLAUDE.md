@@ -17,7 +17,7 @@ engineering.
   a starting point.
 - **Multi-agent env structure**: PettingZoo
 - **Single-agent / self-play wrapping**: Gymnasium (if needed)
-- **RL algorithms**: our own CleanRL-style single-file scripts (DQN, PPO), and
+- **RL algorithms**: our own CleanRL-style single-file scripts (DQN, PPO) in PyTorch, and
   hand-rolled linear Q-learning/SARSA. Not SB3 or RLlib (see PLAN.md
   "Methods to compare").
 - **Tree-search agents** (MCTS with determinization is in the method roster): hand-rolled,
@@ -66,7 +66,9 @@ the env (Phase 4).
 ## Conventions
 
 - Setup: `py -3.14 -m venv .venv` then `.venv/Scripts/python -m pip install -e ".[dev]"`
-  (Python 3.14+).
+  (Python 3.14+). Training needs more extras: first the GPU build of PyTorch,
+  `.venv/Scripts/python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130`
+  (PyPI's Windows wheel is CPU-only), then `pip install -e ".[dev,env,deep,analysis]"`.
 - Tests: `.venv/Scripts/python -m pytest`.
 - Layout: engine in `src/ttr/` (`game.py` rules/state, `board.py` + `data/*.json`
   board data, `scoring.py`, `actions.py`), tests in `tests/`. Code comments like

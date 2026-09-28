@@ -18,6 +18,8 @@ ttr-view = "ttr.viz.app:main"
 ttr-shot = "ttr.viz.screenshot:main"
 # Needs the [env] extra (numpy)
 ttr-train-linear = "ttr.learn.linear:main"
+# Needs the [env] and [deep] extras (numpy, torch)
+ttr-train-dqn = "ttr.learn.dqn:main"
 # Needs the [analysis] extra (matplotlib)
 ttr-dash = "ttr.learn.dashboard:main"
 
@@ -28,6 +30,9 @@ viz = ["pygame-ce>=2.5"]
 analysis = ["pandas>=2", "matplotlib>=3.8"]
 # The RL environment (PLAN.md Phase 4): the PettingZoo AEC env and its spaces
 env = ["numpy>=1.24", "pettingzoo>=1.24", "gymnasium>=0.28"]
+# Deep RL (PLAN.md tiers B, C): DQN, later PPO. PyPI's Windows wheel is CPU-only; for the
+# GPU build install torch from the CUDA index first (see CLAUDE.md "Conventions").
+deep = ["torch>=2.9"]
 # scripts/fit_tiles.py: fitting board tiles to the board photo
 photo = ["numpy>=1.24", "opencv-python-headless>=4.8"]
 

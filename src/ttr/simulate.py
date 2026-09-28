@@ -193,7 +193,8 @@ def show_game(console: Console, board: Board, args: argparse.Namespace) -> None:
 def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--agents", nargs="+", default=["greedy", "random"], type=agent_spec,
-                        help="random, greedy, or linear:PATH (trained weights)")
+                        help="random, greedy, linear:PATH or dqn:PATH (trained runs; append @best for the "
+                             "best checkpoint)")
     parser.add_argument("--games", type=int, default=100)
     parser.add_argument("--board", default="usa")
     parser.add_argument(

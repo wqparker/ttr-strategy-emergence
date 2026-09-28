@@ -1,4 +1,4 @@
-"""Re-score trained linear agents against greedy on fresh games.
+"""Re-score trained agents (linear and DQN runs) against greedy on fresh games.
 
     python scripts/rescore.py "runs/linear/pass5/*.json" "runs/linear/pass6/*.json" --out runs/linear/rescore.csv
 
@@ -53,10 +53,12 @@ def main():
     for pattern in args.patterns:
         for path in sorted(glob.glob(pattern)):
             path = path.replace("\\", "/")
-            tasks.append((f"linear:{path}", args.games, args.seed))
             with open(path) as f:
-                if json.load(f).get("best"):
-                    tasks.append((f"linear:{path}@best", args.games, args.seed))
+                run = json.load(f)
+            method = run.get("method", "linear")  # DQN runs say so; linear runs predate the field
+            tasks.append((f"{method}:{path}", args.games, args.seed))
+            if run.get("best"):
+                tasks.append((f"{method}:{path}@best", args.games, args.seed))
     with ProcessPoolExecutor(args.workers) as pool:
         rows = list(pool.map(score, tasks))
 
@@ -68,7 +70,7 @@ def main():
 
     groups = defaultdict(lambda: defaultdict(list))
     for r in rows:
-        path = r["agent"].removeprefix("linear:")
+        path = r["agent"].split(":", 1)[1]
         which = "best" if path.endswith("@best") else "final"
         setting = path.removesuffix("@best").rsplit("/", 1)[-1].removesuffix(".json").rsplit("_s", 1)[0]
         groups[setting][which].append(r)

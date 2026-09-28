@@ -208,6 +208,38 @@ against greedy; play it as `linear:PATH@best`). Name runs `NAME_s<seed>.json` to
 in `ttr-dash --group`. Feature definitions: `src/ttr/learn/features.py`; metrics:
 `src/ttr/learn/metrics.py`.
 
+### DQN
+
+Double DQN with a dueling head on the env's 765-number observation and the 168-action mask
+(`ttr.learn.dqn`, `[env]` + `[deep]` extras). Same setting as the linear learner: one seat
+against an opponent, reward = margin / 100 between its decisions, γ = 1. Gradient steps run on
+the GPU (`--device auto`); games are played by CPU copies of the network.
+
+```
+ttr-train-dqn --opponent greedy --n-step 8 --average 100 --games 30000 --live 500 --out runs/dqn/n8_s0.json
+ttr-sim --agents dqn:runs/dqn/n8_s0.json@best greedy    # the run's best checkpoint
+```
+
+| Option | Default | |
+| --- | --- | --- |
+| `--opponent` | `greedy` | `random`, `greedy`, or `self` (greedy or the run's own best checkpoint so far) |
+| `--n-step` | `1` | n-step returns; the counterpart of the linear `--lambda` |
+| `--hidden UNITS ...` | `512 256` | hidden layer widths |
+| `--no-dueling` | dueling on | a plain Q head instead of value + advantage |
+| `--lr` / `--lr-end` | `1e-4` / off | Adam step size, optionally falling linearly |
+| `--batch` / `--train-every` | `256` / `8` | one gradient step per 8 learner decisions |
+| `--buffer` / `--learning-starts` | `200000` / `10000` | replay size and first step, in decisions |
+| `--target-every` | `1000` | gradient steps between target-network copies |
+| `--average GAMES` | off | evaluate, checkpoint and save an exponential average of the weights |
+| `--epsilon-start` / `--epsilon-end` / `--epsilon-decay` | `1.0` / `0.02` / `0.05` | exploration |
+| `--eval-linear SPEC` | pass 7's best linear agent | a third evaluation opponent; `none` to skip |
+| `--eval-every` / `--eval-games` | `500` / `100` | evaluation schedule |
+| `--memory-level`, `--reward`, `--device`, `--threads`, `--live [N]` | | as named |
+
+`RUN.json` has the same layout as a linear run (`ttr-dash` reads it; no weight pages), with
+`"method": "dqn"`; the networks (final, best, raw when averaging) are in `RUN.pt` beside it.
+`scripts/rescore.py` and `scripts/run_status.py` take both kinds of run.
+
 ## ttr-dash
 
 Agent analysis: a full-screen matplotlib window over one or more training runs (`[analysis]`
@@ -311,6 +343,8 @@ python -m pip install -e ".[viz]"    # pygame-ce, for the viewer
 python -m pip install -e ".[analysis]"  # pandas + matplotlib: ttr.analysis rows, ttr-dash
 python -m pip install -e ".[env]"    # numpy, PettingZoo, Gymnasium: the RL env (ttr.env)
 python -m pip install -e ".[photo]"  # numpy + OpenCV, board-data tools only
+python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130   # GPU PyTorch
+python -m pip install -e ".[deep]"   # torch: ttr-train-dqn (install the GPU build first)
 ```
 
 Any install creates the three commands; re-run one only after changing `[project.scripts]`. The

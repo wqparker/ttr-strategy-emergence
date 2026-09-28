@@ -91,6 +91,18 @@ TRAIN_OPPONENTS = {
 VALUE = "value"  # the weight block over the state features
 
 
+def swap_in(tmp: Path, path: Path) -> None:
+    """Replace `path` with the finished file `tmp` in one step, so a reader
+    (ttr-dash --live) never sees half of it."""
+    for attempt in range(20):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:  # Windows: a reader has the file open for a moment
+            time.sleep(0.05 * (attempt + 1))
+    os.replace(tmp, path)
+
+
 def expected_features() -> Dict[str, List[str]]:
     return {VALUE: list(STATE_FEATURES), **{k: list(feature_names(k)) for k in ACTION_TYPES}}
 
@@ -146,13 +158,7 @@ class LinearAgent:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_name(path.name + ".tmp")
         tmp.write_text(json.dumps({**meta, **self.to_dict()}, indent=1), encoding="utf-8")
-        for attempt in range(20):
-            try:
-                os.replace(tmp, path)
-                return
-            except PermissionError:  # Windows: a reader has the file open for a moment
-                time.sleep(0.05 * (attempt + 1))
-        os.replace(tmp, path)
+        swap_in(tmp, path)
 
     @classmethod
     def load(cls, path: Path, seed: Optional[int] = None, name: Optional[str] = None,
@@ -319,7 +325,13 @@ def evaluate(agent, opponent: str, games: int, board: Board, seed: int = 0,
              max_turns: int = 1000) -> Dict[str, float]:
     """Mean game metrics (ttr.learn.metrics) of `agent` over `games` against a
     scripted bot, random seats. A LinearAgent plays greedily (epsilon 0). Any
-    `Agent` works, so the scripted bots get the same numbers as baselines."""
+    `Agent` works, so the scripted bots get the same numbers as baselines.
+    `opponent` is a bot name, or any agent spec (ttr.agents.registry)."""
+    make = OPPONENTS.get(opponent)
+    if make is None:
+        from ttr.agents.registry import make_agent
+
+        make = lambda s: make_agent(opponent, s)
     saved = getattr(agent, "epsilon", None)
     if saved is not None:
         agent.epsilon = 0.0
@@ -329,7 +341,7 @@ def evaluate(agent, opponent: str, games: int, board: Board, seed: int = 0,
         for g in range(games):
             game = Game(board, num_players=2, seed=seed * 100_000 + g, max_turns=max_turns)
             seat = rng.randrange(2)
-            opp = OPPONENTS[opponent](seed * 1000 + g)
+            opp = make(seed * 1000 + g)
             while not game.game_over:
                 p = game.current_player
                 game.step(agent.act(game, p) if p == seat else opp.act(game, p))
