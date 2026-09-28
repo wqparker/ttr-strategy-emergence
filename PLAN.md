@@ -469,14 +469,73 @@ for 2 players).
       (linear pass 2 was −35 to −66 at 2000 games); n-step 1 −106 to −121. The n = 8
       agents already race to the end like the best linear ones (2 tickets kept, almost
       none completed).
-  - First DQN pass started 2026-09-28 13:09 (`scripts/dqn_pass1.ps1`, `runs/dqn/pass1/`):
+  - First DQN pass (`scripts/dqn_pass1.ps1`, `runs/dqn/pass1/`, 2026-09-28, 1 h 57 min):
     against greedy, averaging 100, n-step 1 / 8 / 32, 3 seeds, 30000 games, all 9 at
-    once (estimated 2.5–3 h). Evaluated against random, greedy and the strongest linear
-    agent (`p7b_sarsa_lam98_random_s3@best`) on the linear passes' paired games.
-- **Next:** read DQN pass 1 and re-score its final and best networks on fresh games
-  (`scripts/rescore.py`), next to the linear re-scores. Then the next DQN ladder
-  (training opponent, network size, learning rate, reward mode) and PPO. The
-  race-to-the-end strategy is a finding for the tempo question either way.
+    once. Re-scored on 1000 fresh games per opponent (`runs/dqn/rescore_pass1.*`;
+    wary and racer are the new bots below). Mean over seeds, per-seed in brackets:
+
+    | Setting | vs greedy, final | vs greedy, best | Best win | vs wary (final / best) | vs racer (final / best) |
+    | --- | --- | --- | --- | --- | --- |
+    | n = 1 | **+12.5 (+10, +14, +13)** | +14.1 (+12, +16, +14) | 73% | +6.9 / +8.4 | −3.4 / +4.6 |
+    | n = 8 | −49.8 | −26.4 | 22% | −51.0 / −31.4 | −60.7 / −51.6 |
+    | n = 32 | −68.3 | −34.2 | 14% | −68.1 / −38.1 | −74.0 / −52.1 |
+
+    Readings: n-step returns sped up the start and then hurt. n = 8 and 32 led at 3000
+    games (−26, −34), peaked there, and drifted to −47 / −66 with shorter routes (2.9 /
+    2.5) and fewer self-ended games, the drift linear passes 5–6 showed. n = 1 started
+    slowest (−144 at 1000 games), passed 0 near 10k and was still rising (best
+    checkpoints at 22–24.5k games). Why n-step hurts is untested: the n-step return mixes
+    in the opponent's card luck over n decisions, and uncorrected n-step learns the
+    exploring policy's value. So λ's lesson from tier A did not transfer.
+    - n = 1 plays pure racing: 10 claims of mean length 4.4, 97 route points, keeps the
+      minimum 2 tickets and completes 0.02, ends the game itself in 99% of games (69
+      turns), longest-path bonus 87%. Against the best linear agent in training
+      evaluations: −20.
+    - Against tier A: every n = 1 seed's final network (+10 to +14) beats every linear
+      setting's finals (best p8a +5.6) and matches linear best checkpoints (+9 to +11),
+      without checkpoint picking. The strongest single agent is still linear (below).
+  - Done: sparring bots and an opponent pool (2026-09-28). Every learner so far found
+    the one exploit of greedy (which plans its tickets and never looks at the
+    opponent): race to the end. Two causes: the opponent rewards racing, and tickets
+    are hard to learn (the reward comes at the end, after dozens of right claims).
+    - `wary` (`WaryAgent`, an option on `GreedyAgent`): once an opponent is down to 15
+      trains or the final round starts, no more ticket draws, drop tickets it can't
+      finish in the turns likely left, cash cards into the longest claims.
+    - `racer` (`src/ttr/agents/racer.py`): the racing strategy scripted: fewest
+      tickets, only 6-routes until it can't (15 points for 6 trains), extend its own
+      network. Minimum length tuned on 300 games vs greedy: 4 → −13, 5 → −3, 6 → +12.
+    - Wary doesn't beat racer: alert at 15–30 trains, or grabbing 5- or 6-routes
+      itself, all lose −7 to −14. Pure racing beats both simple ticket planners in
+      2-player games.
+    - `ttr-train-dqn --opponent pool` (`--pool greedy wary racer self`, one per game;
+      `self` = the best network or one of the 5 latest evaluated ones), `--shaping`
+      (potential-based, Φ = −POINTS × trains still needed for my tickets; sums to 0
+      over a game), evaluations against every bot, best checkpoint on the mean margin
+      over greedy, wary and racer. `rescore.py --opponents`. `ttr-dash` cycles through
+      a run's opponents.
+  - Round robin (`scripts/round_robin.py`, `runs/round_robin_2026-09-28.*`): 400 fresh
+    games per pair, Elo with greedy = 1000:
+
+    | Agent | Elo | vs linear best | vs DQN best | vs racer | vs wary | vs greedy |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | linear `p7b_sarsa_lam98_random_s3@best` | 1233 | — | +19.4 | +14.6 | +10.8 | +17.4 |
+    | DQN `d1a_n1_s1@best` | 1133 | −19.4 | — | +4.2 | +8.6 | +14.9 |
+    | racer | 1077 | −14.6 | −4.2 | — | +7.0 | +12.9 |
+    | wary | 1055 | −10.8 | −8.6 | −7.0 | — | +4.1 |
+    | greedy | 1000 | −17.4 | −14.9 | −12.9 | −4.1 | — |
+
+    The strongest single linear agent beats everything, racer included (+14.6), so it
+    does something beyond pure racing; worth a look in the viewer. DQN's best beats
+    every bot, narrowly racer.
+  - DQN pass 2 ready (`scripts/dqn_pass2.ps1`, `runs/dqn/pass2/`): n = 1, averaging 100,
+    3 seeds, 30000 games: vs greedy (pass-1 reference), vs pool, vs pool + shaping 1.
+    Evaluations every 1000 games against random, greedy, wary, racer and the best linear
+    agent. Does the pool break racing, and does shaping bring ticket play?
+- **Next:** run DQN pass 2 and re-score it against greedy, wary and racer
+  (`rescore.py --opponents greedy wary racer`); round robin again with its best agents.
+  Look at what `p7b_sarsa_lam98_random_s3@best` does that beats racer. Then PPO with
+  self-play on the same pool. The race-to-the-end strategy is a finding for the tempo
+  question either way.
 
 ## Roadmap
 

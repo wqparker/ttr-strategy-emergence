@@ -39,6 +39,8 @@ runs/linear/*
 runs/linear/pass*/dash/
 runs/linear/pass*/*.err
 runs/linear/pass*/*.tmp
+# Round robins (scripts/round_robin.py)
+!runs/round_robin_*
 # DQN runs, kept the same way (run JSON + networks in .pt)
 !runs/dqn/
 runs/dqn/*

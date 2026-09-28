@@ -1,0 +1,27 @@
+400 games per pair (seed 9101), random seats; row vs column
+
+margin (row - column) +- standard error
+                                                    1          2          3          4          5          6
+ 1. linear:p7b_sarsa_lam98_random_s3@best           - +19.4+-1.2 +14.6+-1.1 +10.8+-1.2 +17.4+-1.3+146.8+-2.2
+ 2. dqn:d1a_n1_s1@best                     -19.4+-1.2          -  +4.2+-1.0  +8.6+-1.2 +14.9+-1.3+156.5+-2.4
+ 3. racer                                  -14.6+-1.1  -4.2+-1.0          -  +7.0+-1.2 +12.9+-1.3+162.0+-2.2
+ 4. wary                                   -10.8+-1.2  -8.6+-1.2  -7.0+-1.2          -  +4.1+-1.6+187.3+-2.6
+ 5. greedy                                 -17.4+-1.3 -14.9+-1.3 -12.9+-1.3  -4.1+-1.6          -+191.1+-2.6
+ 6. random                                -146.8+-2.2-156.5+-2.4-162.0+-2.2-187.3+-2.6-191.1+-2.6          -
+
+win share (row vs column)
+                                                    1          2          3          4          5          6
+ 1. linear:p7b_sarsa_lam98_random_s3@best           -        78%        76%        63%        72%       100%
+ 2. dqn:d1a_n1_s1@best                            22%          -        62%        66%        73%       100%
+ 3. racer                                         24%        38%          -        57%        65%       100%
+ 4. wary                                          37%        34%        42%          -        56%       100%
+ 5. greedy                                        28%        27%        35%        44%          -       100%
+ 6. random                                         0%         0%         0%         0%         0%          -
+
+ratings (Elo scale, greedy = 1000)
+ 1. linear:p7b_sarsa_lam98_random_s3@best    1233
+ 2. dqn:d1a_n1_s1@best                       1133
+ 3. racer                                    1077
+ 4. wary                                     1055
+ 5. greedy                                   1000
+ 6. random                                    -78

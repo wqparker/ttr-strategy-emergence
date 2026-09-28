@@ -1,0 +1,16 @@
+a,b,games,margin,se,a_wins,b_wins,a_tickets_completed,b_tickets_completed
+random,greedy,400,-191.105,2.584246653168197,0.0,400.0,0.6075,4.8325
+random,wary,400,-187.315,2.6287812126840073,0.0,400.0,0.5625,4.575
+random,racer,400,-161.9725,2.2469900467180812,0.0,400.0,0.2575,0
+random,linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best,400,-146.8375,2.2435404875270097,0.0,400.0,0.2525,0.2725
+random,dqn:runs/dqn/pass1/d1a_n1_s1.json@best,400,-156.5375,2.381364888294738,0.0,400.0,0.335,0
+greedy,wary,400,-4.1075,1.591854220405423,175.0,225.0,4.465,4.145
+greedy,racer,400,-12.895,1.3310151919128335,140.0,260.0,3.815,0
+greedy,linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best,400,-17.375,1.2683780567074006,111.0,289.0,3.32,0.235
+greedy,dqn:runs/dqn/pass1/d1a_n1_s1.json@best,400,-14.9175,1.290058083584827,108.0,292.0,3.5425,0.0225
+wary,racer,400,-7.0125,1.160629575663468,170.0,230.0,3.0325,0
+wary,linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best,400,-10.7575,1.203189884898808,149.0,251.0,2.955,0.245
+wary,dqn:runs/dqn/pass1/d1a_n1_s1.json@best,400,-8.6075,1.194576763328213,137.0,263.0,3.195,0.03
+racer,linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best,400,-14.59,1.0503751567534392,98.0,302.0,0,0.2375
+racer,dqn:runs/dqn/pass1/d1a_n1_s1.json@best,400,-4.2475,0.9903054435647037,152.0,248.0,0,0.0525
+linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best,dqn:runs/dqn/pass1/d1a_n1_s1.json@best,400,19.45,1.1890451298424316,310.0,90.0,0.2375,0.0575
