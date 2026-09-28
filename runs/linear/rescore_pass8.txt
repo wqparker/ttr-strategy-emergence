@@ -1,0 +1,5 @@
+vs greedy, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p8a_q_lam98_greedy_decay final   +5.6 (+11, +13, +11, +8, -14)  win  60%  tickets 0.78/1.46
+p8a_q_lam98_greedy_decay best    +9.7 (+10, +14, +11, +10, +3)  win  64%  tickets 0.93/1.22
+p8b_q_lam98_self_decay   final  -12.2 (-6, -47, +9, -12, -6)  win  38%  tickets 2.02/1.01
+p8b_q_lam98_self_decay   best    +8.9 (+14, -8, +10, +14, +15)  win  62%  tickets 0.76/1.27

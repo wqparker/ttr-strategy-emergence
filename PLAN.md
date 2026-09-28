@@ -423,13 +423,40 @@ for 2 players).
     on fresh games: `p7b_sarsa_lam98_random_s3@best` +17.4 ± 0.8 (73% wins);
     `p7c_q_lam98_greedy_s1` final weights +15.5 (70%) and its best +15.3;
     `p7d_q_lam98_self_s2@best` +14.9; `p7c_q_lam98_greedy_s2@best` +14.6.
-  - Eighth pass started (`scripts/linear_pass8.ps1`, `runs/linear/pass8/`): λ 0.98 with
-    α decay 0.2 → 0.02, Q against greedy and self, 5 seeds, all 10 at once: whether
-    decay steadies the noisy finals of pass 7.
-- **Next:** read the pass-6 results; re-score best and final weights of passes 4–6 on
-  fresh games; finish the pass-3 analysis (re-score best and final weights on fresh
-  games, per-seed curves), then the next ladder. DQN / PPO (needs PyTorch) after tier A settles. The race-to-the-end
-  strategy is a finding for the tempo question either way.
+  - Eighth pass (`scripts/linear_pass8.ps1`, `runs/linear/pass8/`): λ 0.98 with α decay
+    0.2 → 0.02, Q against greedy and self, 5 seeds, all 10 at once: whether decay
+    steadies the noisy finals of pass 7. The launcher died at about 10:08, before
+    finishing (no exit lines in `pass8.log`; cause unverified). Every run against greedy
+    and self-play s0 finished; self-play s1–s4 stopped at 27000–28000 games, so their
+    "final" is the last live save. Their best checkpoints (games 10500–18500) are
+    unaffected. Training evaluations and the fresh-game re-score
+    (`runs/linear/rescore_pass8.*`), pass 7 without decay for reference:
+
+    | Setting | Training eval (sd) | Final, fresh (seeds) | Best, fresh (seeds) | Best win |
+    | --- | --- | --- | --- | --- |
+    | p7c Q(λ) vs greedy | +3 (15.1) | −8 (−30, +15, +1, −7, −19) | +11 (+12, +15, +15, +10, +4) | 64% |
+    | p8a + α decay | +3 (6.4) | **+6 (+11, +13, +11, +8, −14)** | +10 (+10, +14, +11, +10, +3) | 64% |
+    | p7d Q(λ) vs self | −12 (11.4) | −15 (−6, −9, +4, −59, −4) | +10 (+12, +12, +15, +5, +7) | 63% |
+    | p8b + α decay | −11 (7.0) | −12 (−6, −47, +9, −12, −6) | +9 (+14, −8, +10, +14, +15) | 62% |
+
+    Readings: decay halves the evaluation noise and makes the final weights usable:
+    four of five p8a seeds beat greedy by +8 to +13 with no checkpoint selection, the
+    first setting whose final weights beat greedy on average (60% wins). The ceiling
+    does not move: best checkpoints are +9 to +10, as in pass 7. One seed per setting
+    still drifts (p8a s4 −14; p8b s1 −47 turned ticket-heavy, completing 5.0 tickets and
+    failing 2.1 a game, and its best was only −8). The self-play checkpoints that beat
+    greedy by +14 (s3, s4) complete almost no tickets: race to the end again. Strongest
+    single agent is still `p7b_sarsa_lam98_random_s3@best` (+17.4); pass 8's best are
+    p8b s4@best +14.9, s3@best +14.4, p8a s1@best +14.2.
+  - Tier A looks settled (reading, not yet decided): across passes 7–8 every λ 0.98
+    setting's best checkpoints average +9 to +11 against greedy, the strongest single
+    agents +14 to +17, and the remaining changes move noise, not the ceiling. The
+    pass-6 reading stands: linear features cap how good a policy they can hold.
+- **Next:** decide whether tier A is settled (recommended: yes). If so, tier B (DQN,
+  needs PyTorch) on the env's observation vector, evaluated against greedy and the
+  best linear agents. Rerunning p8b s1–s4 to 30000 games only completes the
+  self-play finals row; skip unless wanted. The race-to-the-end strategy is a finding
+  for the tempo question either way.
 
 ## Roadmap
 

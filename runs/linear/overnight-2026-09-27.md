@@ -62,3 +62,10 @@ under 2 claims a game). A setting that is merely weak is a result, not a failure
 - 09:28 (thought it was ~05:30 when deciding) Re-scored pass 7 and started pass 8
   (`scripts/linear_pass8.ps1`): lambda 0.98 + alpha decay 0.2 -> 0.02, Q vs greedy and vs self,
   5 seeds, 10 runs at once, ~35 min. Stopped the ineffective keep-awake process.
+- ~10:08 Pass 8 launcher died before finishing (no exit or finished lines in `pass8.log`; cause
+  unverified, likely its console closing). p8a all 5 and p8b s0 finished; p8b s1-s4 stopped at
+  27000-28000 games with their stdout logs empty (buffered output lost); their JSON live saves
+  are intact.
+- 23:45 Re-scored pass 8 (`runs/linear/rescore_pass8.*`). alpha decay makes lambda-0.98 finals
+  usable vs greedy (p8a final +5.6, four seeds +8 to +13) but best checkpoints stay at +9 to +10,
+  as in pass 7. Results in PLAN.md.
