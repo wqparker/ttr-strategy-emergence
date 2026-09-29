@@ -536,15 +536,45 @@ for 2 players).
     The strongest single linear agent beats everything, racer included (+14.6), so it
     does something beyond pure racing; worth a look in the viewer. DQN's best beats
     every bot, narrowly racer.
-  - DQN pass 2 ready (`scripts/dqn_pass2.ps1`, `runs/dqn/pass2/`): n = 1, averaging 100,
-    3 seeds, 30000 games: vs greedy (pass-1 reference), vs pool, vs pool + shaping 1.
-    Evaluations every 1000 games against random, greedy, wary, racer and the best linear
-    agent. Does the pool break racing, and does shaping bring ticket play?
-- **Next:** run DQN pass 2 and re-score it against greedy, wary and racer
-  (`rescore.py --opponents greedy wary racer`); round robin again with its best agents.
-  Look at what `p7b_sarsa_lam98_random_s3@best` does that beats racer. Then PPO with
-  self-play on the same pool. The race-to-the-end strategy is a finding for the tempo
-  question either way.
+  - DQN pass 2 (`scripts/dqn_pass2.ps1`, `runs/dqn/pass2/`, 2026-09-28, 1 h 53 min): n = 1,
+    averaging 100, 3 seeds, 30000 games: vs greedy (pass-1 reference), vs pool (greedy,
+    wary, racer, self; a quarter each), vs pool + shaping 1. Does the pool break racing,
+    and does shaping bring ticket play? Re-scored on 1000 fresh games per opponent
+    (`runs/dqn/rescore_pass2.*`), final / best, mean over seeds:
+
+    | Arm | vs greedy | vs wary | vs racer | vs collector | Tickets done |
+    | --- | --- | --- | --- | --- | --- |
+    | vs greedy | +12.5 / +14.7 | +6.9 / +9.0 | −3.4 / +5.0 | +30.1 / +31.8 | 0.02 |
+    | vs pool | +8.2 / +9.0 | +3.1 / +3.8 | **+22.2 / +22.3** | +24.8 / +26.0 | 0.01 |
+    | pool + shaping | +10.8 / +13.2 | +6.0 / +8.1 | **+21.7 / +22.8** | +27.7 / +30.5 | 0.02 |
+
+    Readings: no arm plays tickets. Every seed of every arm keeps the minimum 2 and
+    completes 0.01–0.02 (−19 ticket points), claims ~10 routes of mean length 4.3–4.5,
+    and ends the game itself 98–99% of the time. What the pool changed is the racing
+    itself: pool-trained agents beat racer +22 (90–92% wins) where the greedy-trained
+    ones tie it, at a cost of 2–6 against greedy and wary. Shaping didn't bring
+    tickets (a game's shaping sums to 0, so abandoning a ticket costs the same as
+    before) but sped learning up: −91 vs greedy at 1000 games against −174 / −202, and
+    positive from ~12k games against ~22k for the pool without it. The greedy arm
+    repeats pass 1 (same numbers). The pool arms went through a ticket-hoarding phase
+    early (12 tickets kept at 5–6k games) and left it by ~10k.
+  - Round robin 2 (`runs/round_robin_2026-09-28b.*`, 10 agents, 400 games per pair), Elo
+    with greedy = 1000: linear `p7b_sarsa_lam98_random_s3@best` 1246, DQN pool + shaping
+    `d2c_pool_shape_s1@best` 1235, DQN pool `d2b_pool_s1@best` 1172, DQN pass-1
+    `d1a_n1_s1@best` 1106, DQN vs greedy `d2a_greedy_s2@best` 1103, wary 1057, racer 1013,
+    greedy 1000, collector 829. Pool + shaping loses to the linear agent by only 6.4
+    (pass 1's DQN: 19.4) and beats both greedy-trained DQNs by 18–21: training against
+    a pool made a more robust racer, not a different strategy.
+- **Next:**
+  - Look at what separates the pool-trained racer from the greedy-trained one (it beats
+    racer +22 vs ±0: taking the 6-routes first? blocking?) and what the linear agent
+    does that beats every DQN, with the viewer and route overlays (`ttr-sim --record`,
+    `ttr-view --overlay`).
+  - Tickets never appeared in any learner. With the collector result (more tickets
+    loses in 2-player games), racing may be close to right for 2 players on this map;
+    3–5 players is where tickets could matter more.
+  - PPO with self-play on the same pool (tier C), as planned. The race-to-the-end
+    strategy is the finding for the tempo question.
 
 ## Roadmap
 
