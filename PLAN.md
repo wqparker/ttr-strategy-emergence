@@ -1005,6 +1005,10 @@ not just to find the strongest one. Each tier teaches something different:
     of state *and* action, designed with that tier. The vector is for DQN, PPO and a
     later AlphaZero-style agent.
   - **A graph network** (cities as nodes, routes as edges) is a possible later experiment.
+  - **Optional ticket-plan block** (decided 2026-09-28, off by default): 224 more numbers
+    with which routes serve my tickets (and their points), which complete one, how
+    offered tickets fit, and the cards my plan needs. Added because DQN never linked
+    ticket IDs to routes on its own; the details are in `src/ttr/env/observation.py`.
 - **Reward: an env setting, defaulting to dense score margin.** The reward decides which
   strategies are worth learning at all, so it is an experiment variable, like memory level.
 
