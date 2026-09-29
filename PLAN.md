@@ -591,12 +591,34 @@ for 2 players).
     Linear seeds range from +3.7 to −18.5 against the same DQN; the three DQN seeds
     are within 2 of each other. Ranking against greedy doesn't transfer to ranking
     against other agents.
+  - Racer fixed (2026-09-28): once no route of its minimum length (6) is open to it,
+    it lowers the minimum to the longest route left instead of drawing to the end. Its
+    results against the bots are unchanged (+11.6 vs greedy, +8.8 vs wary, +22.0 vs
+    collector, 200 games each), and **it beats every trained agent**: +15.6 vs the pool
+    + shaping DQN (76% wins), +22.5 vs the greedy-trained DQN, +1.8 vs the best linear
+    agent. The DQNs had learned to beat broken racer, not racing; a correct scripted
+    racer is the strongest agent so far.
+  - Decided (2026-09-28): the observation gets an optional ticket-plan block
+    (`ObservationEncoder(ticket_plan=True)`, 224 numbers appended; the 765-number
+    default is unchanged): per route, the points of my open tickets whose cheapest path
+    uses it and whether it alone completes one; per offered ticket, trains to connect,
+    too big for my uncommitted trains, overlap with my plan, points per train; cards
+    my plan still needs per color; trains committed / uncommitted, tickets lost. It is
+    what the linear learner's ticket features give it (its one edge over DQN: ticket
+    choice), as exact computations on the viewer's own information, in line with the
+    other computed values. `ttr-train-dqn --ticket-plan`.
+  - DQN pass 3 ready (`scripts/dqn_pass3.ps1`, `runs/dqn/pass3/`): pool = greedy, wary,
+    racer (fixed) twice, collector, self, and two strong linear agents
+    (`p7d_q_lam98_self_s2@best`, `p8b_q_lam98_self_decay_s4@best`; the strongest,
+    `p7b…s3@best`, stays out of training as the held-out evaluation opponent). Shaping
+    1, n = 1, averaging 100, 30000 games, 4 seeds; arms without and with
+    `--ticket-plan`. Evaluations against random, greedy, wary, racer, collector and
+    the held-out linear agent; best checkpoint on the mean over greedy, wary, racer,
+    collector. Questions: does a pool with a real racer produce something that beats
+    racer, and do the ticket features bring ticket play?
 - **Next:**
-  - Fix racer's missing fallback (claim the longest route it can once no 6-route is
-    open) so pool training stops exploiting it; re-measure the bots.
-  - DQN pass 3 candidates: a stronger pool (fixed racer, collector, the best linear
-    agents as frozen opponents, self); shaping on (it only helped); the linear
-    learner's ticket features as extra network inputs (its one edge: ticket choice).
+  - Run DQN pass 3; re-score against greedy, wary, racer, collector; round robin with
+    racer and the held-out linear agent.
   - Tickets never appeared in any learner. With the collector result (more tickets
     loses in 2-player games), racing may be close to right for 2 players on this map;
     3–5 players is where tickets could matter more.

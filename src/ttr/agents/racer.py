@@ -58,9 +58,15 @@ class RacerAgent:
         return choice if choice in legal else next(a for a in legal if len(a.ticket_ids) == fewest)
 
     def _shortest_allowed(self, game: Game, p: int) -> int:
-        if game.final_turns_remaining is not None or game.players[p].trains < self.min_length:
+        """`min_length`, lowered to the longest route still open to it once no route
+        that long is left (it used to wait for 6-routes that were gone, drawing
+        cards to the end: 54 cards and 11 trains unused against DQN pass 2)."""
+        trains = game.players[p].trains
+        if game.final_turns_remaining is not None or trains < self.min_length:
             return 1
-        return self.min_length
+        open_lengths = [r.length for r in game.board.routes
+                        if r.id not in game.route_owner and r.length <= trains and game.route_open_to(p, r)]
+        return min(self.min_length, max(open_lengths, default=1))
 
     def _main_action(self, game: Game, p: int, legal: List[Action]) -> Action:
         routes = game.board.routes

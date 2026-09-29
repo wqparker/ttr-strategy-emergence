@@ -225,6 +225,7 @@ ttr-sim --agents dqn:runs/dqn/n8_s0.json@best greedy    # the run's best checkpo
 | `--opponent` | `greedy` | `random`, `greedy`, `wary`, `racer`, `self` (greedy or the run's own best checkpoint so far), or `pool` (one of `--pool` per game) |
 | `--pool SPEC ...` / `--league N` | `greedy wary racer self` / `5` | with `--opponent pool`; `self` = the best network or one of the N latest evaluated ones |
 | `--shaping POINTS` | off | potential-based shaping: POINTS per train still needed for my tickets; sums to 0 over a game |
+| `--ticket-plan` | off | add the observation's ticket-plan block (224 numbers: which routes serve my tickets, offered tickets' cost and fit, cards my plan needs) |
 | `--n-step` | `1` | n-step returns; the counterpart of the linear `--lambda` |
 | `--hidden UNITS ...` | `512 256` | hidden layer widths |
 | `--no-dueling` | dueling on | a plain Q head instead of value + advantage |
@@ -255,8 +256,8 @@ win-share matrices and Elo ratings (Bradley-Terry, greedy = 1000); writes `PREFI
 
 Scripted bots: `greedy` plans its tickets' cheapest paths and ignores the opponent; `wary` is greedy that
 watches the opponents' trains (at 15 or fewer it stops drawing tickets, drops ones it can't finish, and
-cashes cards into routes); `racer` keeps the fewest tickets, claims only 6-routes until it can't, and ends
-the game fast (the strategy the trained agents found); `collector` is greedy for tickets: 2–3 open at a
+cashes cards into routes); `racer` keeps the fewest tickets, claims only the longest routes (6, then the
+longest left once those are gone) and ends the game fast (the strategy the trained agents found); `collector` is greedy for tickets: 2–3 open at a
 time, drawing more as soon as fewer than 2 are far from done, finishing the nearest one first (tempo-aware
 like wary). It completes the most tickets (about 5 a game) and is the weakest of the four.
 

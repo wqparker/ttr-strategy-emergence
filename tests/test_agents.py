@@ -149,3 +149,15 @@ def test_ascii_map_marks_claimed_routes_with_seat_number():
     plain = render_map(board, {rid: 1}).plain
     assert "SEA" in plain and "HEL" in plain and "1" in plain
     assert "0" not in plain
+
+
+def test_racer_falls_back_to_the_longest_route_left():
+    game = started_game()
+    racer = RacerAgent(0)
+    assert racer._shortest_allowed(game, 0) == 6
+    for r in game.board.routes:
+        if r.length == 6:
+            game.route_owner[r.id] = 1  # every 6-route taken
+            game.players[1].routes.append(r.id)
+    game.invalidate()
+    assert racer._shortest_allowed(game, 0) == 5  # not stuck waiting for 6-routes

@@ -43,6 +43,22 @@ number of claims: code that edits a state by hand should call `reset()`.
 
 For the player to act, both endgame flags are equal (every turn in the final
 round is that player's last); they differ only for a waiting seat.
+
+Optional ticket-plan block (`ticket_plan=True`, off by default; 224 numbers at the
+end). The planning the linear learner's hand-made features and the greedy bot do,
+as exact computations on the viewer's own information, so a network needn't work
+out from ticket IDs alone which routes serve which tickets:
+
+| Block          | Encoding                                                     | Size |
+| -------------- | ------------------------------------------------------------ | ---- |
+| plan_routes    | per route: points of my open tickets whose cheapest path uses it, /20 (max 3) | 100 |
+| plan_completes | per route: claiming it alone completes one of my tickets     | 100  |
+| plan_offer     | per offer slot: trains to connect /45 (1 if impossible), more than my uncommitted trains, share of its path already on my plan, points per train /3 | 12 |
+| plan_colors    | cards still missing per train color for colored plan routes /12; gray plan trains /45 | 9 |
+| plan_summary   | trains committed to my open tickets /45, uncommitted /45, tickets I can no longer finish /5 | 3 |
+
+"Cheapest path" is greedy's (ttr.agents.greedy.cheapest_path: my routes free,
+open routes at their length); a double route's open other half counts too.
 """
 
 from __future__ import annotations
@@ -54,8 +70,9 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from ttr.agents.greedy import INF, cheapest_path
 from ttr.board import Board
-from ttr.cards import ALL_COLORS
+from ttr.cards import ALL_COLORS, TRAIN_COLORS
 from ttr.env.actions import MAX_ROUTES, OFFER
 from ttr.game import MARKET_SIZE, Game, Phase
 from ttr.memory import FULL_DECK, CardMemory
@@ -82,7 +99,10 @@ class ObservationError(ValueError):
     pass
 
 
-def layout(num_players: int) -> Dict[str, slice]:
+PLAN_OFFER = 4  # numbers per offered ticket in the plan_offer block
+
+
+def layout(num_players: int, ticket_plan: bool = False) -> Dict[str, slice]:
     """The slice of the vector each block occupies, in order."""
     n = num_players
     sizes = [
@@ -101,6 +121,14 @@ def layout(num_players: int) -> Dict[str, slice]:
         ("tickets_trains", 2 * MAX_TICKETS),
         ("tickets_offer", OFFER * MAX_TICKETS),
     ]
+    if ticket_plan:
+        sizes += [
+            ("plan_routes", MAX_ROUTES),
+            ("plan_completes", MAX_ROUTES),
+            ("plan_offer", OFFER * PLAN_OFFER),
+            ("plan_colors", len(TRAIN_COLORS) + 1),
+            ("plan_summary", 3),
+        ]
     result: Dict[str, slice] = {}
     start = 0
     for name, size in sizes:
@@ -123,15 +151,16 @@ class ObservationEncoder:
     tracker per viewer and the per-claim cache, and starts over whenever it is
     given a different game object."""
 
-    def __init__(self, num_players: int, memory_level: int = 2) -> None:
+    def __init__(self, num_players: int, memory_level: int = 2, ticket_plan: bool = False) -> None:
         if not 2 <= num_players <= 5:
             raise ObservationError("Ticket to Ride supports 2-5 players")
         if memory_level not in (0, 1, 2):
             raise ObservationError("memory level must be 0, 1 or 2")
         self.num_players = num_players
         self.memory_level = memory_level
-        self.layout = layout(num_players)
-        self.size = self.layout["tickets_offer"].stop
+        self.ticket_plan = ticket_plan
+        self.layout = layout(num_players, ticket_plan)
+        self.size = max(s.stop for s in self.layout.values())
         self._board: Optional[Board] = None
         self._city_index: Dict[str, int] = {}
         self.reset()
@@ -142,6 +171,7 @@ class ObservationEncoder:
         self._claims = -1
         self._memory: Dict[int, CardMemory] = {}
         self._viewers: Dict[int, _ViewerCache] = {}
+        self._paths: Dict[Tuple[int, int], Tuple[float, List[int]]] = {}  # (viewer, ticket) -> cheapest path
 
     # -------------------------------------------------------------- caches
 
@@ -160,6 +190,7 @@ class ObservationEncoder:
         if len(game.route_owner) != self._claims:
             self._claims = len(game.route_owner)
             self._viewers = {}
+            self._paths = {}
 
     def _viewer_cache(self, game: Game, viewer: int) -> _ViewerCache:
         cache = self._viewers.get(viewer)
@@ -290,7 +321,76 @@ class ObservationEncoder:
         offer = obs[L["tickets_offer"]].reshape(OFFER, MAX_TICKETS)
         for i, tid in enumerate(me.pending_tickets):
             offer[i, tid] = 1.0
+        if self.ticket_plan:
+            self._encode_plan(game, viewer, obs)
         return obs
+
+    def _path(self, game: Game, viewer: int, ticket_id: int) -> Tuple[float, List[int]]:
+        """Greedy's cheapest path for a ticket (cost, unclaimed route ids), cached until the next claim."""
+        key = (viewer, ticket_id)
+        hit = self._paths.get(key)
+        if hit is None:
+            t = game.board.tickets[ticket_id]
+            hit = self._paths[key] = cheapest_path(game, viewer, t.a, t.b)
+        return hit
+
+    def _encode_plan(self, game: Game, viewer: int, obs: np.ndarray) -> None:
+        L = self.layout
+        board = game.board
+        routes = board.routes
+        me = game.players[viewer]
+        full = board.trains_per_player
+        value = obs[L["plan_routes"]]
+        completes = obs[L["plan_completes"]]
+
+        def with_sibling(rid: int) -> List[int]:
+            sib = routes[rid].sibling
+            return [rid, sib] if sib is not None and game.route_open_to(viewer, routes[sib]) else [rid]
+
+        committed = lost = 0
+        on_path: set = set()  # the planned routes themselves, one side of each double
+        for tid in me.tickets:
+            cost, path = self._path(game, viewer, tid)
+            if cost == 0:
+                continue  # completed
+            if cost == INF or cost > me.trains:
+                lost += 1
+                continue
+            committed += int(cost)
+            points = board.tickets[tid].points / 20
+            on_path.update(path)
+            for rid in path:
+                for r in with_sibling(rid):
+                    value[r] = min(3.0, value[r] + points)
+            if len(path) == 1:
+                for r in with_sibling(path[0]):
+                    completes[r] = 1.0
+
+        needs: Counter = Counter()
+        gray = 0
+        for rid in on_path:
+            r = routes[rid]
+            if r.color is None:
+                gray += r.length
+            else:
+                needs[r.color] = max(needs[r.color], r.length - me.hand[r.color])
+        colors = obs[L["plan_colors"]]
+        colors[:-1] = [max(0, needs[c]) / 12 for c in TRAIN_COLORS]
+        colors[-1] = min(gray, full) / full
+
+        uncommitted = me.trains - committed
+        offer = obs[L["plan_offer"]].reshape(OFFER, PLAN_OFFER)
+        for i, tid in enumerate(me.pending_tickets):
+            cost, path = self._path(game, viewer, tid)
+            if cost == INF:
+                offer[i] = (1.0, 1.0, 0.0, 0.0)
+                continue
+            length = sum(routes[r].length for r in path)
+            shared = sum(routes[r].length for r in path if r in on_path or routes[r].sibling in on_path)
+            offer[i] = (min(cost, full) / full, float(cost > uncommitted),
+                        shared / length if length else 1.0,
+                        min(board.tickets[tid].points / max(cost, 1) / 3, 1.0))
+        obs[L["plan_summary"]] = (min(committed, full) / full, max(0, uncommitted) / full, min(lost / 5, 1.0))
 
     def _encode_memory(self, game: Game, viewer: int, seats: List[int], out: np.ndarray) -> None:
         memory = self._memory.get(viewer)

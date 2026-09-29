@@ -27,7 +27,7 @@ from ttr.agents.random_agent import RandomAgent
 
 KINDS = ("random", "greedy", "wary", "racer", "collector", "linear:PATH", "linear:PATH@best", "dqn:PATH", "dqn:PATH@best")
 _linear_weights: Dict[str, dict] = {}
-_dqn_nets: Dict[str, Tuple[object, int]] = {}  # spec argument -> (network, memory level)
+_dqn_nets: Dict[str, Tuple[object, dict]] = {}  # spec argument -> (network, its observation settings)
 
 
 def make_agent(spec: str, seed: int) -> Agent:
@@ -59,8 +59,8 @@ def make_agent(spec: str, seed: int) -> Agent:
         if arg not in _dqn_nets:
             torch.set_num_threads(1)  # one observation at a time; matches run several processes
             _dqn_nets[arg] = load_network(Path(path), best=best)
-        net, memory_level = _dqn_nets[arg]
-        return DQNAgent(net, memory_level=memory_level, seed=seed, name=spec)
+        net, view = _dqn_nets[arg]
+        return DQNAgent(net, **view, seed=seed, name=spec)
     raise ValueError(f"unknown agent {spec!r}; expected one of {', '.join(KINDS)}")
 
 

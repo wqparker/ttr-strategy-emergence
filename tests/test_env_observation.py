@@ -233,3 +233,63 @@ def test_rejects_the_wrong_player_count():
         O.ObservationEncoder(2).encode(started_game(num_players=3), 0)
     with pytest.raises(O.ObservationError):
         O.ObservationEncoder(2, memory_level=3)
+
+
+# ------------------------------------------------------------ ticket-plan block
+
+DENVER_EL_PASO = 24  # 4 points; Denver - Santa Fe - El Paso, 2 + 2 trains
+
+
+def test_ticket_plan_block_is_optional_and_appended():
+    plain, planned = O.ObservationEncoder(2), O.ObservationEncoder(2, ticket_plan=True)
+    assert plain.size == 765 and planned.size == 765 + 224
+    assert "plan_routes" not in plain.layout
+    game = started_game()
+    assert (planned.encode(game, 0)[:765] == plain.encode(game, 0)).all()  # the usual vector, unchanged
+
+
+def test_ticket_plan_marks_the_routes_that_serve_my_tickets():
+    game = started_game()
+    game.players[0].tickets = [DENVER_EL_PASO]
+    set_hand(game, 0, red=1)
+    enc = O.ObservationEncoder(2, ticket_plan=True)
+    obs = enc.encode(game, 0)
+    first, second = route_id(game, "Denver", "Santa Fe"), route_id(game, "Santa Fe", "El Paso")
+    plan = block(enc, obs, "plan_routes")
+    assert plan[first] == pytest.approx(4 / 20) and plan[second] == pytest.approx(4 / 20)
+    assert np.count_nonzero(plan) == 2  # neither is a double route
+    assert block(enc, obs, "plan_completes").sum() == 0
+    assert block(enc, obs, "plan_summary")[0] == pytest.approx(4 / 45)  # trains committed
+
+    game.route_owner[first] = 0  # claimed: one route left, which completes the ticket
+    game.players[0].routes.append(first)
+    game.invalidate()
+    obs = enc.encode(game, 0)
+    assert block(enc, obs, "plan_completes")[second] == 1
+    assert block(enc, obs, "plan_routes")[first] == 0
+
+
+def test_ticket_plan_scores_the_offer():
+    game = Game(load_board("usa"), num_players=2, seed=3, first_player=0)
+    enc = O.ObservationEncoder(2, ticket_plan=True)
+    offer = block(enc, enc.encode(game, 0), "plan_offer").reshape(3, O.PLAN_OFFER)
+    for i, tid in enumerate(game.players[0].pending_tickets):
+        cost, _ = enc._path(game, 0, tid)
+        assert offer[i, 0] == pytest.approx(min(cost, 45) / 45)
+        assert offer[i, 3] == pytest.approx(min(game.board.tickets[tid].points / cost / 3, 1))
+
+
+@pytest.mark.parametrize("seed", [1, 2])
+def test_ticket_plan_in_random_games_matches_a_fresh_encoder(seed):
+    rng = random.Random(seed)
+    game = Game(load_board("usa"), num_players=2, seed=seed, max_turns=400)
+    enc = O.ObservationEncoder(2, ticket_plan=True)
+    steps = 0
+    while not game.game_over:
+        for viewer in range(2):
+            obs = enc.encode(game, viewer)
+            assert np.isfinite(obs).all() and obs.min() >= 0 and obs.max() <= 3
+            if steps % 13 == 0:
+                assert (O.ObservationEncoder(2, ticket_plan=True).encode(game, viewer) == obs).all()
+        game.step(rng.choice(game.legal_actions()))
+        steps += 1

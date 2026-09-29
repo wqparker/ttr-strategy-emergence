@@ -129,8 +129,8 @@ def test_training_records_the_linear_run_layout(dqn_run):
 
 def test_saved_networks_reload_and_play(dqn_run):
     path, result = dqn_run
-    net, level = load_network(path)
-    assert level == 2
+    net, view = load_network(path)
+    assert view == {"memory_level": 2, "ticket_plan": False}
     for k, v in net.state_dict().items():
         assert torch.equal(v, result.policy.state_dict()[k].cpu())
     board = load_board("usa")
@@ -182,3 +182,14 @@ def test_shaping_pays_during_the_game_and_sums_to_zero():
     plain, shaped = episodes[0.0], episodes[1.0]
     assert plain.actions == shaped.actions  # shaping changes rewards, not play
     assert any(abs(a - b) > 1e-9 for a, b in zip(plain.rewards, shaped.rewards))
+
+
+def test_ticket_plan_runs_train_save_and_play(tmp_path):
+    cfg = DQNConfig(games=3, hidden=(16,), batch=8, learning_starts=50, ticket_plan=True, device="cpu", seed=6)
+    result = train(cfg, eval_every=3, eval_games=1, eval_linear=None, log=lambda line: None, baselines=False)
+    path = tmp_path / "plan.json"
+    result.save(path)
+    net, view = load_network(path)
+    assert view == {"memory_level": 2, "ticket_plan": True}
+    assert net.body[0].in_features == ObservationEncoder(2, ticket_plan=True).size
+    run_matches([f"dqn:{path}", "racer"], games=1, board=load_board("usa"), seed=1)
