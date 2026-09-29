@@ -565,11 +565,38 @@ for 2 players).
     greedy 1000, collector 829. Pool + shaping loses to the linear agent by only 6.4
     (pass 1's DQN: 19.4) and beats both greedy-trained DQNs by 18–21: training against
     a pool made a more robust racer, not a different strategy.
+  - Behavior analysis (200 instrumented games per matchup; per claim: 6-routes, claims
+    on the opponent's cheapest ticket paths, tempo):
+    - **Racer has a flaw the pool agents exploit.** It claims only 6-routes while it has
+      6+ trains and has no fallback once the 9 six-routes are gone. Against the pool +
+      shaping DQN it ends holding 54 cards with 11 trains unused, having made 5.8
+      claims; the DQN takes the 6-routes, lets the game run to 96 turns (vs ~68) and
+      gets the longest-path bonus 98% of the time. Most of the pool agents' +22 vs
+      racer is this exploit (the greedy-trained DQN, which hurries, gets +5).
+    - **Linear vs DQN play.** The best linear agent claims fewer, longer routes (8.5 ×
+      5.1 vs DQN's 10 × 4.4), draws only blind (0 face-up cards; DQN takes 15–22 face-up
+      colors and 1–2 face-up Locomotives), reaches 22 trains left sooner (turn 42 vs
+      47–51), and completes a few tickets (0.24–0.30 a game vs 0.01; −14 ticket points
+      vs −19). DQN gets the longest-path bonus more (0.8–0.9 vs 0.2–0.7).
+    - **Nobody blocks.** Claims on the opponent's cheapest ticket paths: 0.2–0.7 a game
+      for every learner, all consistent with coincidence (greedy, which claims many
+      short routes, hits 1.3–1.4).
+  - Linear vs DQN cross-match (fresh seeds, random seats): the 4 strongest linear agents
+    against the 3 pool + shaping seeds, 1000 games per pair: three of them beat every
+    DQN seed by +3 to +7, the fourth (`p7c_q_lam98_greedy_s1`, +15.5 vs greedy) loses to
+    every one by 14–17; mean −0.4. Setting against setting (every seed's best, 500
+    games per pair): linear p7c (the best linear setting vs greedy) −7.0, 3 of 15 pairs
+    won, 37% wins; linear p7d (self-play) −4.4, 7 of 15, 40%. **DQN beats linear as a
+    method**; "linear beats DQN" came from the single best of ~150 linear networks.
+    Linear seeds range from +3.7 to −18.5 against the same DQN; the three DQN seeds
+    are within 2 of each other. Ranking against greedy doesn't transfer to ranking
+    against other agents.
 - **Next:**
-  - Look at what separates the pool-trained racer from the greedy-trained one (it beats
-    racer +22 vs ±0: taking the 6-routes first? blocking?) and what the linear agent
-    does that beats every DQN, with the viewer and route overlays (`ttr-sim --record`,
-    `ttr-view --overlay`).
+  - Fix racer's missing fallback (claim the longest route it can once no 6-route is
+    open) so pool training stops exploiting it; re-measure the bots.
+  - DQN pass 3 candidates: a stronger pool (fixed racer, collector, the best linear
+    agents as frozen opponents, self); shaping on (it only helped); the linear
+    learner's ticket features as extra network inputs (its one edge: ticket choice).
   - Tickets never appeared in any learner. With the collector result (more tickets
     loses in 2-player games), racing may be close to right for 2 players on this map;
     3–5 players is where tickets could matter more.
