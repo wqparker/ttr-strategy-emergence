@@ -69,7 +69,7 @@ for 2 players).
 
 ## Current progress
 
-*Updated at the end of each session. Last updated: 2026-09-28.*
+*Updated at the end of each session. Last updated: 2026-09-29.*
 
 - **Earlier: engine ready, and every RL design question settled.**
   - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view,
@@ -607,23 +607,57 @@ for 2 players).
     what the linear learner's ticket features give it (its one edge over DQN: ticket
     choice), as exact computations on the viewer's own information, in line with the
     other computed values. `ttr-train-dqn --ticket-plan`.
-  - DQN pass 3 ready (`scripts/dqn_pass3.ps1`, `runs/dqn/pass3/`): pool = greedy, wary,
-    racer (fixed) twice, collector, self, and two strong linear agents
+  - DQN pass 3 (`scripts/dqn_pass3.ps1`, `runs/dqn/pass3/`, 2026-09-29, 2 h): pool =
+    greedy, wary, racer (fixed) twice, collector, self, and two strong linear agents
     (`p7d_q_lam98_self_s2@best`, `p8b_q_lam98_self_decay_s4@best`; the strongest,
-    `p7b…s3@best`, stays out of training as the held-out evaluation opponent). Shaping
-    1, n = 1, averaging 100, 30000 games, 4 seeds; arms without and with
-    `--ticket-plan`. Evaluations against random, greedy, wary, racer, collector and
-    the held-out linear agent; best checkpoint on the mean over greedy, wary, racer,
-    collector. Questions: does a pool with a real racer produce something that beats
-    racer, and do the ticket features bring ticket play?
+    `p7b…s3@best`, held out for evaluation only). Shaping 1, n = 1, averaging 100,
+    30000 games, 4 seeds; arms without and with `--ticket-plan`. Re-scored on 1000
+    fresh games per opponent (`runs/dqn/rescore_pass3.*`), final / best, mean over seeds:
+
+    | Arm | vs greedy | vs wary | vs racer (fixed) | vs collector | Tickets done vs racer |
+    | --- | --- | --- | --- | --- | --- |
+    | pool | +3.3 / +5.1 | −0.8 / +0.4 | **+2.8 / +1.9** | +20.5 / +23.2 | 0.16 |
+    | pool + ticket plan | +5.9 / +5.9 | +1.5 / +2.0 | **+2.5 / +2.6** | +23.3 / +25.1 | 0.32 |
+
+    Readings: with a real racer in the pool the agents hold even with it (pass 2's lost
+    to the fixed racer by 15–22), and against the held-out linear agent they are at −3
+    to −4 in training evaluations. The price is exploiting greedy less (+3 to +6, pass
+    2: +11 to +15). Still racing: 2 tickets kept, ~10 claims of length 4.1–4.4, ends
+    the game itself in 62–98% of games depending on the opponent. The ticket plan
+    doubles ticket completion (0.07 vs 0.03 against greedy, 0.32 vs 0.16 against racer)
+    and is slightly ahead on every re-score, but tickets stay far below the ~2 kept.
+    Both arms flatten from ~14k games.
+  - DQN trained against random only (`scripts/dqn_random.ps1`, `runs/dqn/random/`,
+    2026-09-29): pass 2's greedy-arm settings with random as the only opponent, 3 seeds,
+    30000 games (`runs/dqn/rescore_random.*`). Final weights: −93 vs greedy, −90 vs
+    racer, 0% wins; +128 vs random. It never learns racing: 16–17 claims of mean length
+    2.2–2.6, ends the game itself 59% of the time against random and 9% against greedy,
+    and scores only 48 against random where the greedy-trained agent scores 91. Its
+    curve against random flattens at ~+130 by game 7000. So random-only training fails
+    for DQN, while linear learners trained against random transfer well (the strongest
+    linear agent is one). Untested explanations: against random the margin is swamped
+    by random's own score (it keeps and fails ~9 tickets; −83 on average, widely
+    spread), which the learner barely affects, so the +40 available from long routes is
+    lost in the noise; the linear features hand it "route points" directly. Test:
+    `--reward score` against random, which removes the opponent's score.
+  - Round robin 3 (`runs/round_robin_2026-09-29.*`, 10 agents, 400 games per pair), Elo
+    with greedy = 1000: linear `p7b…s3@best` 1149, DQN pass-3 pool `d3a_pool_s1@best`
+    1118, racer 1114, DQN pass-2 pool + shaping 1104, DQN pass-3 pool + ticket plan
+    `d3b_pool_plan_s0@best` 1071, wary 1051, greedy 1000, collector 835, random-only DQN
+    1, random −746. The top four are within a few points: the pass-3 agent beats racer
+    +1.5, pass 2's best +2.7, wary +1.5, greedy +4.8, and loses to the linear agent by
+    2.8 (pass 2's: 6.4). Racer beats pass 2's best by 11.1; pass 3 closed that gap.
+    Every strong agent is a racer; they differ in how well they race.
 - **Next:**
-  - Run DQN pass 3; re-score against greedy, wary, racer, collector; round robin with
-    racer and the held-out linear agent.
   - Tickets never appeared in any learner. With the collector result (more tickets
     loses in 2-player games), racing may be close to right for 2 players on this map;
     3–5 players is where tickets could matter more.
-  - PPO with self-play on the same pool (tier C), as planned. The race-to-the-end
-    strategy is the finding for the tempo question.
+  - DQN has converged on racing across three passes and seven settings, and its best
+    agents now tie racer and the best linear agent. Next method: PPO with self-play on
+    the same pool (tier C), as planned. The race-to-the-end strategy is the finding for
+    the tempo question.
+  - Cheap side experiment: DQN against random with `--reward score`, to test the
+    noise explanation for random-only training failing.
 
 ## Roadmap
 

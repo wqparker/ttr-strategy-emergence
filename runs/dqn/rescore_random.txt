@@ -1,0 +1,9 @@
+vs greedy, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+dr_random                final  -93.4 (-96, -94, -91)  win   0%  tickets 0.17/1.89
+dr_random                best   -88.0 (-81, -86, -97)  win   0%  tickets 0.11/1.94
+vs racer, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+dr_random                final  -90.3 (-90, -89, -91)  win   0%  tickets 0.08/1.93
+dr_random                best   -74.8 (-60, -85, -79)  win   0%  tickets 0.02/2.02
+vs random, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+dr_random                final +127.9 (+127, +129, +127)  win  99%  tickets 0.12/1.90
+dr_random                best  +114.7 (+112, +125, +107)  win  99%  tickets 0.07/1.98
