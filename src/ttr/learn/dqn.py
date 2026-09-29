@@ -138,6 +138,18 @@ class QNetwork(nn.Module):
         return q.masked_fill(~mask, float("-inf"))
 
 
+def observe(encoder: ObservationEncoder, game: Game, player: int) -> Tuple[np.ndarray, np.ndarray, List[Action]]:
+    """What a learner sees and may do: the observation, the mask (bool) and the
+    engine action behind each legal index (None elsewhere)."""
+    mask = np.zeros(A.N_ACTIONS, dtype=bool)
+    by_index: List[Optional[Action]] = [None] * A.N_ACTIONS
+    for a in game.legal_actions():
+        i = A.encode(game, a)
+        mask[i] = True
+        by_index[i] = a
+    return encoder.encode(game, player), mask, by_index
+
+
 def resolve_device(name: str) -> torch.device:
     if name == "auto":
         name = "cuda" if torch.cuda.is_available() else "cpu"
@@ -163,15 +175,7 @@ class DQNAgent:
         return next(self.net.parameters()).device
 
     def observe(self, game: Game, player: int) -> Tuple[np.ndarray, np.ndarray, List[Action]]:
-        """The observation, the mask (bool) and the action behind each legal index."""
-        actions = game.legal_actions()
-        mask = np.zeros(A.N_ACTIONS, dtype=bool)
-        by_index: List[Optional[Action]] = [None] * A.N_ACTIONS
-        for a in actions:
-            i = A.encode(game, a)
-            mask[i] = True
-            by_index[i] = a
-        return self.encoder.encode(game, player), mask, by_index
+        return observe(self.encoder, game, player)
 
     def q_values(self, obs: np.ndarray, mask: np.ndarray) -> np.ndarray:
         with torch.no_grad():

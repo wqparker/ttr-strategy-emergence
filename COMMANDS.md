@@ -245,6 +245,33 @@ ttr-sim --agents dqn:runs/dqn/n8_s0.json@best greedy    # the run's best checkpo
 `scripts/rescore.py` and `scripts/run_status.py` take both kinds of run; `rescore.py --opponents greedy wary racer`
 re-scores against several opponents on the same fresh games.
 
+### PPO
+
+Proximal Policy Optimization with action masking (`ttr.learn.ppo`, `[env]` + `[deep]` extras): separate
+actor and critic MLPs, illegal actions masked out of the policy, GAE advantages, clipped updates, an entropy
+bonus, the learning rate annealed to 0. The setting, opponents (`--opponent pool`, `--pool`, `--league`),
+`--shaping`, `--ticket-plan`, evaluations and files are the DQN learner's; the policy samples its moves in
+training, and evaluations and `ppo:PATH` play its most likely move.
+
+```
+ttr-train-ppo --opponent pool --shaping 1 --games 30000 --live 1000 --out runs/ppo/pool_s0.json
+ttr-sim --agents ppo:runs/ppo/pool_s0.json@best racer
+```
+
+| Option | Default | |
+| --- | --- | --- |
+| `--games-per-update` | `32` | games played between updates (about 2700 decisions) |
+| `--update-epochs` / `--minibatches` | `4` / `4` | passes over each batch, and minibatches per pass |
+| `--lr` / `--no-anneal-lr` | `2.5e-4`, annealed to 0 | Adam step size |
+| `--gamma` / `--gae-lambda` | `1.0` / `0.95` | discount and GAE lambda |
+| `--clip` / `--no-clip-vloss` | `0.2` / value loss clipped | PPO clipping |
+| `--ent-coef` / `--vf-coef` / `--max-grad-norm` | `0.01` / `0.5` / `0.5` | loss weights, gradient clipping |
+| `--eval-sample` | off | evaluations sample moves instead of taking the most likely |
+| other flags | | as `ttr-train-dqn` (`--hidden`, `--reward`, `--memory-level`, `--device`, `--eval-*`, `--live`, ...) |
+
+`RUN.json` adds `updates` (per update: policy and value loss, entropy, approximate KL, clip fraction). In the
+per-game rows `epsilon` is 0 and `mean_abs_td` is the value error \|G − V(s)\|, the PPO analog of the TD error.
+
 ### Round robin
 
 ```
@@ -365,7 +392,7 @@ python -m pip install -e ".[analysis]"  # pandas + matplotlib: ttr.analysis rows
 python -m pip install -e ".[env]"    # numpy, PettingZoo, Gymnasium: the RL env (ttr.env)
 python -m pip install -e ".[photo]"  # numpy + OpenCV, board-data tools only
 python -m pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130   # GPU PyTorch
-python -m pip install -e ".[deep]"   # torch: ttr-train-dqn (install the GPU build first)
+python -m pip install -e ".[deep]"   # torch: ttr-train-dqn, ttr-train-ppo (install the GPU build first)
 ```
 
 Any install creates the three commands; re-run one only after changing `[project.scripts]`. The

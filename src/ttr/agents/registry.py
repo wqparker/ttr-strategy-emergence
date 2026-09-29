@@ -9,6 +9,8 @@
     linear:PATH@best           the same run's best checkpoint
     dqn:PATH                   a trained DQN run's final network (ttr.learn.dqn; `[deep]` extra)
     dqn:PATH@best              the same run's best checkpoint
+    ppo:PATH                   a trained PPO run's final policy, most likely move (ttr.learn.ppo; `[deep]` extra)
+    ppo:PATH@best              the same run's best checkpoint
 
 `make_agent(spec, seed)` builds one; `agent_spec` validates a spec for argparse.
 Weight files are read once per path and shared.
@@ -25,9 +27,10 @@ from ttr.agents.greedy import CollectorAgent, GreedyAgent, WaryAgent
 from ttr.agents.racer import RacerAgent
 from ttr.agents.random_agent import RandomAgent
 
-KINDS = ("random", "greedy", "wary", "racer", "collector", "linear:PATH", "linear:PATH@best", "dqn:PATH", "dqn:PATH@best")
+KINDS = ("random", "greedy", "wary", "racer", "collector", "linear:PATH", "linear:PATH@best", "dqn:PATH", "dqn:PATH@best", "ppo:PATH", "ppo:PATH@best")
 _linear_weights: Dict[str, dict] = {}
 _dqn_nets: Dict[str, Tuple[object, dict]] = {}  # spec argument -> (network, its observation settings)
+_ppo_nets: Dict[str, Tuple[object, dict]] = {}
 
 
 def make_agent(spec: str, seed: int) -> Agent:
@@ -61,6 +64,17 @@ def make_agent(spec: str, seed: int) -> Agent:
             _dqn_nets[arg] = load_network(Path(path), best=best)
         net, view = _dqn_nets[arg]
         return DQNAgent(net, **view, seed=seed, name=spec)
+    if kind == "ppo" and arg:
+        import torch
+
+        from ttr.learn.ppo import PPOAgent, load_policy
+
+        path, best = (arg[:-len("@best")], True) if arg.endswith("@best") else (arg, False)
+        if arg not in _ppo_nets:
+            torch.set_num_threads(1)
+            _ppo_nets[arg] = load_policy(Path(path), best=best)
+        net, view = _ppo_nets[arg]
+        return PPOAgent(net, **view, seed=seed, name=spec)
     raise ValueError(f"unknown agent {spec!r}; expected one of {', '.join(KINDS)}")
 
 

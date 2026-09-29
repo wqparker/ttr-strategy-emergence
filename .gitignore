@@ -24,11 +24,14 @@ venv/
 runs/*
 !runs/linear/
 !runs/dqn/
+!runs/ppo/
 runs/linear/*
 runs/dqn/*
+runs/ppo/*
 !runs/linear/overnight-*.md
 !runs/linear/rescore_*
 !runs/dqn/rescore_*
+!runs/ppo/rescore_*
 !runs/round_robin_*
 checkpoints/
 models/

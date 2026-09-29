@@ -648,7 +648,20 @@ for 2 players).
     +1.5, pass 2's best +2.7, wary +1.5, greedy +4.8, and loses to the linear agent by
     2.8 (pass 2's: 6.4). Racer beats pass 2's best by 11.1; pass 3 closed that gap.
     Every strong agent is a racer; they differ in how well they race.
+  - Done: tier C, PPO (`src/ttr/learn/ppo.py`, `ttr-train-ppo`; design in "Methods to
+    compare"). `ppo:PATH[@best]` in the registry; the dashboard, `rescore.py` and
+    `run_status.py` read PPO runs. Smoke run (3 seeds, 3000 games, pass-3 pool, shaping,
+    learning rate annealed over those 3000): it learns (−97 → −70 to −84 vs greedy,
+    beats random ~+115), slower than DQN early (DQN pass 3: about −45 at 3000 games);
+    policy entropy 1.8 → 1.0–1.25; KL 0.006–0.008 and clip fraction 0.10–0.13 early.
+    0.11 s a game with 3 runs at once.
+  - PPO pass 1 ready (`scripts/ppo_pass1.ps1`, `runs/ppo/pass1/`): DQN pass 3's setting
+    (pool with the fixed racer twice, collector, self, two strong linear agents; shaping
+    1), default PPO settings, 50000 games (PPO needs more samples), 4 seeds; arms without
+    and with `--ticket-plan`. Does a stochastic policy find anything besides racing?
 - **Next:**
+  - Run PPO pass 1; re-score and round robin against DQN pass 3, racer and the linear
+    agent.
   - Tickets never appeared in any learner. With the collector result (more tickets
     loses in 2-player games), racing may be close to right for 2 players on this map;
     3–5 players is where tickets could matter more.
@@ -924,6 +937,14 @@ not just to find the strongest one. Each tier teaches something different:
   - The learner drives the engine directly, as tier A does, rather than stepping the
     PettingZoo env: the same encoder, mask and action decoding the env uses, so it sees
     what the env would show that seat, without an env step for the opponent's moves.
+- **Tier C design (`src/ttr/learn/ppo.py`).** PPO (CleanRL's recipe) on the same observation
+  and the same setting as tier B, so the three tiers compare directly: separate actor and
+  critic MLPs (512 → 256, tanh, orthogonal init), illegal logits set to −1e8 (invalid
+  action masking), 32 games per update, GAE (γ = 1, λ = 0.95), 4 epochs × 4 minibatches,
+  clip 0.2 (value loss clipped too), entropy 0.01, value 0.5, gradient norm 0.5, Adam
+  2.5e-4 annealed to 0. Opponents, league self-play, shaping, the ticket-plan block,
+  evaluations and best checkpoints are DQN's. The policy samples in training (its only
+  exploration); evaluations and `ppo:PATH` take its most likely move.
 - **Why linear rather than tabular for tier A:** tabular methods are only feasible on a
   tiny map, and there is none. Linear features keep the same update rules and the same
   Q-learning vs. SARSA comparison on the full map.

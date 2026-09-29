@@ -1,5 +1,5 @@
 """Agent analysis dashboard: one full-screen matplotlib window over one or more
-training runs (the JSON `ttr-train-linear` or `ttr-train-dqn` writes).
+training runs (the JSON `ttr-train-linear`, `ttr-train-dqn` or `ttr-train-ppo` writes).
 
     ttr-dash runs/linear/q_greedy.json
     ttr-dash runs/linear/q_greedy.json runs/linear/sarsa_greedy.json     # compare runs
@@ -70,6 +70,8 @@ CONFIG_KEYS = {
                "epsilon_end", "reward_mode", "seed"),
     "dqn": ("opponent", "games", "hidden", "n_step", "lr", "lr_end", "batch", "average", "epsilon_end",
             "reward_mode", "seed"),
+    "ppo": ("opponent", "games", "games_per_update", "hidden", "lr", "ent_coef", "clip", "gae_lambda", "shaping",
+            "ticket_plan", "reward_mode", "seed"),
 }
 
 # Metric -> (label, format). Order is display order.
