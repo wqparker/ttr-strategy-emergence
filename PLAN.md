@@ -787,20 +787,68 @@ for 2 players).
     only the player count it was trained for (the observation is 879 numbers at 3 players, 993
     at 4); runs saved before this load as 2-player. `rescore.py` re-scores a run at its own
     player count. A game costs about 1.2× a 2-player one at 3 players, 1.5× at 4.
-  - PPO pass 4 (`scripts/ppo_pass4.ps1`, `runs/ppo/pass4/`, launched 2026-09-30, estimated
-    3.5–4 h): 3 and 4 players × margin and score rewards × 3 seeds, all 12 at once; pass 3's
-    setting and pool, 50000 games. Does racing survive when the nine 6-routes are shared by 3–4
-    players, and do blocking (rewarded only by margin) or tickets appear?
+  - PPO pass 4 (`scripts/ppo_pass4.ps1`, `runs/ppo/pass4/`, 2026-09-30, 3 h 38 min): the first
+    3- and 4-player games. 3 and 4 players × margin and score rewards × 3 seeds, all 12 at once;
+    pass 3's setting and pool, 50000 games. Does racing survive when the nine 6-routes are shared
+    by 3–4 players, and do blocking (rewarded only by margin) or tickets appear? Re-scored on 1000
+    fresh games per opponent (`runs/ppo/rescore_pass4.*`; every other seat a copy of the
+    opponent, margin against their mean), final policies, mean over seeds (win share; the
+    baseline is 33% at 3 players, 25% at 4). Parity as in pass 3:
+
+    | Players, reward | vs greedy | vs wary | vs racer | vs collector | Seeds vs greedy | Parity (k games) |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | 3, margin | **+15.9** (61%) | **+11.0** (49%) | +1.2 (39%) | **+30.7** (77%) | +11, +22, +15 | 22, 20, 14 |
+    | 3, score | +11.0 (49%) | +8.3 (45%) | **+5.7** (55%) | +22.7 (65%) | +13, +13, +7 | 14, 10, 14 |
+    | 4, margin | **+11.0** (39%) | +5.9 (29%) | −1.5 (27%) | **+27.0** (64%) | +14, +11, +8 | 10, 18, 16 |
+    | 4, score | +10.9 (40%) | **+7.9** (33%) | **+0.0** (30%) | +20.0 (52%) | +12, +5, +16 | 16, 14, 10 |
+
+    Best checkpoints are within 2.5 of the finals. Behavior below is from 200 instrumented games
+    per seed and opponent (the learner and 2 or 3 copies of the bot) on fresh seeds.
+    - **Racing survives at 3 and 4 players, unchanged.** Against greedy copies the learners play
+      the same game at 2, 3 and 4 players: 93–97 route points (margin) or 104–108 (score), claims
+      of mean length 4.5–4.7 or 5.2–5.5, the 2 opening tickets abandoned (at most 0.15
+      completed), no ticket draws, the end triggered in 98–100% of games, 32–36 turns of their
+      own. Tables of learners only play the same way (0.04–0.07 tickets completed).
+    - **When the 6-routes are contested: shorter routes, not tickets.** Against 3 racers the
+      learner gets 1.3–1.9 of the nine 6-routes (each racer 2.4–2.6) and claims 10–11 routes of
+      mean length 4 instead. It keeps the longest-path bonus (90%; each racer 4%), ends with 3
+      trains unused and completes at most 0.25 tickets. Win share 27–30% (baseline 25%).
+    - **Scripted check: at 4 players tickets become competitive, not better** (400 games per
+      table). A lone greedy among racers wins 33% at 2 players (baseline 50%), 25% at 3 (33%),
+      28% at 4 (25%); a lone racer among 3 greedy also wins 28%. Collector loses at every count
+      (11–21%). At the 3-racer table the learner (27–30%) does about as well as greedy (28%).
+    - **No blocking at 3–4 players either.** Claims on an opponent's cheapest ticket path: 5–17%
+      of the learners' claims, within 0.3 claims a game of the length-matched chance baseline
+      under both rewards, with no consistent margin–score difference (against greedy copies:
+      margin +0.15 and score +0.01 at 3 players, +0.07 and +0.17 at 4). Greedy, which never
+      looks at its opponents, shows as much excess (up to +0.7 a game at 4 players): shared
+      corridors, not intent.
+    - **Margin's tempo persists but pays less as the table grows.** Against greedy copies the
+      margin agents still end games sooner and cut greedy's score (67 vs 82 at 2 players, 64 vs
+      80 at 3, 69 vs 77 at 4) at a cost of 8–10 points of their own. Margin minus score against
+      greedy on the re-scores: +4.9 at 2 players, +4.9 at 3, +0.1 at 4. Hurting one of 3
+      opponents moves the margin a third as much.
+    - **Score beats margin at shared tables at every count**: +7.2 per game at 2 players, +5.7 ±
+      0.5 at 3 (win share 42% vs 25%), +3.7 ± 0.4 at 4 (33% vs 18%), 900 games each at 3–4.
+      The score agents again take more of the 6-routes.
+    - **Margin learns as fast as score at 4 players** (parity at 10–18k games; score 10–16k). At
+      2 players margin needed about twice as long. The margin's opponent term is a mean over
+      N − 1 opponents, less noisy as N grows: more support for the noise explanation.
 - **Next:**
-  - Analyze PPO pass 4: re-score on fresh games (`rescore.py`), the behavior instrumentation
-    (route lengths, blocking against chance, tempo) at 3–4 players, and a multiplayer round
-    robin. Its design is open: for example each pair splits the seats (2 + 2 at 4 players;
-    2 + 1 both ways at 3), rated from win shares against the 1/N baseline.
-  - Within 2-player games every method, and every reward that learned, has converged on
-    racing (PPO adding the connected network); tickets and blocking never appeared. Racing is
-    the finding for the tempo question, and pass 3 shows it isn't an artifact of the margin
-    reward (only the denial part is). Other options: Phase 6 strategy analysis of the agents
-    we have, MCTS (tier D) as a non-learning contrast.
+  - Every method, every reward that learned and every player count tried (2–4) converges on
+    racing (PPO adding the connected network); tickets and blocking never appeared, and the
+    scripted bots agree that ticket planning doesn't beat racing on this map (at 4 players it
+    is competitive, not better). Racing is the finding for the tempo question; pass 3 shows it
+    isn't an artifact of the margin reward (only the denial part is). Options:
+    - 5 players, the table size left: the nine 6-routes shared five ways.
+    - 4 players in self-play only: the pool is 5 of 8 racers (tables of learners only still
+      race, but they were trained against the pool).
+    - MCTS (tier D), a non-learning contrast with no credit-assignment problem for tickets.
+    - Phase 6: write up racing across methods, rewards and player counts, and move the behavior
+      instrumentation (blocking against chance, tempo, the 6-route race, the ticket gap) from
+      scratch scripts into the repo.
+  - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
+    needed for pass 4's questions; the cross-play covered margin against score.
   - Win/loss reward, for the risk-tolerance question: it doesn't learn from scratch against
     this pool. Either warm-start it from a trained margin policy (needs an `--init` option in
     `ttr-train-ppo`) or train it in self-play only, where every game carries signal.
@@ -809,13 +857,13 @@ for 2 players).
     "tickets are too hard to learn".
   - Ticket choice: PPO abandons pricier tickets than racer does (−21 to −23 vs −19 a game).
   - Phase 6 strategy analysis on the agents we have (PLAN "Roadmap"): the longest-path
-    bonus as an emergent sub-strategy, tempo (pass 3 measured the margin agents' denial), the
-    race for the nine 6-routes, blocking (none so far, now measured against chance).
+    bonus as an emergent sub-strategy, tempo (passes 3–4 measured the margin agents' denial),
+    the race for the nine 6-routes, blocking (none, measured against chance at 2–4 players).
   - Tickets never appeared in any learner. With the collector result (more tickets
     loses in 2-player games), racing may be close to right for 2 players on this map;
-    3–5 players is where tickets could matter more.
+    3–4 players didn't change it (pass 4); 5 is untested.
   - Cheap side experiment: DQN against random with `--reward score`, to test the
-    noise explanation for random-only training failing (PPO pass 3 supports it
+    noise explanation for random-only training failing (PPO passes 3–4 support it
     indirectly).
 
 ## Roadmap
@@ -1232,10 +1280,10 @@ not just to find the strongest one. Each tier teaches something different:
     the margin. Comparing it with margin speaks to the risk-tolerance question.
   - **Experiment:** train in all three modes. "Does blocking only emerge when the reward
     includes the opponent?" tests the route-hoarding vs. blocking question directly.
-    *(Run: PPO pass 3, 2026-09-30.)* Blocking emerged under neither margin nor own score; the
-    margin agents use the opponent term through tempo, ending the game before the opponent's
-    tickets are done. Own score races too. Win/loss didn't learn from scratch against the
-    pool, so the risk-tolerance comparison is still open.
+    *(Run: PPO pass 3, 2026-09-30; at 3–4 players, pass 4.)* Blocking emerged under neither
+    margin nor own score, at 2, 3 or 4 players; the margin agents use the opponent term through
+    tempo, ending the game before the opponents' tickets are done. Own score races too. Win/loss
+    didn't learn from scratch against the pool, so the risk-tolerance comparison is still open.
   - **γ = 1**, since every game ends. Win rate is the evaluation metric whatever the
     reward mode.
   - **Shaping is off.** If added later, use potential-based shaping,
