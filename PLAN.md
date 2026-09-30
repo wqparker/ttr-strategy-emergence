@@ -28,7 +28,8 @@ Research questions to explore:
 
 The first experiments use two-player games. Credit assignment is simpler and interactions
 are easier to interpret. Scaling to 3–5 players is a later phase. The engine should
-support N players from the start so that step needs no rewrite.
+support N players from the start so that step needs no rewrite. *(Started 2026-09-30, PPO
+pass 4, once every 2-player method had converged on racing.)*
 
 ### Full map and full ruleset from the start
 
@@ -774,13 +775,32 @@ for 2 players).
     everything else (linear +8.8, racer +5.8, DQN +7.4); its lower rating comes from letting
     greedy and wary score (68–71% wins against them, the margin agents 83–94%). The win agent
     loses to collector (−9.0). `p2b_pool_s3` stays the reference strongest agent.
+  - Checked (2026-09-30): tickets aren't cheap additions to the racing network. At game end
+    the tickets PPO abandons are a median 8 trains from its network (5–10% within 3), and
+    keeping the best 2 of the 3 offered, in hindsight, would recover about 2 points a game
+    (−21 instead of −23). Finishing one costs about as many route points as it pays. Racing
+    looks close to right for 2 players, so the next step is more players, not a new learner.
+  - Decided (2026-09-30): multiplayer next, with PPO. `ttr-train-ppo --players N` (2–5): each
+    opponent seat is drawn from the pool on its own; evaluations fill every other seat with the
+    evaluation opponent ("vs greedy" at 4 players = against 3 greedy); the margin is against the
+    opponents' mean (the reward already was), and win share's baseline is 1/N. A network plays
+    only the player count it was trained for (the observation is 879 numbers at 3 players, 993
+    at 4); runs saved before this load as 2-player. `rescore.py` re-scores a run at its own
+    player count. A game costs about 1.2× a 2-player one at 3 players, 1.5× at 4.
+  - PPO pass 4 (`scripts/ppo_pass4.ps1`, `runs/ppo/pass4/`, launched 2026-09-30, estimated
+    3.5–4 h): 3 and 4 players × margin and score rewards × 3 seeds, all 12 at once; pass 3's
+    setting and pool, 50000 games. Does racing survive when the nine 6-routes are shared by 3–4
+    players, and do blocking (rewarded only by margin) or tickets appear?
 - **Next:**
+  - Analyze PPO pass 4: re-score on fresh games (`rescore.py`), the behavior instrumentation
+    (route lengths, blocking against chance, tempo) at 3–4 players, and a multiplayer round
+    robin. Its design is open: for example each pair splits the seats (2 + 2 at 4 players;
+    2 + 1 both ways at 3), rated from win shares against the 1/N baseline.
   - Within 2-player games every method, and every reward that learned, has converged on
     racing (PPO adding the connected network); tickets and blocking never appeared. Racing is
     the finding for the tempo question, and pass 3 shows it isn't an artifact of the margin
-    reward (only the denial part is). Options: 3–5 players (routes contested, blocking
-    matters, tickets may pay), Phase 6 strategy analysis of the agents we have, MCTS (tier D)
-    as a non-learning contrast.
+    reward (only the denial part is). Other options: Phase 6 strategy analysis of the agents
+    we have, MCTS (tier D) as a non-learning contrast.
   - Win/loss reward, for the risk-tolerance question: it doesn't learn from scratch against
     this pool. Either warm-start it from a trained margin policy (needs an `--init` option in
     `ttr-train-ppo`) or train it in self-play only, where every game carries signal.
@@ -818,8 +838,8 @@ for 2 players).
    by an opponent while on a player's ticket path — route-length
    distribution, ticket draw/keep behavior, tempo), compared across methods, plus
    pandas/matplotlib notebooks and the viewer's overlays.
-7. **Later / optional**: 3–5 players, the AlphaZero-style stretch agent, and Unity +
-   ML-Agents for presentation.
+7. **Later / optional**: 3–5 players (started 2026-09-30 with PPO pass 4), the AlphaZero-style
+   stretch agent, and Unity + ML-Agents for presentation.
 
 ## Visualization (Phase 3)
 
@@ -1070,7 +1090,9 @@ not just to find the strongest one. Each tier teaches something different:
   clip 0.2 (value loss clipped too), entropy 0.01, value 0.5, gradient norm 0.5, Adam
   2.5e-4 annealed to 0. Opponents, league self-play, shaping, the ticket-plan block,
   evaluations and best checkpoints are DQN's. The policy samples in training (its only
-  exploration); evaluations and `ppo:PATH` take its most likely move.
+  exploration); evaluations and `ppo:PATH` take its most likely move. `--players N` trains
+  at 3–5 players: every opponent seat drawn on its own, evaluations against N − 1 copies of
+  the evaluation opponent.
 - **Why linear rather than tabular for tier A:** tabular methods are only feasible on a
   tiny map, and there is none. Linear features keep the same update rules and the same
   Q-learning vs. SARSA comparison on the full map.

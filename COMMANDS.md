@@ -243,7 +243,8 @@ ttr-sim --agents dqn:runs/dqn/n8_s0.json@best greedy    # the run's best checkpo
 `RUN.json` has the same layout as a linear run (`ttr-dash` reads it; no weight pages), with
 `"method": "dqn"`; the networks (final, best, raw when averaging) are in `RUN.pt` beside it.
 `scripts/rescore.py` and `scripts/run_status.py` take both kinds of run; `rescore.py --opponents greedy wary racer`
-re-scores against several opponents on the same fresh games.
+re-scores against several opponents on the same fresh games. A run trained for more than 2 players (PPO
+`--players`) is re-scored at its own player count, every other seat a copy of the opponent.
 
 ### PPO
 
@@ -267,6 +268,7 @@ ttr-sim --agents ppo:runs/ppo/pool_s0.json@best racer
 | `--clip` / `--no-clip-vloss` | `0.2` / value loss clipped | PPO clipping |
 | `--ent-coef` / `--vf-coef` / `--max-grad-norm` | `0.01` / `0.5` / `0.5` | loss weights, gradient clipping |
 | `--eval-sample` | off | evaluations sample moves instead of taking the most likely |
+| `--players` | `2` | seats per game (2-5): the learner and PLAYERS - 1 opponents, each seat drawn on its own; evaluations fill every other seat with the evaluation opponent. The network plays only this player count |
 | other flags | | as `ttr-train-dqn` (`--hidden`, `--reward`, `--memory-level`, `--device`, `--eval-*`, `--live`, ...) |
 
 `RUN.json` adds `updates` (per update: policy and value loss, entropy, approximate KL, clip fraction). In the

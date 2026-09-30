@@ -78,6 +78,46 @@ def test_rollouts_play_legal_moves_and_rewards_sum_to_the_margin():
         game.step(greedy_play.act(game, p) if p == 0 else RandomAgent(5).act(game, p))
 
 
+@pytest.mark.parametrize("players", [3, 4])
+def test_multiplayer_rollouts_reward_the_margin_over_the_opponents_mean(players):
+    net = ActorCritic(ObservationEncoder(players).size, (16,))
+    game = Game(load_board("usa"), num_players=players, seed=21)
+    seat = 1
+    opponents = {q: (GreedyAgent(q) if q % 2 else RandomAgent(q)) for q in range(players) if q != seat}
+    ep = play_rollout_game(PPOAgent(net, num_players=players, sample=True, seed=2), opponents, game, seat,
+                           PPOConfig(players=players))
+    totals = [r.total for r in game.result.players]
+    margin = totals[seat] - np.mean([t for q, t in enumerate(totals) if q != seat])
+    assert sum(ep.rewards) == pytest.approx(margin / 100)
+    assert all(m[a] for m, a in zip(ep.masks, ep.actions))
+
+
+@pytest.fixture(scope="module")
+def ppo_run_3p(tmp_path_factory):
+    cfg = PPOConfig(opponent="pool", pool=("greedy", "racer", "self"), players=3, games=6, games_per_update=2,
+                    hidden=(32,), device="cpu", seed=5)
+    result = train(cfg, eval_every=3, eval_games=2, eval_linear=None, eval_opponents=("random", "greedy"),
+                   log=lambda line: None, baselines=False)
+    path = tmp_path_factory.mktemp("ppo3") / "ppo_3p_s5.json"
+    result.save(path)
+    return path, result
+
+
+def test_multiplayer_training_saves_a_policy_for_its_player_count(ppo_run_3p):
+    path, result = ppo_run_3p
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["config"]["players"] == 3
+    assert data["network"]["num_players"] == 3 and data["network"]["obs_size"] == ObservationEncoder(3).size
+    for row in data["games"]:
+        shares = [row[f"vs_{k}"] for k in ("random", "greedy", "wary", "racer", "collector", "self", "linear", "dqn")]
+        assert sum(shares) == pytest.approx(1) and all(s in (0, 0.5, 1) for s in shares)  # 2 opponent seats
+    assert set(data["history"][0]["eval"]) == {"random", "greedy"}
+    net, view = load_policy(path)
+    assert view == {"num_players": 3, "memory_level": 2, "ticket_plan": False}
+    out = run_matches([f"ppo:{path}", "racer", "greedy"], games=2, board=load_board("usa"), seed=4)
+    assert len(out["stats"]) == 3 and all(s.games == 2 for s in out["stats"])
+
+
 @pytest.fixture(scope="module")
 def ppo_run(tmp_path_factory):
     cfg = PPOConfig(opponent="pool", games=8, games_per_update=2, hidden=(32,), shaping=1.0, ticket_plan=True,
@@ -104,7 +144,7 @@ def test_training_records_the_run_layout(ppo_run):
 def test_saved_policy_reloads_and_plays(ppo_run):
     path, result = ppo_run
     net, view = load_policy(path)
-    assert view == {"memory_level": 2, "ticket_plan": True}
+    assert view == {"num_players": 2, "memory_level": 2, "ticket_plan": True}
     for k, v in net.state_dict().items():
         assert torch.equal(v, result.net.state_dict()[k].cpu())
     for spec in (f"ppo:{path}", f"ppo:{path}@best"):

@@ -322,11 +322,12 @@ def train_game(agent: LinearAgent, opponent, game: Game, seat: int, cfg: TrainCo
 
 
 def evaluate(agent, opponent: str, games: int, board: Board, seed: int = 0,
-             max_turns: int = 1000) -> Dict[str, float]:
+             max_turns: int = 1000, num_players: int = 2) -> Dict[str, float]:
     """Mean game metrics (ttr.learn.metrics) of `agent` over `games` against a
     scripted bot, random seats. A LinearAgent plays greedily (epsilon 0). Any
     `Agent` works, so the scripted bots get the same numbers as baselines.
-    `opponent` is a bot name, or any agent spec (ttr.agents.registry)."""
+    `opponent` is a bot name, or any agent spec (ttr.agents.registry). With
+    `num_players` > 2, every other seat is its own copy of `opponent`."""
     make = OPPONENTS.get(opponent)
     if make is None:
         from ttr.agents.registry import make_agent
@@ -339,12 +340,14 @@ def evaluate(agent, opponent: str, games: int, board: Board, seed: int = 0,
     rows = []
     try:
         for g in range(games):
-            game = Game(board, num_players=2, seed=seed * 100_000 + g, max_turns=max_turns)
-            seat = rng.randrange(2)
-            opp = make(seed * 1000 + g)
+            game = Game(board, num_players=num_players, seed=seed * 100_000 + g, max_turns=max_turns)
+            seat = rng.randrange(num_players)
+            # the first copy's seed is the 2-player one, so 2-player evaluations are unchanged
+            opps = [make(seed * 1000 + g + 100_000_000 * k) for k in range(num_players - 1)]
+            by_seat = {q: opps.pop(0) for q in range(num_players) if q != seat}
             while not game.game_over:
                 p = game.current_player
-                game.step(agent.act(game, p) if p == seat else opp.act(game, p))
+                game.step(agent.act(game, p) if p == seat else by_seat[p].act(game, p))
             rows.append(game_metrics(game, seat))
     finally:
         if saved is not None:

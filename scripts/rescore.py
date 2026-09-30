@@ -8,7 +8,8 @@ against greedy on the same fresh games (batch seed 9001 by default, never used i
 training), so the numbers are unbiased and paired across agents. One row per agent and
 opponent in the CSV; the printed table averages each setting (NAME_s<seed>) over its
 seeds. `--opponents` plays other opponents too (default greedy alone), each on the same
-fresh games.
+fresh games. A run trained for more than 2 players (its config's `players`) plays at
+that count, every other seat a copy of the opponent; the margin is against their mean.
 """
 
 from __future__ import annotations
@@ -27,13 +28,14 @@ from ttr.simulate import run_matches
 
 
 def score(task):
-    spec, opponent, games, seed = task
-    stats = run_matches([spec, opponent], games=games, board=load_board("usa"), seed=seed)["stats"]
-    me, opp = stats
-    margins = [a - b for a, b in zip(me.totals, opp.totals)]
+    spec, opponent, games, seed, players = task
+    stats = run_matches([spec] + [opponent] * (players - 1), games=games, board=load_board("usa"), seed=seed)["stats"]
+    me, opps = stats[0], stats[1:]
+    margins = [mine - st.mean(theirs) for mine, *theirs in zip(me.totals, *(o.totals for o in opps))]
     return {
         "agent": spec,
         "opponent": opponent,
+        "players": players,
         "games": games,
         "margin": st.mean(margins),
         "se": st.stdev(margins) / len(margins) ** 0.5,
@@ -61,8 +63,9 @@ def main():
             with open(path) as f:
                 run = json.load(f)
             method = run.get("method", "linear")  # DQN runs say so; linear runs predate the field
+            players = run.get("config", {}).get("players", 2)
             specs = [f"{method}:{path}"] + ([f"{method}:{path}@best"] if run.get("best") else [])
-            tasks += [(spec, opp, args.games, args.seed) for spec in specs for opp in args.opponents]
+            tasks += [(spec, opp, args.games, args.seed, players) for spec in specs for opp in args.opponents]
     with ProcessPoolExecutor(args.workers) as pool:
         rows = list(pool.map(score, tasks))
 
