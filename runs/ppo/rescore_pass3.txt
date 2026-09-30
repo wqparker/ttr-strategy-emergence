@@ -1,0 +1,28 @@
+vs greedy, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p3a_margin               final  +16.7 (+25, +20, -1, +23)  win  76%  tickets 0.05/1.95
+p3a_margin               best   +17.5 (+25, +20, +2, +23)  win  77%  tickets 0.05/1.95
+p3b_score                final  +11.8 (+11, +13, +13, +10)  win  67%  tickets 0.00/2.00
+p3b_score                best   +13.6 (+14, +13, +13, +15)  win  70%  tickets 0.00/2.00
+p3c_win                  final  -35.5 (-23, -44, -35, -41)  win  11%  tickets 0.09/2.19
+p3c_win                  best   -34.5 (-18, -46, -36, -38)  win  13%  tickets 0.09/2.18
+vs wary, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p3a_margin               final  +10.3 (+19, +13, -7, +16)  win  67%  tickets 0.05/1.95
+p3a_margin               best   +11.0 (+19, +13, -4, +16)  win  68%  tickets 0.05/1.95
+p3b_score                final   +8.5 (+9, +9, +10, +5)  win  65%  tickets 0.00/2.00
+p3b_score                best    +9.6 (+8, +10, +10, +10)  win  66%  tickets 0.00/2.00
+p3c_win                  final  -39.8 (-27, -46, -40, -46)  win   7%  tickets 0.09/2.18
+p3c_win                  best   -39.0 (-23, -48, -41, -44)  win   8%  tickets 0.09/2.18
+vs racer, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p3a_margin               final   -2.5 (+6, -1, -14, -1)  win  46%  tickets 0.08/1.92
+p3a_margin               best    -1.7 (+6, -1, -12, +0)  win  47%  tickets 0.09/1.91
+p3b_score                final   +4.2 (+5, +5, +6, +1)  win  64%  tickets 0.02/1.98
+p3b_score                best    +3.3 (-1, +5, +6, +4)  win  62%  tickets 0.01/1.99
+p3c_win                  final  -61.4 (-38, -68, -62, -78)  win   0%  tickets 0.08/2.32
+p3c_win                  best   -54.1 (-42, -54, -47, -74)  win   0%  tickets 0.09/2.30
+vs collector, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p3a_margin               final  +31.4 (+39, +35, +15, +37)  win  87%  tickets 0.04/1.96
+p3a_margin               best   +31.8 (+39, +35, +16, +37)  win  87%  tickets 0.05/1.95
+p3b_score                final  +23.3 (+24, +29, +28, +13)  win  79%  tickets 0.00/2.00
+p3b_score                best   +27.0 (+26, +28, +28, +26)  win  83%  tickets 0.00/2.00
+p3c_win                  final  -21.2 (-11, -28, -20, -26)  win  26%  tickets 0.08/2.19
+p3c_win                  best   -20.8 (-6, -29, -25, -24)  win  25%  tickets 0.08/2.18

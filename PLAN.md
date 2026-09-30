@@ -69,7 +69,7 @@ for 2 players).
 
 ## Current progress
 
-*Updated at the end of each session. Last updated: 2026-09-29.*
+*Updated at the end of each session. Last updated: 2026-09-30.*
 
 - **Earlier: engine ready, and every RL design question settled.**
   - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view,
@@ -711,28 +711,92 @@ for 2 players).
     1113, wary 1057, greedy 1000, collector 842. The three PPO agents are within 1.4 of
     each other head to head (a tie); each beats the linear agent by 5–7, racer by 7–9,
     DQN by 10–14, greedy by 27–28. `p2b_pool_s3` is the reference strongest agent.
-  - PPO pass 3 ready (`scripts/ppo_pass3.ps1`, `runs/ppo/pass3/`, overnight 2026-09-30): the
-    reward mode (PLAN "Reward": an open experiment since the design). margin (reference),
-    score (my points only: nothing gained by hurting the opponent or ending early), win
-    (±1 at the end: risk tolerance). Pass 2's no-shaping setting, 50000 games, 4 seeds,
-    all 12 at once. Does racing come from a reward that includes the opponent?
+  - PPO pass 3 (`scripts/ppo_pass3.ps1`, `runs/ppo/pass3/`, 2026-09-30, 2 h 32 min): the reward
+    mode (PLAN "Reward"): margin (reference), score (my points only), win (±1 at the end). Pass
+    2's no-shaping setting, 50000 games, 4 seeds, all 12 at once. Does racing come from a reward
+    that includes the opponent? Re-scored on 1000 fresh games per opponent
+    (`runs/ppo/rescore_pass3.*`), final policies, mean over seeds (win share). Parity is each
+    seed's first evaluation at or above 0 against greedy:
+
+    | Reward | vs greedy | vs wary | vs racer | vs collector | Seeds vs greedy | Parity (k games) |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | margin | **+16.7** (76%) | **+10.3** | −2.5 (46%) | **+31.4** | +25, +20, −1, +23 | 16, 26, 32, 32 |
+    | score | +11.8 (67%) | +8.5 | **+4.2** (64%) | +23.3 | +11, +13, +13, +10 | 8, 16, 10, 20 |
+    | win | −35.5 (11%) | −39.8 | −61.4 (0%) | −21.2 | −23, −44, −35, −41 | never |
+
+    Best checkpoints (picked on margin, the wrong measure for score and win) are within 2 of the
+    finals except score against collector (+27.0). Behavior below is from 200 instrumented games
+    per seed and opponent on fresh seeds.
+    - **Racing doesn't come from the opponent in the reward.** Own score alone learns the race in
+      its purest form: seven of the nine 6-routes and one 3-route in nearly every game against
+      greedy (108.6 route points; 45 trains can score at most 109), the 2 opening tickets
+      abandoned (0.00 completed), longest-path bonus 87%. That is scripted racer's rule,
+      rediscovered.
+    - **What the margin adds is tempo.** Against greedy the margin agent takes fewer 6-routes
+      (4.4) and more 4s and 5s, and the game ends at turn 67 instead of 73. Greedy is left with 13
+      trains instead of 10, completes 3.5 tickets instead of 4.1 and scores 67 instead of 82: the
+      margin agent gives up 11 route points to take 15 from greedy.
+    - **Nobody blocks, under either reward.** Claims on the opponent's cheapest ticket paths (or
+      a double route's other side) against greedy: 0.023 per claim for margin and 0.022 for
+      score, against chance baselines of 0.026 and 0.017 (a random legal claim of the same
+      length). The reward's opponent term was used through tempo only.
+    - **Score beats margin head to head**: +7.2 ± 0.5 over the 16 seed pairs (64% wins), and it
+      is ahead against racer (+4.2 vs −2.5); margin is ahead only against the ticket players.
+      Between two racers speed decides: the score agents reach half their trains at turn 47
+      (margin 50.5) and take 4.9 of the nine 6-routes to the margin agents' 3.1. The margin seed
+      with the fastest start (s0, half its trains at turn 45.5) beats every score seed by 2–3.
+      s3 beats greedy by +23 but reaches half its trains at turn 54 and loses to every score
+      seed by 12–17: the score agent ends 77% of those games, leaving s3 4 trains unused and the
+      longest-path bonus 36% of the time. Strength against greedy again doesn't predict strength
+      against racers.
+    - **Win/loss didn't learn**: 0% wins against racer, and its training win share against every
+      bot stayed at 0–4% for the whole run (collector reached 11%). So in 7 of 8 pool games the
+      reward was almost always −1 and only self-play carried signal. Two seeds kept 26–27 tickets
+      at 2000 games (a loss by 400 costs what a loss by 5 does). Policy entropy stayed at 1.27
+      (margin 0.37). The risk-tolerance question needs a win-reward agent that wins some games.
+    - **Own score learns about twice as fast** (parity at 8–20k games vs 16–32k, seeds within 3
+      of each other at the end). Consistent with the noise explanation for random-only DQN: the
+      opponent's score is noise the learner can't yet influence. Indirect (PPO against the pool).
+    - Tickets don't appear under own score either, though greedy scores 110 against itself:
+      tickets pay in own points when the game runs long. Against this pool, where 5 of 8
+      opponents race, the learner didn't find them.
+    - Margin arm (= pass 1 without shaping): three seeds match pass 1 (+20 to +25 against
+      greedy), one stalled (s2, −1: shorter routes, 71 turns). Across passes 1–3 seeds reach
+      parity with greedy anywhere from 12k to 32k games, and pass 2's shaping and
+      learning-rate-schedule comparisons reverse sign here (shaping reached parity sooner on the
+      50k schedule, later on the 100k one): 4 seeds resolve neither.
+  - Round robin 6 (`runs/round_robin_2026-09-30.*`, 13 agents, 400 games per pair), Elo with
+    greedy = 1000: PPO `p1a_pool_s0` 1327, `p2b_pool_s3` 1325, `p2a_pool_shape_s1` 1316, pass-3
+    margin `p3a_margin_s0` 1296, pass-3 score `p3b_score_s2` 1240, linear `p7b…s3@best` 1163,
+    racer 1146, DQN pass 3 1124, wary 1049, greedy 1000, collector 824, pass-3 win
+    `p3c_win_s0` 668. The best margin seed ties pass 1–2's PPO agents (within 3 head to head).
+    The score agent loses to every margin-trained PPO agent by 2–3 (40–42% wins) and beats
+    everything else (linear +8.8, racer +5.8, DQN +7.4); its lower rating comes from letting
+    greedy and wary score (68–71% wins against them, the margin agents 83–94%). The win agent
+    loses to collector (−9.0). `p2b_pool_s3` stays the reference strongest agent.
 - **Next:**
-  - Within 2-player games every method has converged on racing (PPO adding the connected
-    network); tickets and blocking never appeared. Options: 3–5 players (routes contested,
-    blocking matters, tickets may pay), Phase 6 strategy analysis of the agents we have,
-    MCTS (tier D) as a non-learning contrast, or the win/loss reward mode.
-  - Ticket choice: PPO abandons pricier tickets than racer does (−23 vs −19 a game).
+  - Within 2-player games every method, and every reward that learned, has converged on
+    racing (PPO adding the connected network); tickets and blocking never appeared. Racing is
+    the finding for the tempo question, and pass 3 shows it isn't an artifact of the margin
+    reward (only the denial part is). Options: 3–5 players (routes contested, blocking
+    matters, tickets may pay), Phase 6 strategy analysis of the agents we have, MCTS (tier D)
+    as a non-learning contrast.
+  - Win/loss reward, for the risk-tolerance question: it doesn't learn from scratch against
+    this pool. Either warm-start it from a trained margin policy (needs an `--init` option in
+    `ttr-train-ppo`) or train it in self-play only, where every game carries signal.
+  - Own score against greedy alone (cheap): does a score learner find tickets when its
+    opponent doesn't race? Separates "racing is the best response to this pool" from
+    "tickets are too hard to learn".
+  - Ticket choice: PPO abandons pricier tickets than racer does (−21 to −23 vs −19 a game).
   - Phase 6 strategy analysis on the agents we have (PLAN "Roadmap"): the longest-path
-    bonus as an emergent sub-strategy, tempo, blocking (none so far).
+    bonus as an emergent sub-strategy, tempo (pass 3 measured the margin agents' denial), the
+    race for the nine 6-routes, blocking (none so far, now measured against chance).
   - Tickets never appeared in any learner. With the collector result (more tickets
     loses in 2-player games), racing may be close to right for 2 players on this map;
     3–5 players is where tickets could matter more.
-  - DQN has converged on racing across three passes and seven settings, and its best
-    agents now tie racer and the best linear agent. Next method: PPO with self-play on
-    the same pool (tier C), as planned. The race-to-the-end strategy is the finding for
-    the tempo question.
   - Cheap side experiment: DQN against random with `--reward score`, to test the
-    noise explanation for random-only training failing.
+    noise explanation for random-only training failing (PPO pass 3 supports it
+    indirectly).
 
 ## Roadmap
 
@@ -1146,6 +1210,10 @@ not just to find the strongest one. Each tier teaches something different:
     the margin. Comparing it with margin speaks to the risk-tolerance question.
   - **Experiment:** train in all three modes. "Does blocking only emerge when the reward
     includes the opponent?" tests the route-hoarding vs. blocking question directly.
+    *(Run: PPO pass 3, 2026-09-30.)* Blocking emerged under neither margin nor own score; the
+    margin agents use the opponent term through tempo, ending the game before the opponent's
+    tickets are done. Own score races too. Win/loss didn't learn from scratch against the
+    pool, so the risk-tolerance comparison is still open.
   - **γ = 1**, since every game ends. Win rate is the evaluation metric whatever the
     reward mode.
   - **Shaping is off.** If added later, use potential-based shaping,
