@@ -686,10 +686,13 @@ for 2 players).
     against the other racers. Route points are about equal to theirs (93–94 vs 89–90).
     One inefficiency left: its abandoned tickets cost −22 a game against racer's −19 (it
     doesn't keep the cheapest two).
+  - PPO pass 2 ready (`scripts/ppo_pass2.ps1`, `runs/ppo/pass2/`): pass 1's pool arm for
+    100000 games (the learning rate annealed over all of them; pass 1 was still improving
+    when it reached 0 at 50000), with shaping 1 and without shaping, 4 seeds each,
+    evaluations every 2000 games; about 5 h.
 - **Next:**
-  - PPO pass 2: longer training or a slower learning-rate decay (still improving at
-    50k), maybe no shaping (DQN needed it early; PPO's own signal may be enough), and a
-    ticket-choice check.
+  - Run PPO pass 2: does longer training raise the ceiling, and is shaping needed? Then a
+    ticket-choice check (PPO abandons pricier tickets than racer does).
   - Phase 6 strategy analysis on the agents we have (PLAN "Roadmap"): the longest-path
     bonus as an emergent sub-strategy, tempo, blocking (none so far).
   - Tickets never appeared in any learner. With the collector result (more tickets
