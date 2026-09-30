@@ -655,13 +655,43 @@ for 2 players).
     beats random ~+115), slower than DQN early (DQN pass 3: about −45 at 3000 games);
     policy entropy 1.8 → 1.0–1.25; KL 0.006–0.008 and clip fraction 0.10–0.13 early.
     0.11 s a game with 3 runs at once.
-  - PPO pass 1 ready (`scripts/ppo_pass1.ps1`, `runs/ppo/pass1/`): DQN pass 3's setting
-    (pool with the fixed racer twice, collector, self, two strong linear agents; shaping
-    1), default PPO settings, 50000 games (PPO needs more samples), 4 seeds; arms without
-    and with `--ticket-plan`. Does a stochastic policy find anything besides racing?
+  - PPO pass 1 (`scripts/ppo_pass1.ps1`, `runs/ppo/pass1/`, 2026-09-29, 2 h 56 min): DQN
+    pass 3's setting (pool with the fixed racer twice, collector, self, two strong linear
+    agents; shaping 1), default PPO settings, 50000 games, 4 seeds; arms without and with
+    `--ticket-plan`. Re-scored on 1000 fresh games per opponent (`runs/ppo/rescore_pass1.*`),
+    final / best, mean over seeds:
+
+    | Arm | vs greedy | vs wary | vs racer | vs collector |
+    | --- | --- | --- | --- | --- |
+    | pool | **+24.2 / +24.1** (86%) | +17.5 / +17.5 | **+4.9 / +4.1** (62%) | +37.8 / +37.8 |
+    | pool + ticket plan | +18.5 / +19.1 | +12.0 / +12.6 | +1.7 / +1.3 | +33.8 / +34.3 |
+
+    Readings: **PPO is the strongest method so far**, by a clear margin, and its final
+    policies need no checkpoint picking (final ≈ best; seeds +19 to +28 vs greedy).
+    Against the held-out linear agent in training evaluations: +1.6 (pool), −3.6 (ticket
+    plan). Slow start (−58 vs greedy at 5k games, DQN pass 3 −23), then steady: positive
+    from ~17k, +20 at 30k, +24 at 50k, still creeping up when the learning rate reached 0
+    (KL → 0). Policy entropy 1.5 → 0.37. The ticket plan hurt PPO (the reverse of DQN).
+  - Round robin 4 (`runs/round_robin_2026-09-29b.*`, 10 agents, 400 games per pair), Elo
+    with greedy = 1000: PPO `p1a_pool_s0` 1323, PPO + ticket plan `p1b_pool_plan_s3` 1284,
+    PPO `p1a_pool_s1` 1245, linear `p7b…s3@best` 1162, racer 1130, DQN pass-3
+    `d3a_pool_s1@best` 1117, wary 1058, greedy 1000, collector 840. Every PPO agent beats
+    every non-PPO agent; the best beats the linear agent +6.6, racer +8.5, DQN +13.5,
+    greedy +27.1.
+  - What PPO does differently (200 instrumented games per matchup): the same race (2
+    tickets abandoned, ~10 claims of mean length 4.4–4.8, almost only blind draws: 42 blind,
+    1–2 face-up a game), plus **one connected network for the longest-path bonus**: it takes
+    the bonus in 96–98% of games against racer and the linear agent, who get it 4–6% (10
+    points a game), and 85% against DQN (16%). It ends the game itself 81–91% of the time
+    against the other racers. Route points are about equal to theirs (93–94 vs 89–90).
+    One inefficiency left: its abandoned tickets cost −22 a game against racer's −19 (it
+    doesn't keep the cheapest two).
 - **Next:**
-  - Run PPO pass 1; re-score and round robin against DQN pass 3, racer and the linear
-    agent.
+  - PPO pass 2: longer training or a slower learning-rate decay (still improving at
+    50k), maybe no shaping (DQN needed it early; PPO's own signal may be enough), and a
+    ticket-choice check.
+  - Phase 6 strategy analysis on the agents we have (PLAN "Roadmap"): the longest-path
+    bonus as an emergent sub-strategy, tempo, blocking (none so far).
   - Tickets never appeared in any learner. With the collector result (more tickets
     loses in 2-player games), racing may be close to right for 2 players on this map;
     3–5 players is where tickets could matter more.
