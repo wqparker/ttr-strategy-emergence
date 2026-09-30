@@ -217,6 +217,24 @@ def test_cannot_claim_route_longer_than_remaining_trains():  # §9 #10
     assert ClaimRoute(rid) not in game.legal_actions()
 
 
+@pytest.mark.parametrize("num_players", [2, 3, 4, 5])
+def test_claimable_routes_are_exactly_those_with_a_payment(num_players):
+    """Legal claims come from one comparison per route, without building the
+    payments; they must be the routes open to the player, within their trains,
+    for which a payment exists."""
+    def check(game):
+        if game.phase is not Phase.CHOOSE_ACTION:
+            return
+        p = game.current_player
+        claims = {a.route_id for a in game.legal_actions() if isinstance(a, ClaimRoute)}
+        paid = {r.id for r in game.board.routes
+                if game.route_open_to(p, r) and game.players[p].trains >= r.length and any(game._payments(p, r))}
+        assert claims == paid
+
+    for seed in range(3):
+        play_random(Game(load_board("usa"), num_players=num_players, seed=seed), random.Random(seed), check)
+
+
 def test_claimed_route_unavailable():
     game = started_game()
     rid = route_id(game, "Nashville", "Atlanta")

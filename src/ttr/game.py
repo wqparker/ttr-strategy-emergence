@@ -14,7 +14,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from itertools import combinations
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 from ttr.actions import (
     Action,
@@ -258,7 +258,7 @@ class Game:
 
         # CHOOSE_ACTION
         actions: List[Action] = self._card_draws(second=False)
-        actions.extend(ClaimRoute(r.id) for r in self.board.routes if self._can_claim(self.current_player, r))
+        actions.extend(ClaimRoute(r.id) for r in self._claimable_routes(self.current_player))
         if self.ticket_deck:  # §9 #5
             actions.append(DrawTickets())
         if not actions:
@@ -287,12 +287,19 @@ class Game:
                 return False
         return True
 
-    def _can_claim(self, p: int, route: Route) -> bool:
-        if not self.route_open_to(p, route):
-            return False
-        if self.players[p].trains < route.length:  # §9 #10
-            return False
-        return next(iter(self._payments(p, route)), None) is not None
+    def _claimable_routes(self, p: int) -> Iterator[Route]:
+        """Routes open to player p that they have the trains (§9 #10) and cards to
+        claim: those for which `_payments` would yield something. Without building
+        the payments: the route's color (for gray, the player's largest color) plus
+        every Locomotive covers the length, which includes paying all Locomotives."""
+        player = self.players[p]
+        hand = player.hand
+        locos = hand[Color.LOCOMOTIVE]
+        best_color = max(hand[c] for c in TRAIN_COLORS)
+        for route in self.board.routes:
+            if (route.length <= player.trains and self.route_open_to(p, route)
+                    and (best_color if route.is_gray else hand[route.color]) + locos >= route.length):
+                yield route
 
     def _payments(self, p: int, route: Route):
         """Yield every distinct legal Pay for this route from player p's hand."""
@@ -300,7 +307,7 @@ class Game:
         locos = hand[Color.LOCOMOTIVE]
         colors = TRAIN_COLORS if route.is_gray else [route.color]
         for color in colors:
-            for k in range(0, min(locos, route.length - 1) + 1):
+            for k in range(min(locos, route.length - 1) + 1):
                 if hand[color] >= route.length - k:
                     yield Pay(color, k)
         if locos >= route.length:  # §9 #9

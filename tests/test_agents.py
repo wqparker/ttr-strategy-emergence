@@ -6,7 +6,7 @@ from rich.console import Console
 from helpers import route_id, started_game
 from ttr.actions import DrawTickets
 from ttr.agents import CollectorAgent, GreedyAgent, RacerAgent, RandomAgent, WaryAgent
-from ttr.agents.greedy import cheapest_path
+from ttr.agents.greedy import _dijkstra, cheapest_path
 from ttr.board import load_board
 from ttr.game import Game
 from ttr.ascii_map import render_map
@@ -25,6 +25,18 @@ def test_cheapest_path_uses_own_routes_free_and_avoids_blocked():
     game.route_owner[own] = 0
     cost3, path3 = cheapest_path(game, 0, "Raleigh", "Nashville")
     assert cost3 == 0 and path3 == []
+
+
+def test_cheapest_path_answers_are_remembered_until_the_ownership_changes():
+    game = started_game()
+    first = cheapest_path(game, 0, "Seattle", "New York")
+    again = cheapest_path(game, 0, "Seattle", "New York")
+    assert again == first and again[1] is not first[1]  # the same answer, in a fresh list
+    again[1].clear()  # a caller changing its list changes nothing remembered
+    assert cheapest_path(game, 0, "Seattle", "New York") == first
+    game.route_owner[first[1][0]] = 1  # an opponent claims a route on the path
+    after = cheapest_path(game, 0, "Seattle", "New York")
+    assert after == _dijkstra(game, 0, "Seattle", "New York") and first[1][0] not in after[1]
 
 
 @pytest.mark.parametrize("num_players", [2, 4])

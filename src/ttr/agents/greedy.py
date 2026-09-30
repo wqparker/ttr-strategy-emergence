@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import heapq
 import random
+import weakref
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -58,9 +59,29 @@ def _adjacency(board: Board) -> Dict[str, List[Route]]:
     return hit[1]
 
 
+# game -> (route ownership it was computed for, {(p, a, b): (cost, path)}). A path
+# depends only on who owns which route, so an answer holds until the next claim;
+# bots, linear features and the observation ask the same questions many times a turn.
+_PATHS: "weakref.WeakKeyDictionary[Game, Tuple[tuple, Dict[Tuple[int, str, str], Tuple[float, List[int]]]]]" = (
+    weakref.WeakKeyDictionary())
+
+
 def cheapest_path(game: Game, p: int, a: str, b: str) -> Tuple[float, List[int]]:
     """Dijkstra from a to b. Own routes cost 0, open routes cost their length,
-    anything else is impassable. Returns (cost, unclaimed route ids on the path)."""
+    anything else is impassable. Returns (cost, unclaimed route ids on the path),
+    remembered until the route ownership changes."""
+    owners = tuple(game.route_owner.items())
+    hit = _PATHS.get(game)
+    if hit is None or hit[0] != owners:
+        hit = _PATHS[game] = (owners, {})
+    memo = hit[1]
+    found = memo.get((p, a, b))
+    if found is None:
+        found = memo[p, a, b] = _dijkstra(game, p, a, b)
+    return found[0], list(found[1])  # a fresh list: callers may change theirs
+
+
+def _dijkstra(game: Game, p: int, a: str, b: str) -> Tuple[float, List[int]]:
     adj = _adjacency(game.board)
     dist: Dict[str, float] = {a: 0}
     via: Dict[str, Tuple[str, Route]] = {}
