@@ -9,10 +9,10 @@ np = pytest.importorskip("numpy")
 
 from ttr.actions import ClaimRoute, DrawBlind, DrawTickets, KeepTickets, Pay
 from ttr.board import load_board
-from ttr.cards import ALL_COLORS, Color
+from ttr.cards import Color
 from ttr.env import observation as O
 from ttr.env.actions import MAX_ROUTES
-from ttr.game import Game, Phase
+from ttr.game import Game
 
 from helpers import route_id, set_hand, started_game
 

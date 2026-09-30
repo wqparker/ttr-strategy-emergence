@@ -1,7 +1,6 @@
 """Linear Q-learning / SARSA: features, updates, saving, and that it learns."""
 
 import json
-import random
 
 import pytest
 

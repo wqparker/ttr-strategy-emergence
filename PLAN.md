@@ -834,6 +834,21 @@ for 2 players).
     - **Margin learns as fast as score at 4 players** (parity at 10–18k games; score 10–16k). At
       2 players margin needed about twice as long. The margin's opponent term is a mean over
       N − 1 opponents, less noisy as N grows: more support for the noise explanation.
+  - Cleanup (2026-09-30), no behavior change: before and after, whole games at 2–5 players
+    (every action, legal-move list and observation), match-runner batches with trained agents,
+    and short linear, DQN and PPO training runs (rows, evaluations, checkpoints, weights, run
+    files) came out byte-identical.
+    - Engine: claimability is one comparison per route instead of building payments, and
+      greedy's `cheapest_path` answers are remembered until the next claim (72% fewer searches):
+      2.8× engine speed, evaluation games a third faster, the test suite 91 s → 72 s.
+    - `src/ttr/learn/common.py`: what the learners shared or had copied: evaluation, baselines and
+      run files for all three; for DQN and PPO the training-game loop with reward and shaping,
+      opponent drawing, best-checkpoint bookkeeping, saving and loading networks, and the
+      command line, each once instead of in two or three copies (`dqn.py` 704 → 526 lines,
+      `ppo.py` 584 → 462, `linear.py` 556 → 492; `common.py` 370). Old import paths still work.
+    - `scripts/run_queue.ps1` (58 lines): the run queue each of the 13 launchers carried a copy
+      of (351 lines gone). `-DryRun` prints a launcher's command lines; every launcher was
+      checked against its old ones.
 - **Next:**
   - Every method, every reward that learned and every player count tried (2–4) converges on
     racing (PPO adding the connected network); tickets and blocking never appeared, and the
@@ -1292,10 +1307,13 @@ not just to find the strongest one. Each tier teaches something different:
 
 ## Open questions
 
-- **Engine speed**: *(settled for now.)* Legal moves are cached per state; 12.6k
-  sub-steps/s engine-only, 11.2k with the env's mask, about 4.4k adding the observation
-  (USA, 2 players, random play). Revisit if
-  training throughput needs more, e.g. incremental claimability per route.
+- **Engine speed**: *(settled for now.)* Legal moves are cached per state, and since
+  2026-09-30 whether a route can be claimed is one comparison per route (the best color plus
+  every Locomotive against its length) instead of building its payments; greedy's
+  `cheapest_path` answers are remembered until the next claim. `scripts/bench_env.py` (USA, 2
+  players, random play): 55.6k sub-steps/s engine-only (19.5k before), 41.5k with the env's
+  mask (18.4k), 8.7k adding the observation (5.9k); evaluation games against the bots take a
+  third less time. The observation (about 0.14 ms) is now the largest cost per decision.
 
 ## Notes
 

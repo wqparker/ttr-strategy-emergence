@@ -49,7 +49,7 @@ def ratings(agents: Sequence[str], rows: Sequence[dict], iterations: int = 2000)
         wins[r["a"]] += r["a_wins"]
         wins[r["b"]] += r["b_wins"]
         games[r["a"], r["b"]] = games[r["b"], r["a"]] = r["games"] + 1
-    strength = {x: 1.0 for x in agents}
+    strength = dict.fromkeys(agents, 1.0)
     for _ in range(iterations):
         new = {x: wins[x] / sum(games[x, y] / (strength[x] + strength[y]) for y in agents if y != x)
                for x in agents}

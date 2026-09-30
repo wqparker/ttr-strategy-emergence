@@ -1,10 +1,11 @@
-"""One line per linear training run: progress, latest evaluations and health checks.
+"""One line per training run (linear, DQN or PPO): progress, latest evaluations and health checks.
 
-    python scripts/run_status.py "runs/linear/pass4/*.json"
+    python scripts/run_status.py "runs/linear/pass4/*.json" "runs/ppo/pass4/*.json"
 
-Flags a run as BROKEN (non-finite weights) or COLLAPSED (past 3000 games, its last
-evaluation against random below -150 margin with fewer than 2 claims a game, the way
-pass 3's lambda 0.98 runs stopped claiming). Reads the files `--live` rewrites.
+Flags a linear run as BROKEN (non-finite weights), and any run as COLLAPSED (past 3000
+games, its last evaluation against random below -150 margin with fewer than 2 claims a
+game, the way linear pass 3's lambda 0.98 runs stopped claiming). Reads the files
+`--live` rewrites.
 """
 
 import glob

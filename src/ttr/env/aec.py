@@ -91,7 +91,7 @@ class raw_env(AECEnv):
             "observation": spaces.Box(0.0, OBS_HIGH, (self.encoder.size,), dtype=np.float32),
             "action_mask": spaces.Box(0, 1, (A.N_ACTIONS,), dtype=np.int8),
         })
-        self.observation_spaces = {a: obs_space for a in self.possible_agents}
+        self.observation_spaces = dict.fromkeys(self.possible_agents, obs_space)
         self.action_spaces = {a: spaces.Discrete(A.N_ACTIONS) for a in self.possible_agents}
         self._seeds = random.Random()
         self.game: Optional[Game] = None
@@ -110,10 +110,10 @@ class raw_env(AECEnv):
         self.game = Game(self.board, self.num_players, seed=self._seeds.getrandbits(64), max_turns=self.max_turns)
         self.encoder.reset()
         self.agents = list(self.possible_agents)
-        self.rewards = {a: 0.0 for a in self.agents}
-        self._cumulative_rewards = {a: 0.0 for a in self.agents}
-        self.terminations = {a: False for a in self.agents}
-        self.truncations = {a: False for a in self.agents}
+        self.rewards = dict.fromkeys(self.agents, 0.0)
+        self._cumulative_rewards = dict.fromkeys(self.agents, 0.0)
+        self.terminations = dict.fromkeys(self.agents, False)
+        self.truncations = dict.fromkeys(self.agents, False)
         self.infos = {a: {} for a in self.agents}
         self._values = self._reward_values()
         self.agent_selection = self.possible_agents[self.game.current_player]

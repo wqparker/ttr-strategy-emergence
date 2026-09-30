@@ -24,7 +24,7 @@ for seed in range(1500):
         if g.market.count(L) >= 3:
             assert not g._legal_market_possible(), seed
             guard_hits += 1
-        for i, pl in enumerate(g.players):
+        for pl in g.players:
             rs = [b.routes[r] for r in pl.routes]
             assert pl.trains == b.trains_per_player - sum(r.length for r in rs)
             assert pl.route_points == sum(r.points for r in rs)

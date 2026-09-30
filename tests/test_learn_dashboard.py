@@ -1,7 +1,6 @@
 """Game metrics and the agent-analysis dashboard (rendered headless)."""
 
 import json
-import random
 from types import SimpleNamespace
 
 import pytest

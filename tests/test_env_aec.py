@@ -16,7 +16,7 @@ from ttr.env.aec import env, raw_env
 def play(e, rng, seed=0):
     """Random legal play to the end. Returns per-agent reward sums and final infos."""
     e.reset(seed=seed)
-    totals = {a: 0.0 for a in e.possible_agents}
+    totals = dict.fromkeys(e.possible_agents, 0.0)
     infos = {}
     for agent in e.agent_iter():
         obs, reward, terminated, truncated, info = e.last()

@@ -75,7 +75,7 @@ def parse_size(text: str) -> Tuple[int, int]:
     try:
         return (int(w), int(h))
     except ValueError:
-        raise argparse.ArgumentTypeError(f"expected WIDTHxHEIGHT, e.g. 1920x1080, not {text!r}")
+        raise argparse.ArgumentTypeError(f"expected WIDTHxHEIGHT, e.g. 1920x1080, not {text!r}") from None
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:

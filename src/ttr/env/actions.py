@@ -29,7 +29,7 @@ from __future__ import annotations
 from typing import List
 
 from ttr.actions import Action, ClaimRoute, DrawBlind, DrawFaceUp, DrawTickets, KeepTickets, Pass, Pay
-from ttr.cards import ALL_COLORS, TRAIN_COLORS, Color
+from ttr.cards import ALL_COLORS, TRAIN_COLORS
 from ttr.game import Game
 
 MAX_ROUTES = 100
