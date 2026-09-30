@@ -686,13 +686,37 @@ for 2 players).
     against the other racers. Route points are about equal to theirs (93–94 vs 89–90).
     One inefficiency left: its abandoned tickets cost −22 a game against racer's −19 (it
     doesn't keep the cheapest two).
-  - PPO pass 2 ready (`scripts/ppo_pass2.ps1`, `runs/ppo/pass2/`): pass 1's pool arm for
-    100000 games (the learning rate annealed over all of them; pass 1 was still improving
-    when it reached 0 at 50000), with shaping 1 and without shaping, 4 seeds each,
-    evaluations every 2000 games; about 5 h.
+  - PPO pass 2 (`scripts/ppo_pass2.ps1`, `runs/ppo/pass2/`, 2026-09-29, 4 h 13 min): pass 1's
+    pool arm for 100000 games (learning rate annealed over all of them), with and without
+    shaping, 4 seeds each. Re-scored on 1000 fresh games per opponent
+    (`runs/ppo/rescore_pass2.*`), final policies, mean over seeds (best checkpoints within 0.6):
+
+    | Arm | vs greedy | vs wary | vs racer | vs collector | Seeds vs greedy |
+    | --- | --- | --- | --- | --- | --- |
+    | shaping 1 | +25.4 (87%) | +18.6 | +6.5 (65%) | +38.2 | +23 to +28 |
+    | no shaping | **+26.1** (88%) | **+19.5** | **+7.2** (66%) | **+39.6** | +25 to +27 |
+
+    Readings: PPO has plateaued. Twice the training added 1–2 points over pass 1 and made
+    the seeds consistent (within 4 of each other, pass 1: 8); the curves flatten from
+    ~70k games. **Shaping isn't needed for PPO**: without it the arm learned faster early
+    (−42 vs −54 against greedy at 10k games, +15 vs +5 at 30k) and ends equal or slightly
+    ahead; DQN was the reverse. The slower learning-rate decay made the early phase
+    slower (pass 1 was at +20 at 30k games) for little gain at the end: the schedule
+    mattered more than the length. The strategy is unchanged: race, one connected network
+    (longest-path bonus in 91–97% of games), 2 tickets abandoned (−23 a game), 0.01–0.02
+    completed.
+  - Round robin 5 (`runs/round_robin_2026-09-29c.*`, 400 games per pair), Elo with greedy =
+    1000: PPO pass 2 no shaping `p2b_pool_s3` 1311, PPO pass 1 `p1a_pool_s0` 1306, PPO pass
+    2 shaping `p2a_pool_shape_s1` 1295, linear `p7b…s3@best` 1158, racer 1126, DQN pass 3
+    1113, wary 1057, greedy 1000, collector 842. The three PPO agents are within 1.4 of
+    each other head to head (a tie); each beats the linear agent by 5–7, racer by 7–9,
+    DQN by 10–14, greedy by 27–28. `p2b_pool_s3` is the reference strongest agent.
 - **Next:**
-  - Run PPO pass 2: does longer training raise the ceiling, and is shaping needed? Then a
-    ticket-choice check (PPO abandons pricier tickets than racer does).
+  - Within 2-player games every method has converged on racing (PPO adding the connected
+    network); tickets and blocking never appeared. Options: 3–5 players (routes contested,
+    blocking matters, tickets may pay), Phase 6 strategy analysis of the agents we have,
+    MCTS (tier D) as a non-learning contrast, or the win/loss reward mode.
+  - Ticket choice: PPO abandons pricier tickets than racer does (−23 vs −19 a game).
   - Phase 6 strategy analysis on the agents we have (PLAN "Roadmap"): the longest-path
     bonus as an emergent sub-strategy, tempo, blocking (none so far).
   - Tickets never appeared in any learner. With the collector result (more tickets
