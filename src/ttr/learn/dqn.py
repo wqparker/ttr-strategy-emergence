@@ -75,11 +75,8 @@ from __future__ import annotations
 
 import argparse
 import copy
-import io
-import json
 import random
 import statistics
-import sys
 import time
 from collections import deque
 from dataclasses import asdict, dataclass, field
@@ -92,21 +89,15 @@ from torch import nn
 from torch.nn import functional as F
 
 from ttr.actions import Action
-from ttr.agents import GreedyAgent
-from ttr.agents.registry import make_agent
 from ttr.board import load_board
 from ttr.env import actions as A
 from ttr.env.observation import ObservationEncoder
-from ttr.env.reward import REWARD_MODES, reward_values
 from ttr.game import Game
-from ttr.learn.linear import OPPONENTS, _eval_seed, evaluate, swap_in
+from ttr.learn.common import (BEST_LINEAR, EVAL_BOTS, TRAIN_OPPONENTS, add_run_arguments,  # noqa: F401 (re-exported)
+                              baseline_evaluations, check_config, draw_opponent, evaluation_due, evaluations,
+                              load_run, observe, opponent_shares, play_learner_game, progress_line,
+                              record_evaluation, resolve_device, run_from_cli, save_run)
 from ttr.learn.metrics import METRICS, game_metrics
-
-TRAIN_OPPONENTS = ("random", "greedy", "wary", "racer", "self", "pool")
-# Evaluation opponents; the best checkpoint is chosen on the mean margin over all but random.
-EVAL_BOTS = ("random", "greedy", "wary", "racer")
-# The strongest linear agent on fresh games (PLAN.md, pass 7 re-score: +17.4 vs greedy).
-BEST_LINEAR = "linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best"
 
 
 # ------------------------------------------------------------------ network
@@ -136,24 +127,6 @@ class QNetwork(nn.Module):
             mean = (q * m).sum(1, keepdim=True) / m.sum(1, keepdim=True).clamp(min=1.0)
             q = self.value(x) + q - mean
         return q.masked_fill(~mask, float("-inf"))
-
-
-def observe(encoder: ObservationEncoder, game: Game, player: int) -> Tuple[np.ndarray, np.ndarray, List[Action]]:
-    """What a learner sees and may do: the observation, the mask (bool) and the
-    engine action behind each legal index (None elsewhere)."""
-    mask = np.zeros(A.N_ACTIONS, dtype=bool)
-    by_index: List[Optional[Action]] = [None] * A.N_ACTIONS
-    for a in game.legal_actions():
-        i = A.encode(game, a)
-        mask[i] = True
-        by_index[i] = a
-    return encoder.encode(game, player), mask, by_index
-
-
-def resolve_device(name: str) -> torch.device:
-    if name == "auto":
-        name = "cuda" if torch.cuda.is_available() else "cpu"
-    return torch.device(name)
 
 
 class DQNAgent:
@@ -341,48 +314,20 @@ class Episode:
     shaping: float = 0.0  # the shaping reward summed over the game (0 up to rounding)
 
 
-def ticket_trains(encoder: ObservationEncoder, game: Game, p: int) -> int:
-    """Trains `p` still needs for its incomplete tickets, a ticket that can no
-    longer be finished counting a full supply (ttr.learn.features `ticket_trains`)."""
-    full = game.board.trains_per_player
-    trains = game.players[p].trains
-    total = 0
-    for tid in game.players[p].tickets:
-        d = encoder.trains_to_finish(game, p, tid)
-        total += full if d is None or d > trains else d
-    return total
-
-
 def play_training_game(learner: DQNAgent, opponent, game: Game, seat: int, cfg: DQNConfig) -> Episode:
-    """With `cfg.shaping`, each reward also gets Phi(next) - Phi(this) for
-    Phi = -shaping * reward_scale * ticket_trains (Ng et al., 1999). Phi is 0
-    before any ticket is kept and at the end, so a game's shaping sums to 0 and
-    the best policy doesn't change; `ep.shaping` records the sum."""
-    scale = 1.0 if cfg.reward_mode == "win" else cfg.reward_scale
+    """One training game (rewards and shaping: ttr.learn.common.play_learner_game),
+    the learner playing epsilon-greedily; `ep.shaping` is the shaping's sum (0)."""
     ep = Episode()
-    last = reward_values(game, cfg.reward_mode)[seat]
-    last_phi = 0.0
-    while not game.game_over:
-        p = game.current_player
-        if p != seat:
-            game.step(opponent.act(game, p))
-            continue
-        value = reward_values(game, cfg.reward_mode)[seat]
-        phi = -cfg.shaping * cfg.reward_scale * ticket_trains(learner.encoder, game, p) if cfg.shaping else 0.0
-        if ep.actions:
-            ep.rewards.append(scale * (value - last) + phi - last_phi)
-            ep.shaping += phi - last_phi
-        last, last_phi = value, phi
-        obs, mask, by_index = learner.observe(game, p)
+
+    def decide(obs: np.ndarray, mask: np.ndarray) -> int:
         i, q = learner.choose(obs, mask)
         ep.obs.append(obs)
         ep.masks.append(mask)
         ep.actions.append(i)
         ep.qs.append(q)
-        game.step(by_index[i])
-    if ep.actions:
-        ep.rewards.append(scale * (reward_values(game, cfg.reward_mode)[seat] - last) - last_phi)  # Phi(end) = 0
-        ep.shaping -= last_phi
+        return i
+
+    ep.rewards, ep.shaping = play_learner_game(learner.encoder, decide, opponent, game, seat, cfg)
     return ep
 
 
@@ -405,54 +350,23 @@ class DQNResult:
     eval_linear: Optional[str] = None
 
     def save(self, path: Path, finished: bool = True) -> None:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        cpu = lambda net: {k: v.detach().cpu() for k, v in net.state_dict().items()}
-        nets = {"final": cpu(self.policy), "best": cpu(self.best_net) if self.best_net is not None else None}
-        if self.policy is not self.online:
-            nets["raw"] = cpu(self.online)
-        buf = io.BytesIO()
-        torch.save(nets, buf)
-        weights = path.with_suffix(".pt")
-        tmp = weights.with_name(weights.name + ".tmp")
-        tmp.write_bytes(buf.getvalue())
-        swap_in(tmp, weights)
-
         cfg = self.cfg
-        data = {
-            "method": "dqn",
-            "config": {**asdict(cfg), "hidden": list(cfg.hidden)},
-            "network": {"obs_size": ObservationEncoder(2, cfg.memory_level, cfg.ticket_plan).size,
-                        "hidden": list(cfg.hidden), "dueling": cfg.dueling, "memory_level": cfg.memory_level,
-                        "ticket_plan": cfg.ticket_plan},
-            "weights_file": weights.name,
-            "eval_linear": self.eval_linear,
-            "eval_games": self.eval_games,
-            "metrics": METRICS,
-            "progress": {"games": len(self.games), "of": cfg.games, "finished": finished},
-            "history": self.history,
-            "snapshots": [],
-            "baselines": self.baselines,
-            "games": self.games,
-            "best": self.best,
-        }
-        tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        swap_in(tmp, path)
+        nets = {"final": self.policy, "best": self.best_net}
+        if self.policy is not self.online:
+            nets["raw"] = self.online
+        save_run(path, nets, "dqn", {**asdict(cfg), "hidden": list(cfg.hidden)},
+                 {"obs_size": ObservationEncoder(2, cfg.memory_level, cfg.ticket_plan).size,
+                  "hidden": list(cfg.hidden), "dueling": cfg.dueling, "memory_level": cfg.memory_level,
+                  "ticket_plan": cfg.ticket_plan},
+                 eval_linear=self.eval_linear, eval_games=self.eval_games, metrics=METRICS,
+                 progress={"games": len(self.games), "of": cfg.games, "finished": finished},
+                 history=self.history, snapshots=[], baselines=self.baselines, games=self.games, best=self.best)
 
 
 def load_network(path: Path, best: bool = False, device: str = "cpu") -> Tuple[QNetwork, dict]:
     """The final (or best) network of a run saved by `DQNResult.save`, and what its
     observation needs: {"memory_level", "ticket_plan"} (DQNAgent's arguments)."""
-    path = Path(path)
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("method") != "dqn":
-        raise ValueError(f"{path} is not a DQN run")
-    spec = data["network"]
-    nets = torch.load(path.with_name(data["weights_file"]), map_location=device, weights_only=True)
-    state = nets["best" if best else "final"]
-    if state is None:
-        raise ValueError(f"{path} has no best checkpoint")
+    spec, state = load_run(path, "dqn", best, device)
     net = QNetwork(spec["obs_size"], spec["hidden"], spec["dueling"]).to(device)
     net.load_state_dict(state)
     net.eval()
@@ -470,17 +384,9 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
     random. With `baselines`, the random and greedy bots then play the final
     evaluation's games too. `on_progress(result)` is called every
     `progress_every` games and after every evaluation (live runs)."""
-    if cfg.opponent not in TRAIN_OPPONENTS:
-        raise ValueError(f"opponent must be one of {TRAIN_OPPONENTS}")
-    if cfg.reward_mode not in REWARD_MODES:
-        raise ValueError(f"reward mode must be one of {REWARD_MODES}")
+    check_config(cfg, eval_opponents)
     if cfg.n_step < 1:
         raise ValueError("n_step must be at least 1")
-    if "greedy" not in eval_opponents:
-        raise ValueError("the evaluations must include greedy (runs are compared on it)")
-    for name in cfg.pool if cfg.opponent == "pool" else ():
-        if name != "self":
-            make_agent(name, 0)  # an unknown name fails here, not mid-run
     selected_on = [o for o in eval_opponents if o != "random"]
     device = resolve_device(cfg.device)
     torch.manual_seed(cfg.seed)
@@ -502,16 +408,9 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
     learner = DQNAgent(actor, **view, seed=cfg.seed, name="dqn")
     evaluated = DQNAgent(eval_net, **view, seed=cfg.seed, name="dqn")
     out = DQNResult(cfg, online, policy, eval_games=eval_games, eval_linear=eval_linear)
-    opponents = {**{o: o for o in eval_opponents}, **({"linear": eval_linear} if eval_linear else {})}
+    eval_specs = {**{o: o for o in eval_opponents}, **({"linear": eval_linear} if eval_linear else {})}
     league: Deque[QNetwork] = deque(maxlen=cfg.league)  # the latest evaluated networks, on the CPU
-
-    def own_network(seed: int):
-        """A frozen copy of the learner for self-play: the best network or a recent
-        one; greedy until the first evaluation."""
-        nets = [out.best_net, *league] if out.best_net is not None else []
-        if not nets:
-            return GreedyAgent(seed)
-        return DQNAgent(random.Random(seed).choice(nets), **view, seed=seed, name="self")
+    frozen = lambda net, seed: DQNAgent(net, **view, seed=seed, name="self")  # a copy of the learner for self-play
 
     rng = random.Random(cfg.seed)
     window: List[Dict[str, float]] = []
@@ -524,16 +423,7 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
         for group in opt.param_groups:
             group["lr"] = lr
         game = Game(board, num_players=2, seed=rng.getrandbits(32), max_turns=cfg.max_turns)
-        opp_seed = rng.getrandbits(32)
-        if cfg.opponent == "self" and out.best_net is not None and random.Random(opp_seed).random() < 0.5:
-            opponent = DQNAgent(out.best_net, **view, seed=opp_seed, name="self")
-        elif cfg.opponent == "self":
-            opponent = GreedyAgent(opp_seed)
-        elif cfg.opponent == "pool":
-            name = random.Random(opp_seed).choice(cfg.pool)
-            opponent = own_network(opp_seed) if name == "self" else make_agent(name, opp_seed)
-        else:
-            opponent = make_agent(cfg.opponent, opp_seed)
+        opponent = draw_opponent(cfg, rng.getrandbits(32), out.best_net, league, frozen)
         seat = rng.randrange(2)
         ep = play_training_game(learner, opponent, game, seat, cfg)
         replay.add_game(ep.obs, ep.masks, ep.actions, ep.rewards)
@@ -557,11 +447,8 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
                     p_avg.lerp_(p, 1.0 / cfg.average)
 
         row = game_metrics(game, seat)
-        opp_name = getattr(opponent, "name", "")
         row.update(
-            game=float(g + 1), epsilon=learner.epsilon, lr=lr, seat=float(seat),
-            **{f"vs_{name}": float(opp_name == name) for name in ("random", "greedy", "wary", "racer", "collector", "self")},
-            vs_linear=float(opp_name.startswith("linear:")), vs_dqn=float(opp_name.startswith("dqn:")),
+            game=float(g + 1), epsilon=learner.epsilon, lr=lr, seat=float(seat), **opponent_shares([opponent]),
             decisions=float(len(ep.actions)),
             shaping=ep.shaping,
             mean_abs_td=float(torch.stack(tds).mean()) if tds else 0.0,
@@ -572,7 +459,7 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
         out.games.append(row)
         window.append(row)
         done = g + 1
-        if (eval_every and done % eval_every == 0) or done == cfg.games:
+        if evaluation_due(done, eval_every, cfg.games):
             eval_net.load_state_dict(policy.state_dict())
             entry = {
                 "games": done,
@@ -581,59 +468,26 @@ def train(cfg: DQNConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
                 "grad_steps": steps,
                 "seconds": round(time.perf_counter() - start, 1),
                 "train": {k: statistics.mean(r[k] for r in window) for k in ("won", "margin", "mean_abs_td")},
-                "eval": {name: evaluate(evaluated, spec, eval_games, board, seed=_eval_seed(len(out.history)),
-                                        max_turns=cfg.max_turns)
-                         for name, spec in opponents.items()},
+                "eval": evaluations(evaluated, eval_specs, eval_games, board, len(out.history), cfg.max_turns),
             }
-            out.history.append(entry)
-            selection = statistics.mean(entry["eval"][o]["margin"] for o in selected_on)
-            if out.best is None or selection > out.best["selection"]:
-                out.best = {"games": done, "margin_vs_greedy": entry["eval"]["greedy"]["margin"],
-                            "selection": selection, "selected_on": selected_on}
-                out.best_net = copy.deepcopy(eval_net)  # on the CPU, where the self-play opponent plays
-            league.append(copy.deepcopy(eval_net))
+            record_evaluation(out, entry, selected_on, eval_net, league)
             window = []
-            log(_progress_line(entry))
+            log(progress_line(entry))
             if on_progress is not None:
                 on_progress(out)
         elif on_progress is not None and progress_every and done % progress_every == 0:
             on_progress(out)
     if baselines:
-        seed = _eval_seed(len(out.history) - 1)
-        for bot in ("random", "greedy"):
-            out.baselines[bot] = {opp: evaluate(OPPONENTS[bot](seed), opp, eval_games, board, seed=seed,
-                                                max_turns=cfg.max_turns)
-                                  for opp in eval_opponents}
+        out.baselines = baseline_evaluations(eval_opponents, eval_games, board, len(out.history) - 1, cfg.max_turns)
     return out
-
-
-def _progress_line(e: dict) -> str:
-    t, ev = e["train"], e["eval"]
-    line = (f"{e['games']:6d} games  eps {e['epsilon']:.3f}  steps {e['grad_steps']:7d}  "
-            f"train win {t['won']:.2f} margin {t['margin']:+6.1f}  |td| {t['mean_abs_td']:.3f}  eval")
-    for name, m in ev.items():
-        line += f"  vs {name} win {m['win_share']:.2f} ({m['margin']:+.1f})"
-    return line + f"  [{e['seconds']:.0f}s]"
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     d = DQNConfig()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--opponent", choices=TRAIN_OPPONENTS, default=d.opponent,
-                        help="training opponent; self = greedy or the learner's own best checkpoint so far, "
-                             "a coin flip each game; pool = one of --pool each game")
-    parser.add_argument("--pool", nargs="+", default=list(d.pool), metavar="SPEC",
-                        help="with --opponent pool: agent specs to draw from, one per game; 'self' = the best "
-                             "network or one of the --league latest evaluated ones (greedy until the first evaluation)")
-    parser.add_argument("--league", type=int, default=d.league, help="latest evaluated networks 'self' draws from")
-    parser.add_argument("--shaping", type=float, default=d.shaping, metavar="POINTS",
-                        help="potential-based shaping: POINTS per train still needed for my tickets (0 = off)")
-    parser.add_argument("--games", type=int, default=d.games)
-    parser.add_argument("--hidden", type=int, nargs="+", default=list(d.hidden), metavar="UNITS",
-                        help="hidden layer widths")
+    add_run_arguments(parser, d)
     parser.add_argument("--no-dueling", dest="dueling", action="store_false", help="a plain Q head")
     parser.add_argument("--n-step", type=int, default=d.n_step, help="n-step returns (1 = one-step Double DQN)")
-    parser.add_argument("--lr", type=float, default=d.lr)
     parser.add_argument("--lr-end", type=float, default=None, help="let lr fall linearly to this by the last game")
     parser.add_argument("--batch", type=int, default=d.batch)
     parser.add_argument("--buffer", type=int, default=d.buffer, help="replay capacity in decisions")
@@ -647,57 +501,25 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--epsilon-end", type=float, default=d.epsilon_end)
     parser.add_argument("--epsilon-decay", type=float, default=d.epsilon_decay,
                         help="share of the games over which epsilon falls to its end value")
-    parser.add_argument("--reward", choices=REWARD_MODES, default=d.reward_mode)
-    parser.add_argument("--memory-level", type=int, choices=(0, 1, 2), default=d.memory_level)
-    parser.add_argument("--ticket-plan", action="store_true",
-                        help="add the observation's ticket-plan block: which routes serve my tickets, offered "
-                             "tickets' cost and fit, cards my ticket paths still need (ttr.env.observation)")
-    parser.add_argument("--seed", type=int, default=d.seed)
-    parser.add_argument("--device", default=d.device, help="auto (cuda if available), cpu, cuda, cuda:1, ...")
-    parser.add_argument("--threads", type=int, default=1,
-                        help="torch CPU threads (default 1: several runs share the CPU)")
-    parser.add_argument("--eval-every", type=int, default=1000, help="games between evaluations (0 = at the end)")
-    parser.add_argument("--eval-games", type=int, default=100, help="games against each evaluation opponent")
-    parser.add_argument("--eval-opponents", nargs="+", default=list(EVAL_BOTS), metavar="SPEC",
-                        help="evaluation opponents (must include greedy); the best checkpoint is picked on the "
-                             "mean margin over all but random")
-    parser.add_argument("--eval-linear", default=BEST_LINEAR, metavar="SPEC",
-                        help="also evaluate against this agent (ttr.agents.registry spec); 'none' to skip")
-    parser.add_argument("--out", type=Path, required=True,
-                        help="run JSON (config, per-game rows, evaluations, baselines); networks go to the .pt beside it")
-    parser.add_argument("--live", type=int, nargs="?", const=100, default=0, metavar="N",
-                        help="also write the run files every N games (default 100) and after every evaluation")
     args = parser.parse_args(argv)
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
-    torch.set_num_threads(args.threads)
 
     cfg = DQNConfig(
-        opponent=args.opponent, pool=tuple(args.pool), league=args.league, shaping=args.shaping, games=args.games, hidden=tuple(args.hidden), dueling=args.dueling,
-        n_step=args.n_step, lr=args.lr, lr_end=args.lr_end, batch=args.batch, buffer=args.buffer,
-        learning_starts=args.learning_starts, train_every=args.train_every, target_every=args.target_every,
-        grad_clip=args.grad_clip, average=args.average, epsilon_start=args.epsilon_start,
-        epsilon_end=args.epsilon_end, epsilon_decay=args.epsilon_decay, reward_mode=args.reward,
-        memory_level=args.memory_level, ticket_plan=args.ticket_plan, seed=args.seed, device=args.device,
+        opponent=args.opponent, pool=tuple(args.pool), league=args.league, shaping=args.shaping, games=args.games,
+        hidden=tuple(args.hidden), dueling=args.dueling, n_step=args.n_step, lr=args.lr, lr_end=args.lr_end,
+        batch=args.batch, buffer=args.buffer, learning_starts=args.learning_starts, train_every=args.train_every,
+        target_every=args.target_every, grad_clip=args.grad_clip, average=args.average,
+        epsilon_start=args.epsilon_start, epsilon_end=args.epsilon_end, epsilon_decay=args.epsilon_decay,
+        reward_mode=args.reward, memory_level=args.memory_level, ticket_plan=args.ticket_plan, seed=args.seed,
+        device=args.device,
     )
-    eval_linear = None if args.eval_linear.lower() == "none" else args.eval_linear
-    print(f"training dqn vs {cfg.opponent} on {resolve_device(cfg.device)}: {cfg.games} games, "
-          f"hidden {list(cfg.hidden)}{' dueling' if cfg.dueling else ''}, n-step {cfg.n_step}, lr {cfg.lr}"
-          f"{f' -> {cfg.lr_end}' if cfg.lr_end is not None else ''}, batch {cfg.batch}, "
-          f"epsilon {cfg.epsilon_start} -> {cfg.epsilon_end}, reward {cfg.reward_mode}"
-          + (f", average {cfg.average}" if cfg.average else "") + (f", shaping {cfg.shaping}" if cfg.shaping else "")
-          + (", ticket plan" if cfg.ticket_plan else "")
-          + (f"; pool {' '.join(cfg.pool)}" if cfg.opponent == "pool" else ""))
-    print(f"(best checkpoint kept by mean margin vs {', '.join(o for o in args.eval_opponents if o != 'random')}; "
-          f"play it as dqn:{args.out}@best)")
-    live = None
-    if args.live:
-        print(f"live: {args.out} rewritten every {args.live} games (watch with ttr-dash --live {args.out})")
-        live = lambda result: result.save(args.out, finished=False)
-    result = train(cfg, eval_every=args.eval_every, eval_games=args.eval_games, eval_linear=eval_linear,
-                   eval_opponents=tuple(args.eval_opponents), on_progress=live, progress_every=args.live)
-    result.save(args.out)
-    print(f"saved {args.out} and {args.out.with_suffix('.pt')}  (ttr-dash {args.out} to analyze)")
+    header = (f"training dqn vs {cfg.opponent} on {resolve_device(cfg.device)}: {cfg.games} games, "
+              f"hidden {list(cfg.hidden)}{' dueling' if cfg.dueling else ''}, n-step {cfg.n_step}, lr {cfg.lr}"
+              f"{f' -> {cfg.lr_end}' if cfg.lr_end is not None else ''}, batch {cfg.batch}, "
+              f"epsilon {cfg.epsilon_start} -> {cfg.epsilon_end}, reward {cfg.reward_mode}"
+              + (f", average {cfg.average}" if cfg.average else "") + (f", shaping {cfg.shaping}" if cfg.shaping else "")
+              + (", ticket plan" if cfg.ticket_plan else "")
+              + (f"; pool {' '.join(cfg.pool)}" if cfg.opponent == "pool" else ""))
+    run_from_cli(args, cfg, train, "dqn", header)
 
 
 if __name__ == "__main__":

@@ -58,7 +58,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import statistics
 import sys
@@ -71,17 +70,15 @@ import numpy as np
 
 from ttr.actions import Action
 from ttr.agents import GreedyAgent, RandomAgent
-from ttr.board import Board, load_board
+from ttr.board import load_board
 from ttr.env.reward import REWARD_MODES, reward_values
 from ttr.game import Game
+from ttr.learn.common import (OPPONENTS, baseline_evaluations, evaluate, evaluation_due, evaluations,  # noqa: F401
+                              write_json)  # evaluate: still importable from here
 from ttr.learn.features import ACTION_TYPES, STATE_FEATURES, Context, feature_names, features_with_context
-from ttr.learn.metrics import METRICS, game_metrics, mean_metrics
+from ttr.learn.metrics import METRICS, game_metrics
 
 ALGOS = ("q", "sarsa")
-OPPONENTS = {
-    "random": lambda seed: RandomAgent(seed),
-    "greedy": lambda seed: GreedyAgent(seed),
-}
 # Training opponents: the bots, either at random each game, or "self" (built in train()).
 TRAIN_OPPONENTS = {
     **OPPONENTS,
@@ -89,18 +86,6 @@ TRAIN_OPPONENTS = {
     "self": None,
 }
 VALUE = "value"  # the weight block over the state features
-
-
-def swap_in(tmp: Path, path: Path) -> None:
-    """Replace `path` with the finished file `tmp` in one step, so a reader
-    (ttr-dash --live) never sees half of it."""
-    for attempt in range(20):
-        try:
-            os.replace(tmp, path)
-            return
-        except PermissionError:  # Windows: a reader has the file open for a moment
-            time.sleep(0.05 * (attempt + 1))
-    os.replace(tmp, path)
 
 
 def expected_features() -> Dict[str, List[str]]:
@@ -152,13 +137,10 @@ class LinearAgent:
         }
 
     def save(self, path: Path, **meta) -> None:
-        """Write the file whole: to a temporary file, then swapped in, so a reader
-        (ttr-dash --live) never sees half of it."""
+        """Write the file whole, so a reader (ttr-dash --live) never sees half of it."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(json.dumps({**meta, **self.to_dict()}, indent=1), encoding="utf-8")
-        swap_in(tmp, path)
+        write_json(path, {**meta, **self.to_dict()})
 
     @classmethod
     def load(cls, path: Path, seed: Optional[int] = None, name: Optional[str] = None,
@@ -321,40 +303,6 @@ def train_game(agent: LinearAgent, opponent, game: Game, seat: int, cfg: TrainCo
     return row
 
 
-def evaluate(agent, opponent: str, games: int, board: Board, seed: int = 0,
-             max_turns: int = 1000, num_players: int = 2) -> Dict[str, float]:
-    """Mean game metrics (ttr.learn.metrics) of `agent` over `games` against a
-    scripted bot, random seats. A LinearAgent plays greedily (epsilon 0). Any
-    `Agent` works, so the scripted bots get the same numbers as baselines.
-    `opponent` is a bot name, or any agent spec (ttr.agents.registry). With
-    `num_players` > 2, every other seat is its own copy of `opponent`."""
-    make = OPPONENTS.get(opponent)
-    if make is None:
-        from ttr.agents.registry import make_agent
-
-        make = lambda s: make_agent(opponent, s)
-    saved = getattr(agent, "epsilon", None)
-    if saved is not None:
-        agent.epsilon = 0.0
-    rng = random.Random(seed)
-    rows = []
-    try:
-        for g in range(games):
-            game = Game(board, num_players=num_players, seed=seed * 100_000 + g, max_turns=max_turns)
-            seat = rng.randrange(num_players)
-            # the first copy's seed is the 2-player one, so 2-player evaluations are unchanged
-            opps = [make(seed * 1000 + g + 100_000_000 * k) for k in range(num_players - 1)]
-            by_seat = {q: opps.pop(0) for q in range(num_players) if q != seat}
-            while not game.game_over:
-                p = game.current_player
-                game.step(agent.act(game, p) if p == seat else by_seat[p].act(game, p))
-            rows.append(game_metrics(game, seat))
-    finally:
-        if saved is not None:
-            agent.epsilon = saved
-    return mean_metrics(rows)
-
-
 @dataclass
 class TrainResult:
     """Everything a run records; `save` writes it next to the weights.
@@ -395,10 +343,6 @@ class TrainResult:
 
 
 EVAL_OPPONENTS = ("random", "greedy")
-
-
-def _eval_seed(i: int) -> int:
-    return 10_000 + i
 
 
 def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
@@ -449,18 +393,15 @@ def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
         out.games.append(row)
         window.append(row)
         done = g + 1
-        if (eval_every and done % eval_every == 0) or done == cfg.games:
+        if evaluation_due(done, eval_every, cfg.games):
             entry = {
                 "games": done,
                 "epsilon": round(agent.epsilon, 4),
                 "alpha": round(row["alpha"], 5),
                 "seconds": round(time.perf_counter() - start, 1),
                 "train": {k: statistics.mean(r[k] for r in window) for k in ("won", "margin", "mean_abs_td")},
-                "eval": {
-                    opp: evaluate(out.policy, opp, eval_games, board, seed=_eval_seed(len(out.history)),
-                                  max_turns=cfg.max_turns)
-                    for opp in EVAL_OPPONENTS
-                },
+                "eval": evaluations(out.policy, {o: o for o in EVAL_OPPONENTS}, eval_games, board,
+                                    len(out.history), cfg.max_turns),
             }
             out.history.append(entry)
             weights = out.policy.to_dict()["weights"]
@@ -475,12 +416,7 @@ def train(cfg: TrainConfig, eval_every: int = 0, eval_games: int = 100,
         elif on_progress is not None and progress_every and done % progress_every == 0:
             on_progress(out)
     if baselines:
-        seed = _eval_seed(len(out.history) - 1)
-        for bot in ("random", "greedy"):
-            out.baselines[bot] = {
-                opp: evaluate(OPPONENTS[bot](seed), opp, eval_games, board, seed=seed, max_turns=cfg.max_turns)
-                for opp in EVAL_OPPONENTS
-            }
+        out.baselines = baseline_evaluations(EVAL_OPPONENTS, eval_games, board, len(out.history) - 1, cfg.max_turns)
     return out
 
 

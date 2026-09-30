@@ -56,11 +56,8 @@ from __future__ import annotations
 
 import argparse
 import copy
-import io
-import json
 import random
 import statistics
-import sys
 import time
 from collections import deque
 from dataclasses import asdict, dataclass, field
@@ -72,16 +69,14 @@ import torch
 from torch import nn
 
 from ttr.actions import Action
-from ttr.agents import GreedyAgent
-from ttr.agents.registry import make_agent
 from ttr.board import load_board
 from ttr.env import actions as A
 from ttr.env.observation import ObservationEncoder
-from ttr.env.reward import REWARD_MODES, reward_values
 from ttr.game import Game
-from ttr.learn.dqn import (BEST_LINEAR, EVAL_BOTS, TRAIN_OPPONENTS, _progress_line, observe, resolve_device,
-                           ticket_trains)
-from ttr.learn.linear import OPPONENTS, _eval_seed, evaluate, swap_in
+from ttr.learn.common import (BEST_LINEAR, EVAL_BOTS, add_run_arguments, baseline_evaluations, check_config,
+                              draw_opponent, evaluation_due, evaluations, load_run, observe, opponent_shares,
+                              play_learner_game, progress_line, record_evaluation, resolve_device, run_from_cli,
+                              save_run)
 from ttr.learn.metrics import METRICS, game_metrics
 
 MASKED = -1e8  # logit of an illegal action: probability 0 without the NaNs -inf brings
@@ -175,25 +170,12 @@ class Episode:
 
 
 def play_rollout_game(learner: PPOAgent, opponent, game: Game, seat: int, cfg: "PPOConfig") -> Episode:
-    """Rewards and shaping exactly as ttr.learn.dqn.play_training_game. `opponent`
-    plays every other seat, or is a dict of seat -> agent (one agent per seat)."""
-    scale = 1.0 if cfg.reward_mode == "win" else cfg.reward_scale
-    agent_at = opponent.__getitem__ if isinstance(opponent, dict) else (lambda p: opponent)
+    """One training game (rewards and shaping: ttr.learn.common.play_learner_game),
+    the learner sampling its moves. `opponent` plays every other seat, or is a
+    dict of seat -> agent."""
     ep = Episode()
-    last = reward_values(game, cfg.reward_mode)[seat]
-    last_phi = 0.0
-    while not game.game_over:
-        p = game.current_player
-        if p != seat:
-            game.step(agent_at(p).act(game, p))
-            continue
-        value = reward_values(game, cfg.reward_mode)[seat]
-        phi = -cfg.shaping * cfg.reward_scale * ticket_trains(learner.encoder, game, p) if cfg.shaping else 0.0
-        if ep.actions:
-            ep.rewards.append(scale * (value - last) + phi - last_phi)
-            ep.shaping += phi - last_phi
-        last, last_phi = value, phi
-        obs, mask, by_index = observe(learner.encoder, game, p)
+
+    def decide(obs: np.ndarray, mask: np.ndarray) -> int:
         i, logp, v, entropy = learner.step(obs, mask)
         ep.obs.append(obs)
         ep.masks.append(mask)
@@ -201,10 +183,9 @@ def play_rollout_game(learner: PPOAgent, opponent, game: Game, seat: int, cfg: "
         ep.logprobs.append(logp)
         ep.values.append(v)
         ep.entropies.append(entropy)
-        game.step(by_index[i])
-    if ep.actions:
-        ep.rewards.append(scale * (reward_values(game, cfg.reward_mode)[seat] - last) - last_phi)  # Phi(end) = 0
-        ep.shaping -= last_phi
+        return i
+
+    ep.rewards, ep.shaping = play_learner_game(learner.encoder, decide, opponent, game, seat, cfg)
     return ep
 
 
@@ -322,53 +303,23 @@ class PPOResult:
     eval_linear: Optional[str] = None
 
     def save(self, path: Path, finished: bool = True) -> None:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        cpu = lambda net: {k: v.detach().cpu() for k, v in net.state_dict().items()}
-        buf = io.BytesIO()
-        torch.save({"final": cpu(self.net), "best": cpu(self.best_net) if self.best_net is not None else None}, buf)
-        weights = path.with_suffix(".pt")
-        tmp = weights.with_name(weights.name + ".tmp")
-        tmp.write_bytes(buf.getvalue())
-        swap_in(tmp, weights)
-
         cfg = self.cfg
-        data = {
-            "method": "ppo",
-            "config": {**asdict(cfg), "hidden": list(cfg.hidden), "pool": list(cfg.pool)},
-            "network": {"obs_size": ObservationEncoder(cfg.players, cfg.memory_level, cfg.ticket_plan).size,
-                        "hidden": list(cfg.hidden), "memory_level": cfg.memory_level, "ticket_plan": cfg.ticket_plan,
-                        "num_players": cfg.players},
-            "weights_file": weights.name,
-            "eval_linear": self.eval_linear,
-            "eval_games": self.eval_games,
-            "metrics": METRICS,
-            "progress": {"games": len(self.games), "of": cfg.games, "finished": finished},
-            "history": self.history,
-            "snapshots": [],
-            "baselines": self.baselines,
-            "games": self.games,
-            "updates": self.updates,
-            "best": self.best,
-        }
-        tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(json.dumps(data, indent=1), encoding="utf-8")
-        swap_in(tmp, path)
+        save_run(path, {"final": self.net, "best": self.best_net}, "ppo",
+                 {**asdict(cfg), "hidden": list(cfg.hidden), "pool": list(cfg.pool)},
+                 {"obs_size": ObservationEncoder(cfg.players, cfg.memory_level, cfg.ticket_plan).size,
+                  "hidden": list(cfg.hidden), "memory_level": cfg.memory_level, "ticket_plan": cfg.ticket_plan,
+                  "num_players": cfg.players},
+                 eval_linear=self.eval_linear, eval_games=self.eval_games, metrics=METRICS,
+                 progress={"games": len(self.games), "of": cfg.games, "finished": finished},
+                 history=self.history, snapshots=[], baselines=self.baselines, games=self.games,
+                 updates=self.updates, best=self.best)
 
 
 def load_policy(path: Path, best: bool = False) -> Tuple[ActorCritic, dict]:
     """The final (or best) network of a run saved by `PPOResult.save` (on the CPU),
     and its observation settings {"num_players", "memory_level", "ticket_plan"}
     (runs from before multiplayer training are 2-player)."""
-    path = Path(path)
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if data.get("method") != "ppo":
-        raise ValueError(f"{path} is not a PPO run")
-    spec = data["network"]
-    nets = torch.load(path.with_name(data["weights_file"]), map_location="cpu", weights_only=True)
-    state = nets["best" if best else "final"]
-    if state is None:
-        raise ValueError(f"{path} has no best checkpoint")
+    spec, state = load_run(path, "ppo", best)
     net = ActorCritic(spec["obs_size"], spec["hidden"])
     net.load_state_dict(state)
     net.eval()
@@ -381,17 +332,9 @@ def train(cfg: PPOConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
           on_progress: Optional[Callable[[PPOResult], None]] = None, progress_every: int = 0) -> PPOResult:
     """Train for cfg.games games, one PPO update per `games_per_update` games.
     Evaluations, best checkpoint and live saving as in ttr.learn.dqn.train."""
-    if cfg.opponent not in TRAIN_OPPONENTS:
-        raise ValueError(f"opponent must be one of {TRAIN_OPPONENTS}")
-    if cfg.reward_mode not in REWARD_MODES:
-        raise ValueError(f"reward mode must be one of {REWARD_MODES}")
-    if "greedy" not in eval_opponents:
-        raise ValueError("the evaluations must include greedy (runs are compared on it)")
+    check_config(cfg, eval_opponents)
     if not 2 <= cfg.players <= 5:
         raise ValueError("players must be 2-5")
-    for name in cfg.pool if cfg.opponent == "pool" else ():
-        if name != "self":
-            make_agent(name, 0)  # an unknown name fails here, not mid-run
     selected_on = [o for o in eval_opponents if o != "random"]
     device = resolve_device(cfg.device)
     torch.manual_seed(cfg.seed)
@@ -408,25 +351,8 @@ def train(cfg: PPOConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
     eval_specs = {**{o: o for o in eval_opponents}, **({"linear": eval_linear} if eval_linear else {})}
     league: Deque[ActorCritic] = deque(maxlen=cfg.league)
     update_rng = np.random.default_rng(cfg.seed)
-
-    def own_policy(seed: int):
-        """A frozen copy of the learner, sampling as in training: the best policy or
-        a recent one; greedy until the first evaluation."""
-        nets = [out.best_net, *league] if out.best_net is not None else []
-        if not nets:
-            return GreedyAgent(seed)
-        return PPOAgent(random.Random(seed).choice(nets), **view, sample=True, seed=seed, name="self")
-
-    def opponent_for(seed: int):
-        """One opponent seat's agent for this game: each seat is drawn on its own."""
-        if cfg.opponent == "self" and out.best_net is not None and random.Random(seed).random() < 0.5:
-            return PPOAgent(out.best_net, **view, sample=True, seed=seed, name="self")
-        if cfg.opponent == "self":
-            return GreedyAgent(seed)
-        if cfg.opponent == "pool":
-            name = random.Random(seed).choice(cfg.pool)
-            return own_policy(seed) if name == "self" else make_agent(name, seed)
-        return make_agent(cfg.opponent, seed)
+    # a copy of the learner for self-play, sampling as in training
+    frozen = lambda net, seed: PPOAgent(net, **view, sample=True, seed=seed, name="self")
 
     rng = random.Random(cfg.seed)
     window: List[Dict[str, float]] = []
@@ -438,7 +364,8 @@ def train(cfg: PPOConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
         # one seed per opponent seat, drawn before the learner's seat, so 2-player runs are unchanged
         opp_seeds = [rng.getrandbits(32) for _ in range(cfg.players - 1)]
         seat = rng.randrange(cfg.players)
-        opponents = dict(zip([q for q in range(cfg.players) if q != seat], map(opponent_for, opp_seeds)))
+        opponents = {q: draw_opponent(cfg, s, out.best_net, league, frozen)
+                     for q, s in zip([q for q in range(cfg.players) if q != seat], opp_seeds)}
         ep = play_rollout_game(learner, opponents, game, seat, cfg)
         if ep.actions:
             batch.append(ep)
@@ -446,13 +373,8 @@ def train(cfg: PPOConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
 
         lr = cfg.lr * (1.0 - len(out.updates) / n_updates) if cfg.anneal_lr else cfg.lr
         row = game_metrics(game, seat)
-        opp_names = [getattr(o, "name", "") for o in opponents.values()]
-        share = lambda pred: sum(1 for n in opp_names if pred(n)) / len(opp_names)  # of the opponent seats
         row.update(
-            game=float(g + 1), epsilon=0.0, lr=lr, seat=float(seat),
-            **{f"vs_{name}": share(lambda n, name=name: n == name)
-               for name in ("random", "greedy", "wary", "racer", "collector", "self")},
-            vs_linear=share(lambda n: n.startswith("linear:")), vs_dqn=share(lambda n: n.startswith("dqn:")),
+            game=float(g + 1), epsilon=0.0, lr=lr, seat=float(seat), **opponent_shares(opponents.values()),
             decisions=float(len(ep.actions)),
             mean_abs_td=float(np.mean(np.abs(np.asarray(returns) - np.asarray(ep.values)))) if ep.actions else 0.0,
             entropy=statistics.mean(ep.entropies) if ep.entropies else 0.0,
@@ -471,7 +393,7 @@ def train(cfg: PPOConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
                 actor.load_state_dict(net.state_dict())
 
         done = g + 1
-        if (eval_every and done % eval_every == 0) or done == cfg.games:
+        if evaluation_due(done, eval_every, cfg.games):
             eval_net.load_state_dict(net.state_dict())
             entry = {
                 "games": done,
@@ -481,48 +403,30 @@ def train(cfg: PPOConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
                 "grad_steps": len(out.updates) * cfg.update_epochs * cfg.minibatches,
                 "seconds": round(time.perf_counter() - start, 1),
                 "train": {k: statistics.mean(r[k] for r in window) for k in ("won", "margin", "mean_abs_td", "entropy")},
-                "eval": {name: evaluate(evaluated, spec, eval_games, board, seed=_eval_seed(len(out.history)),
-                                        max_turns=cfg.max_turns, num_players=cfg.players)
-                         for name, spec in eval_specs.items()},
+                "eval": evaluations(evaluated, eval_specs, eval_games, board, len(out.history), cfg.max_turns,
+                                    cfg.players),
             }
-            out.history.append(entry)
-            selection = statistics.mean(entry["eval"][o]["margin"] for o in selected_on)
-            if out.best is None or selection > out.best["selection"]:
-                out.best = {"games": done, "margin_vs_greedy": entry["eval"]["greedy"]["margin"],
-                            "selection": selection, "selected_on": selected_on}
-                out.best_net = copy.deepcopy(eval_net)
-            league.append(copy.deepcopy(eval_net))
+            record_evaluation(out, entry, selected_on, eval_net, league)
             window = []
-            log(_progress_line(entry) + f"  entropy {entry['train']['entropy']:.2f}")
+            log(progress_line(entry) + f"  entropy {entry['train']['entropy']:.2f}")
             if on_progress is not None:
                 on_progress(out)
         elif on_progress is not None and progress_every and done % progress_every == 0:
             on_progress(out)
     if baselines:
-        seed = _eval_seed(len(out.history) - 1)
-        for bot in ("random", "greedy"):
-            out.baselines[bot] = {opp: evaluate(OPPONENTS[bot](seed), opp, eval_games, board, seed=seed,
-                                                max_turns=cfg.max_turns, num_players=cfg.players)
-                                  for opp in eval_opponents}
+        out.baselines = baseline_evaluations(eval_opponents, eval_games, board, len(out.history) - 1,
+                                             cfg.max_turns, cfg.players)
     return out
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     d = PPOConfig()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--opponent", choices=TRAIN_OPPONENTS, default=d.opponent,
-                        help="training opponent; pool = one of --pool each game (default)")
-    parser.add_argument("--pool", nargs="+", default=list(d.pool), metavar="SPEC",
-                        help="with --opponent pool: agent specs to draw from; 'self' = the best policy or one of the "
-                             "--league latest evaluated ones (greedy until the first evaluation)")
-    parser.add_argument("--league", type=int, default=d.league)
-    parser.add_argument("--shaping", type=float, default=d.shaping, metavar="POINTS",
-                        help="potential-based shaping: POINTS per train still needed for my tickets (0 = off)")
-    parser.add_argument("--ticket-plan", action="store_true", help="add the observation's ticket-plan block")
-    parser.add_argument("--games", type=int, default=d.games)
+    add_run_arguments(parser, d)
+    parser.add_argument("--players", type=int, choices=(2, 3, 4, 5), default=d.players,
+                        help="seats per game: the learner and PLAYERS - 1 opponents, each drawn on its own; "
+                             "evaluations fill every other seat with the evaluation opponent")
     parser.add_argument("--games-per-update", type=int, default=d.games_per_update)
-    parser.add_argument("--hidden", type=int, nargs="+", default=list(d.hidden), metavar="UNITS")
-    parser.add_argument("--lr", type=float, default=d.lr)
     parser.add_argument("--no-anneal-lr", dest="anneal_lr", action="store_false")
     parser.add_argument("--gamma", type=float, default=d.gamma)
     parser.add_argument("--gae-lambda", type=float, default=d.gae_lambda)
@@ -534,25 +438,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--vf-coef", type=float, default=d.vf_coef)
     parser.add_argument("--max-grad-norm", type=float, default=d.max_grad_norm)
     parser.add_argument("--eval-sample", action="store_true", help="evaluations sample moves (default: argmax)")
-    parser.add_argument("--reward", choices=REWARD_MODES, default=d.reward_mode)
-    parser.add_argument("--memory-level", type=int, choices=(0, 1, 2), default=d.memory_level)
-    parser.add_argument("--players", type=int, choices=(2, 3, 4, 5), default=d.players,
-                        help="seats per game: the learner and PLAYERS - 1 opponents, each drawn on its own; "
-                             "evaluations fill every other seat with the evaluation opponent")
-    parser.add_argument("--seed", type=int, default=d.seed)
-    parser.add_argument("--device", default=d.device, help="auto (cuda if available), cpu, cuda, ...")
-    parser.add_argument("--threads", type=int, default=1, help="torch CPU threads (default 1)")
-    parser.add_argument("--eval-every", type=int, default=1000)
-    parser.add_argument("--eval-games", type=int, default=100, help="games against each evaluation opponent")
-    parser.add_argument("--eval-opponents", nargs="+", default=list(EVAL_BOTS), metavar="SPEC")
-    parser.add_argument("--eval-linear", default=BEST_LINEAR, metavar="SPEC", help="'none' to skip")
-    parser.add_argument("--out", type=Path, required=True, help="run JSON; networks go to the .pt beside it")
-    parser.add_argument("--live", type=int, nargs="?", const=100, default=0, metavar="N",
-                        help="also write the run files every N games and after every evaluation")
     args = parser.parse_args(argv)
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
-    torch.set_num_threads(args.threads)
 
     cfg = PPOConfig(
         opponent=args.opponent, pool=tuple(args.pool), league=args.league, shaping=args.shaping,
@@ -563,21 +449,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         reward_mode=args.reward, memory_level=args.memory_level, ticket_plan=args.ticket_plan, players=args.players,
         seed=args.seed, device=args.device,
     )
-    eval_linear = None if args.eval_linear.lower() == "none" else args.eval_linear
-    print(f"training ppo vs {cfg.opponent} on {resolve_device(cfg.device)}: {cfg.players} players, {cfg.games} games, "
-          f"{cfg.games_per_update} per update, hidden {list(cfg.hidden)}, lr {cfg.lr}{' annealed' if cfg.anneal_lr else ''}, "
-          f"gamma {cfg.gamma}, lambda {cfg.gae_lambda}, clip {cfg.clip}, entropy {cfg.ent_coef}, reward {cfg.reward_mode}"
-          + (f", shaping {cfg.shaping}" if cfg.shaping else "") + (", ticket plan" if cfg.ticket_plan else "")
-          + (f"; pool {' '.join(cfg.pool)}" if cfg.opponent == "pool" else ""))
-    print(f"(best checkpoint kept by mean margin vs {', '.join(o for o in args.eval_opponents if o != 'random')}; "
-          f"play it as ppo:{args.out}@best)")
-    live = None
-    if args.live:
-        live = lambda result: result.save(args.out, finished=False)
-    result = train(cfg, eval_every=args.eval_every, eval_games=args.eval_games, eval_linear=eval_linear,
-                   eval_opponents=tuple(args.eval_opponents), on_progress=live, progress_every=args.live)
-    result.save(args.out)
-    print(f"saved {args.out} and {args.out.with_suffix('.pt')}  (ttr-dash {args.out} to analyze)")
+    header = (f"training ppo vs {cfg.opponent} on {resolve_device(cfg.device)}: {cfg.players} players, "
+              f"{cfg.games} games, {cfg.games_per_update} per update, hidden {list(cfg.hidden)}, "
+              f"lr {cfg.lr}{' annealed' if cfg.anneal_lr else ''}, gamma {cfg.gamma}, lambda {cfg.gae_lambda}, "
+              f"clip {cfg.clip}, entropy {cfg.ent_coef}, reward {cfg.reward_mode}"
+              + (f", shaping {cfg.shaping}" if cfg.shaping else "") + (", ticket plan" if cfg.ticket_plan else "")
+              + (f"; pool {' '.join(cfg.pool)}" if cfg.opponent == "pool" else ""))
+    run_from_cli(args, cfg, train, "ppo", header)
 
 
 if __name__ == "__main__":
