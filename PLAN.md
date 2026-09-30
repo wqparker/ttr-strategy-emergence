@@ -711,6 +711,11 @@ for 2 players).
     1113, wary 1057, greedy 1000, collector 842. The three PPO agents are within 1.4 of
     each other head to head (a tie); each beats the linear agent by 5–7, racer by 7–9,
     DQN by 10–14, greedy by 27–28. `p2b_pool_s3` is the reference strongest agent.
+  - PPO pass 3 ready (`scripts/ppo_pass3.ps1`, `runs/ppo/pass3/`, overnight 2026-09-30): the
+    reward mode (PLAN "Reward": an open experiment since the design). margin (reference),
+    score (my points only: nothing gained by hurting the opponent or ending early), win
+    (±1 at the end: risk tolerance). Pass 2's no-shaping setting, 50000 games, 4 seeds,
+    all 12 at once. Does racing come from a reward that includes the opponent?
 - **Next:**
   - Within 2-player games every method has converged on racing (PPO adding the connected
     network); tickets and blocking never appeared. Options: 3–5 players (routes contested,
