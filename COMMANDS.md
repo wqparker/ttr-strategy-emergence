@@ -12,7 +12,7 @@ each command with `.venv/Scripts/`. Roadmap and reasoning: [PLAN.md](PLAN.md).
 
 ## ttr-view
 
-```
+```text
 ttr-view [--record FILE] [--agents NAME ...] [--human SEAT]
          [--perspective all|SEAT] [--memory-level 0|1|2] [--seed N]
          [--max-turns N] [--scale F] [--paused] [--overlay DIR] [--fullscreen]
@@ -110,7 +110,7 @@ always start with seat 0, so a seat is also a place in turn order.
 
 ## ttr-shot
 
-```
+```text
 ttr-shot --out FILE [--record FILE [--step N]] [--players N] [--turns N] [--seed N]
          [--first-player SEAT] [--perspective all|SEAT] [--memory-level 0|1|2]
          [--scale F] [--fit WxH] [--board-only] [--compare]
@@ -141,7 +141,7 @@ artwork and needed locally.
 
 ## ttr-sim
 
-```
+```text
 ttr-sim [--agents AGENT ...] [--games N] [--seed N]
         [--max-turns N] [--show [log|board]] [--step] [--delay S] [--record DIR]
 ```
@@ -178,7 +178,7 @@ Linear Q-learning / SARSA on hand-made features (`ttr.learn`, `[env]` extra). On
 against a scripted bot, random seat each game; evaluates greedy play against random and
 greedy every `--eval-every` games and prints a line per evaluation.
 
-```
+```text
 ttr-train-linear --algo q --opponent random --games 2000 --out runs/linear/q_random.json
 ttr-train-linear --algo sarsa --opponent greedy --games 2000 --out runs/linear/sarsa_greedy.json
 ttr-train-linear --algo q --opponent mixed --seed 1 --games 2000 --out runs/linear/q_mixed_s1.json
@@ -215,7 +215,7 @@ Double DQN with a dueling head on the env's 765-number observation and the 168-a
 against an opponent, reward = margin / 100 between its decisions, γ = 1. Gradient steps run on
 the GPU (`--device auto`); games are played by CPU copies of the network.
 
-```
+```text
 ttr-train-dqn --opponent greedy --n-step 8 --average 100 --games 30000 --live 500 --out runs/dqn/n8_s0.json
 ttr-sim --agents dqn:runs/dqn/n8_s0.json@best greedy    # the run's best checkpoint
 ```
@@ -254,7 +254,7 @@ bonus, the learning rate annealed to 0. The setting, opponents (`--opponent pool
 `--shaping`, `--ticket-plan`, evaluations and files are the DQN learner's; the policy samples its moves in
 training, and evaluations and `ppo:PATH` play its most likely move.
 
-```
+```text
 ttr-train-ppo --opponent pool --shaping 1 --games 30000 --live 1000 --out runs/ppo/pool_s0.json
 ttr-sim --agents ppo:runs/ppo/pool_s0.json@best racer
 ```
@@ -276,7 +276,7 @@ per-game rows `epsilon` is 0 and `mean_abs_td` is the value error \|G − V(s)\|
 
 ### Round robin
 
-```
+```text
 python scripts/round_robin.py random greedy wary racer linear:PATH@best dqn:PATH@best --out runs/round_robin_DATE
 ```
 
@@ -295,7 +295,7 @@ like wary). It completes the most tickets (about 5 a game) and is the weakest of
 Agent analysis: a full-screen matplotlib window over one or more training runs (`[analysis]`
 extra).
 
-```
+```text
 ttr-dash runs/linear/q_greedy.json                              # one run
 ttr-dash runs/linear/q_greedy.json runs/linear/sarsa_greedy.json   # compare (up to 8)
 ttr-dash runs/linear/*.json --save runs/linear/dash               # all pages as PNG, no window
@@ -310,22 +310,23 @@ so it can be started first. Training-game pages move every N games; evaluation c
 table and weight snapshots move at each evaluation (`--eval-every 50` for a finer curve, at the
 cost of 200 evaluation games each time).
 
-```
+```text
 ttr-train-linear --algo q --opponent random --seed 0 --live --out runs/linear/pass3/q_random_s0.json
 ttr-dash --live runs/linear/pass3/q_random_s0.json
 ```
 
-Several seeds at once (PowerShell). Terminal 1 starts three seeds in the background, each logging
-to its own file, and waits for them; terminal 2 follows them as one averaged line (drop `--group`
-to see each seed):
+Several runs at once (PowerShell): `scripts\run_queue.ps1` defines `Invoke-RunQueue`, which runs one
+training command per setting and seed, at most `-Slots` at a time, each logging to its own
+`.log` / `.err`, keeps the PC awake until they end, and writes start, exit and finish lines to
+`-Log`. Every `scripts\*_pass*.ps1` launcher uses it; `-DryRun` (on a launcher too) prints the
+command lines without starting anything. Terminal 1 starts three seeds; terminal 2 follows them as
+one averaged line (drop `--group` to see each seed):
 
 ```powershell
 # terminal 1
-New-Item -ItemType Directory -Force runs\linear\pass3 | Out-Null
-$p = 0..2 | ForEach-Object { Start-Process -NoNewWindow -PassThru -FilePath .venv\Scripts\ttr-train-linear.exe `
-    -ArgumentList "--algo q --opponent random --seed $_ --games 2000 --live --out runs\linear\pass3\q_random_s$_.json" `
-    -RedirectStandardOutput "runs\linear\pass3\q_random_s$_.log" }
-$p | Wait-Process
+. .\scripts\run_queue.ps1
+Invoke-RunQueue -Exe ttr-train-linear -Out runs\linear\pass3 -Common "--algo q --opponent random --games 2000 --live" `
+  -Runs @{ "q_random" = "" } -Seeds (0..2) -Slots 3
 
 # terminal 2
 .venv\Scripts\ttr-dash.exe --live --group "runs/linear/pass3/q_random_s*.json"
@@ -338,19 +339,16 @@ A ladder of settings × seeds (the third pass: each step adds one change to the 
 the second pass's `q_random` as the reference line:
 
 ```powershell
-# terminal 1: 4 settings x 3 seeds = 12 runs in parallel (~6-8 min on 12 cores)
-New-Item -ItemType Directory -Force runs\linear\pass3 | Out-Null
+# terminal 1: 4 settings x 3 seeds = 12 runs, all at once (~6-8 min on 12 cores)
+. .\scripts\run_queue.ps1
 $runs = [ordered]@{
   "p3a_avg"   = "--alpha 0.02 --average 100"
   "p3b_lam"   = "--alpha 0.02 --average 100 --lambda 0.98"
   "p3c_shape" = "--alpha 0.02 --average 100 --lambda 0.98 --shaping 1"
   "p3d_self"  = "--alpha 0.02 --average 100 --lambda 0.98 --shaping 1 --opponent self"
 }
-$p = foreach ($name in $runs.Keys) { foreach ($s in 0..2) {
-  Start-Process -NoNewWindow -PassThru -FilePath .venv\Scripts\ttr-train-linear.exe `
-    -ArgumentList "--algo q --opponent random --seed $s --games 2000 --live $($runs[$name]) --out runs\linear\pass3\${name}_s$s.json" `
-    -RedirectStandardOutput "runs\linear\pass3\${name}_s$s.log" -RedirectStandardError "runs\linear\pass3\${name}_s$s.err" } }
-$p | Wait-Process
+Invoke-RunQueue -Exe ttr-train-linear -Out runs\linear\pass3 -Common "--algo q --opponent random --games 2000 --live" `
+  -Runs $runs -Seeds (0..2) -Slots 12 -Log pass3.log
 
 # terminal 2
 .venv\Scripts\ttr-dash.exe --live --group "runs/linear/pass3/*.json" "runs/linear/pass2/q_random_s*.json"
@@ -377,7 +375,7 @@ Keys: `1`-`7` or `←`/`→` pages, `o` next evaluation opponent (greedy, random
 
 ## Tests and setup
 
-```
+```text
 python -m pytest                     # the whole suite
 python -m pytest tests/test_game.py  # one file
 python scripts/stress.py             # long random-play invariant run (~1 min)
@@ -385,7 +383,7 @@ python scripts/bench_env.py          # env speed: engine, + mask, + observation
 python scripts/smoke_env.py          # random agents through the PettingZoo env (--players, --board, --reward)
 ```
 
-```
+```text
 py -3.14 -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev]"    # engine + pytest
@@ -405,7 +403,7 @@ see the note at the end of PLAN.md.
 
 Only when the map data changes; the first two need the board photo and the `[photo]` extra.
 
-```
+```text
 python scripts/fit_tiles.py fit | size | check | overlay out.png --zoom 4
 python scripts/build_backdrop.py NE_DIR                 # rebuild the map backdrop
 python scripts/board_checklist.py usa > docs/usa_map_checklist.md

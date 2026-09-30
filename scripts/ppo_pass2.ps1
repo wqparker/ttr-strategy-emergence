@@ -5,10 +5,9 @@
 #   powershell -ExecutionPolicy Bypass -File scripts\ppo_pass2.ps1
 # Watch:  .venv\Scripts\ttr-dash.exe --live --group "runs/ppo/pass2/*.json"
 #         .venv\Scripts\python scripts\run_status.py "runs/ppo/pass2/*.json"
+param([switch]$DryRun)  # -DryRun: print the command lines, start nothing
 Set-Location (Split-Path $PSScriptRoot)
-$out = "runs\ppo\pass2"
-$slots = 8
-New-Item -ItemType Directory -Force $out | Out-Null
+. "$PSScriptRoot\run_queue.ps1"
 
 # evaluations every 2000 games (100 games each vs
 # random, greedy, wary, racer, collector and the held-out best linear agent p7b); best checkpoint on the
@@ -19,29 +18,5 @@ $runs = [ordered]@{
   "p2a_pool_shape" = "--shaping 1"
   "p2b_pool"       = ""
 }
-$queue = [System.Collections.Queue]::new()
-foreach ($s in 0..3) { foreach ($name in $runs.Keys) { $queue.Enqueue(@($name, $s)) } }
 
-# Keep the PC awake while this script runs (released at the end).
-Add-Type -Namespace Win32 -Name Power -MemberDefinition `
-  '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);'
-[Win32.Power]::SetThreadExecutionState([uint32]"0x80000001") | Out-Null
-
-"started $(Get-Date -Format s)" | Out-File -Encoding utf8 "$out\pass2.log"
-$jobs = @()
-while ($queue.Count -gt 0 -or ($jobs.Proc | Where-Object { -not $_.HasExited })) {
-  while ($queue.Count -gt 0 -and @($jobs.Proc | Where-Object { -not $_.HasExited }).Count -lt $slots) {
-    $name, $s = $queue.Dequeue()
-    $proc = Start-Process -NoNewWindow -PassThru -FilePath .venv\Scripts\ttr-train-ppo.exe `
-      -ArgumentList "$common $($runs[$name]) --seed $s --out $out\${name}_s$s.json" `
-      -RedirectStandardOutput "$out\${name}_s$s.log" -RedirectStandardError "$out\${name}_s$s.err"
-    $null = $proc.Handle  # keep the handle, or ExitCode reads empty after exit
-    $jobs += [pscustomobject]@{ Run = "${name}_s$s"; Proc = $proc }
-    "start $(Get-Date -Format s)  ${name}_s$s" | Out-File -Append -Encoding utf8 "$out\pass2.log"
-  }
-  Start-Sleep -Seconds 10
-}
-foreach ($j in $jobs) { "exit $($j.Proc.ExitCode)  $($j.Run)" | Out-File -Append -Encoding utf8 "$out\pass2.log" }
-"finished $(Get-Date -Format s)" | Out-File -Append -Encoding utf8 "$out\pass2.log"
-
-[Win32.Power]::SetThreadExecutionState([uint32]"0x80000000") | Out-Null
+Invoke-RunQueue -Exe ttr-train-ppo -Out "runs\ppo\pass2" -Common $common -Runs $runs -Seeds (0..3) -Slots 8 -Log pass2.log -DryRun:$DryRun
