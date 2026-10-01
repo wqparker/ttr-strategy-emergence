@@ -1,0 +1,939 @@
+<title>Racing to the End</title>
+<meta name="description" content="What linear Q-learning, DQN and PPO agents learn in Ticket to Ride, from two to five players.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+:root {
+  --page: #f5f5f2; --surface: #fcfcfb; --panel: #eeeeea;
+  --ink: #15161a; --ink-2: #4b4e55; --muted: #85878c;
+  --rule: #e1e0d9; --axis: #c3c2b7; --accent: #1d4f80; --accent-soft: rgba(29, 79, 128, 0.08);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --bot: #9a9893;
+  --r1: #86b6ef; --r2: #5598e7; --r3: #2a78d6; --r4: #1c5cab; --r5: #104281;
+  --good: #006300;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #111110; --surface: #1a1a19; --panel: #21211f;
+    --ink: #f2f1ec; --ink-2: #c3c2b7; --muted: #8f8d86;
+    --rule: #2c2c2a; --axis: #45453f; --accent: #8ab6e6; --accent-soft: rgba(138, 182, 230, 0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --bot: #77756f;
+    --r1: #184f95; --r2: #256abf; --r3: #3987e5; --r4: #6da7ec; --r5: #9ec5f4;
+    --good: #0ca30c;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #111110; --surface: #1a1a19; --panel: #21211f;
+  --ink: #f2f1ec; --ink-2: #c3c2b7; --muted: #8f8d86;
+  --rule: #2c2c2a; --axis: #45453f; --accent: #8ab6e6; --accent-soft: rgba(138, 182, 230, 0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --bot: #77756f;
+  --r1: #184f95; --r2: #256abf; --r3: #3987e5; --r4: #6da7ec; --r5: #9ec5f4;
+  --good: #0ca30c;
+}
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font: 17.5px/1.62 var(--serif); margin: 0;
+  padding-inline: 16px; padding-block: 0 64px; -webkit-font-smoothing: antialiased; }
+main { max-width: 760px; margin: 0 auto; }
+p, li { max-width: 68ch; }
+p { margin: 0 0 1em; }
+a { color: var(--accent); text-underline-offset: 2px; }
+a:focus-visible, [tabindex]:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+h1, h2, h3, h4 { font-family: var(--sans); text-wrap: balance; color: var(--ink); }
+h1 { font-size: clamp(2.1rem, 5vw, 2.9rem); line-height: 1.06; font-weight: 600; letter-spacing: -0.015em; margin: 0 0 12px; }
+h2 { font-size: 1.42rem; font-weight: 600; margin: 56px 0 14px; letter-spacing: -0.005em; line-height: 1.25; }
+h3 { font-size: 1.08rem; font-weight: 600; margin: 32px 0 10px; }
+h2 .num, h3 .num { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 0.5em; }
+code, .mono { font-family: var(--mono); font-size: 0.82em; }
+code { background: var(--panel); padding: 1px 5px; border-radius: 4px; }
+em { font-style: italic; }
+strong { font-weight: 600; }
+.masthead { padding-block: 56px 8px; }
+.eyebrow { font: 500 0.74rem/1.4 var(--sans); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+.subtitle { font: 400 1.18rem/1.45 var(--sans); color: var(--ink-2); margin: 0 0 22px; max-width: 46ch; }
+.byline { font: 400 0.92rem/1.5 var(--sans); color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 6px; }
+.byline strong { color: var(--ink); font-weight: 500; }
+.status { font: 400 0.86rem/1.5 var(--sans); color: var(--muted); margin: 0 0 28px; max-width: 70ch; }
+.abstract { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 20px 24px 8px; margin: 0 0 22px; }
+.abstract h2 { font-size: 0.78rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+.abstract p { font-size: 1.02rem; }
+.findings { font-family: var(--sans); font-size: 0.97rem; line-height: 1.55; padding-left: 1.2em; margin: 0 0 8px; }
+.findings li { margin: 0 0 8px; max-width: 72ch; }
+.findings li::marker { color: var(--accent); }
+nav.toc { font-family: var(--sans); font-size: 0.86rem; line-height: 1.45; }
+nav.toc ol { list-style: none; padding: 0; margin: 0; }
+nav.toc li { margin: 0; }
+nav.toc a { display: block; color: var(--ink-2); text-decoration: none; padding: 3px 0 3px 10px; border-left: 2px solid transparent; }
+nav.toc a:hover { color: var(--ink); }
+nav.toc a.active { color: var(--accent); border-left-color: var(--accent); }
+nav.toc .sub a { padding-left: 22px; font-size: 0.8rem; }
+details.toc-inline { font-family: var(--sans); background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 10px 16px; margin: 0 0 8px; }
+details.toc-inline summary { cursor: pointer; font-weight: 500; font-size: 0.9rem; }
+@media (min-width: 1320px) {
+  details.toc-inline { display: none; }
+  nav.toc.rail { position: fixed; top: 56px; width: 230px; left: max(16px, calc(50% - 380px - 270px)); max-height: calc(100vh - 80px); overflow-y: auto; }
+  nav.toc.rail::before { content: "Contents"; display: block; font-size: 0.72rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px 12px; font-weight: 600; }
+}
+@media (max-width: 1319px) { nav.toc.rail { display: none; } }
+figure.fig { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; margin: 26px 0 30px; padding: 16px 18px 14px; }
+figure.fig.wide { margin-inline: min(0px, calc((760px - min(100vw - 32px, 960px)) / 2)); }
+.fig-title { font: 600 0.95rem/1.35 var(--sans); margin: 0 0 4px; color: var(--ink); }
+.fig-title .num { color: var(--accent); margin-right: 0.45em; }
+.fig-sub { font: 400 0.84rem/1.45 var(--sans); color: var(--ink-2); margin: 0 0 10px; max-width: 80ch; }
+figcaption { font: 400 0.84rem/1.5 var(--sans); color: var(--ink-2); margin-top: 10px; max-width: 86ch; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font: 400 0.8rem/1.3 var(--sans); color: var(--ink-2); margin: 2px 0 8px; }
+.legend span.item { display: inline-flex; align-items: center; gap: 6px; }
+.legend .key-line { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+.legend .key-rect { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.legend .key-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.legend .key-ring { width: 10px; height: 10px; border-radius: 50%; display: inline-block; border: 2px solid var(--muted); }
+.chart { width: 100%; position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--sans); }
+.chart svg text { fill: var(--muted); font-size: 11.5px; }
+.chart svg .lab { fill: var(--ink-2); font-size: 12px; }
+.chart svg .val { fill: var(--ink); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.chart svg .grid { stroke: var(--rule); stroke-width: 1; shape-rendering: crispEdges; }
+.chart svg .axis { stroke: var(--axis); stroke-width: 1; shape-rendering: crispEdges; }
+.chart svg .zero { stroke: var(--muted); stroke-width: 1; shape-rendering: crispEdges; }
+.chart svg .hair { stroke: var(--ink-2); stroke-width: 1; shape-rendering: crispEdges; pointer-events: none; }
+.chart svg .mark:hover, .chart svg .mark:focus { opacity: 0.82; }
+.chart[tabindex] { border-radius: 6px; }
+.multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px 22px; }
+.multiples .panel h4 { font: 600 0.84rem/1.3 var(--sans); margin: 0 0 2px; color: var(--ink); }
+.multiples .panel p.note { font: 400 0.78rem/1.35 var(--sans); color: var(--muted); margin: 0 0 4px; }
+.multiples .legend { min-height: calc(2.6em + 6px); align-content: flex-start; }
+.duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px 26px; }
+.duo h4 { font: 600 0.84rem/1.3 var(--sans); margin: 0 0 6px; }
+details.data { margin-top: 10px; font-family: var(--sans); }
+details.data summary { cursor: pointer; font-size: 0.8rem; color: var(--accent); display: inline-block; padding: 2px 0; }
+.tablewrap { overflow-x: auto; margin: 8px 0 0; }
+table { border-collapse: collapse; font: 400 0.82rem/1.4 var(--sans); font-variant-numeric: tabular-nums; width: 100%; }
+th, td { padding: 6px 10px 6px 0; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; white-space: normal; min-width: 11em; }
+th { font-weight: 600; color: var(--ink-2); font-size: 0.76rem; vertical-align: bottom; }
+td.neg { color: var(--ink-2); }
+table.prose th, table.prose td, th.l, td.l { text-align: left; white-space: normal; vertical-align: top; }
+table.prose th:first-child, table.prose td:first-child { min-width: 8em; }
+table.prose.num-last th:last-child, table.prose.num-last td:last-child { text-align: right; }
+td.lines { white-space: pre-line; }
+tr:has(td.lines) td { vertical-align: top; }
+tr.group td { font-weight: 600; color: var(--ink); padding-top: 14px; border-bottom-color: var(--axis); }
+.tbl { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 14px 18px 12px; margin: 22px 0 28px; }
+.tbl .tbl-title { font: 600 0.95rem/1.35 var(--sans); margin: 0 0 4px; }
+.tbl .tbl-title .num { color: var(--accent); margin-right: 0.45em; }
+.tbl .tbl-sub { font: 400 0.84rem/1.45 var(--sans); color: var(--ink-2); margin: 0 0 6px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin: 6px 0 4px; }
+.tile { border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; background: var(--page); }
+.tile .label { font: 500 0.78rem/1.35 var(--sans); color: var(--ink-2); margin: 0 0 6px; }
+.tile .value { font: 600 1.9rem/1.05 var(--sans); color: var(--ink); }
+.tile .detail { font: 400 0.78rem/1.4 var(--sans); color: var(--muted); margin-top: 6px; }
+.route-demo { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; }
+.route-demo svg { flex: 0 1 300px; max-width: 100%; height: auto; }
+.callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 22px 0; font-family: var(--sans); font-size: 0.95rem; line-height: 1.55; }
+.callout p { margin: 0; }
+.refs { font-size: 0.92rem; line-height: 1.5; padding-left: 1.6em; }
+.refs li { margin: 0 0 8px; }
+.interim { font: 500 0.72rem/1 var(--sans); letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--rule); border-radius: 999px; padding: 3px 8px; margin-left: 6px; vertical-align: 2px; white-space: nowrap; }
+.tip { position: fixed; z-index: 20; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--rule);
+  border-radius: 8px; padding: 8px 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14); font: 400 0.8rem/1.35 var(--sans); min-width: 140px; max-width: 280px; }
+.tip-title { font-size: 0.74rem; color: var(--muted); margin: 0 0 4px; }
+.tip-row { display: flex; align-items: center; gap: 7px; margin: 2px 0; }
+.tip-row strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+.tip-row span.l { color: var(--ink-2); }
+.tip-key { width: 14px; height: 3px; border-radius: 2px; flex: none; }
+.tip-key.rect { height: 10px; width: 10px; border-radius: 2px; }
+footer { font: 400 0.82rem/1.5 var(--sans); color: var(--muted); border-top: 1px solid var(--rule); margin-top: 56px; padding-top: 16px; }
+@media (max-width: 560px) { body { font-size: 16.5px; } figure.fig, .tbl { padding: 12px 12px 10px; } .abstract { padding: 16px 16px 4px; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<nav class="toc rail" aria-label="Contents"></nav>
+<main>
+<header class="masthead">
+  <p class="eyebrow">Research report · Ticket to Ride strategy emergence · Draft</p>
+  <h1>Racing to the End</h1>
+  <p class="subtitle">What linear Q-learning, DQN and PPO agents learn in Ticket to Ride, on the full USA map, from two to five players</p>
+  <p class="byline"><span><strong>William Parker</strong></span><span>30 September 2026</span><span><span data-v="runs"></span> training runs · <span data-v="games"></span> million training games</span></p>
+  <p class="status">Data as of <span data-v="generated"></span>. The two four-player self-play settings of PPO pass 5 had played <span data-v="self.games"></span> of their 50,000 training games when this draft was built (<span data-v="self.finished"></span>); their numbers are marked <span class="interim">interim</span>. Every other run had finished.</p>
+</header>
+
+<section class="abstract" aria-labelledby="abstract-h">
+  <h2 id="abstract-h">Abstract</h2>
+  <p>We implemented the board game <em>Ticket to Ride</em> as a multi-agent reinforcement-learning environment, with the full rules and the full USA map at two to five players. We trained three families of agents on it: linear Q-learning and SARSA on hand-made features, deep Q-networks (DQN), and proximal policy optimization (PPO). Every method that learned converged on the same strategy, which we call <strong>racing</strong>. A racing agent keeps the two destination tickets it must keep and abandons them. It spends almost every train on the longest routes, which score the most points per train, and it ends the game before an opponent can finish its tickets. PPO adds one connected network that wins the longest-path bonus. The strongest agent, a PPO policy, beats a ticket-planning heuristic by 26 points a game (88% wins) and a scripted racer by 7 (66%).</p>
+  <p>Racing does not come from rewarding the agent for beating its opponent. Agents rewarded only on their own score race even more purely. The opponent term in the margin reward adds tempo: ending games early to deny the opponent's tickets. No agent blocks. Claims on opponents' ticket paths occur at the rate a random claim of the same length would produce, under every reward and at every table size. Racing survives three, four and five players and self-play, but at five players it stops being the winning strategy: scripted ticket planners win more often than racers while scoring fewer points, and agents trained on points follow the points.</p>
+</section>
+
+<ul class="findings">
+  <li><strong>One strategy, three methods.</strong> Linear, DQN and PPO agents all learned to race: the minimum two tickets, abandoned; long routes; the game ended early. PPO raced best and added a connected network for the 10-point longest-path bonus.</li>
+  <li><strong>Racing is about points, not the opponent.</strong> Rewarded on its own score alone, PPO claims seven of the board's nine 6-routes and one 3-route in nearly every game, the most points 45 trains can score. The margin reward trades some of those points for tempo.</li>
+  <li><strong>No blocking.</strong> Blocking claims happen at chance rates against a length-matched baseline, at 2–5 players and under both rewards. A heuristic that never looks at its opponents shows the same overlap.</li>
+  <li><strong>Tickets are not cheap additions.</strong> The tickets racers abandon end a median of 7–8 trains away from their final network. Completing one costs about as many route points as it pays.</li>
+  <li><strong>At five players, points and wins part ways.</strong> A lone ticket planner among racers wins 24% of games (an even split is 20%) while scoring 6 points fewer on average. The learners, rewarded on points, keep racing and win at about the even-split rate.</li>
+</ul>
+
+<details class="toc-inline"><summary>Contents</summary><nav class="toc inline" aria-label="Contents"></nav></details>
+
+<h2 id="intro"><span class="num">1</span>Introduction</h2>
+<p>Modern board games sit between the perfect-information games where reinforcement learning made its name and the open-ended worlds it struggles with. <em>Ticket to Ride</em> (Moon, 2004) has hidden cards and hidden goals, chance on every draw, two to five players, and no single obvious objective: points come from routes, from destination tickets that must be completed or count against the player, and from a bonus for the longest continuous path. Experienced players argue about whether to chase tickets, grab long routes, block, or rush the end. That makes the game a natural place to ask what learning agents discover on their own.</p>
+<p>This project set out to recreate the game as an environment, train several kinds of agents on it, and study the strategies they converge on. Five questions framed the work:</p>
+<ol>
+  <li><strong>Route-hoarding vs. blocking.</strong> Do agents take routes their opponents need, or play only for their own goals?</li>
+  <li><strong>Risk tolerance on routes.</strong> Do they commit cards to long, high-value routes or take short, safe ones?</li>
+  <li><strong>Ticket risk.</strong> Do they draw extra tickets late, how many do they keep, and how often does it backfire?</li>
+  <li><strong>Tempo.</strong> How do they balance drawing cards against claiming routes before someone else does?</li>
+  <li><strong>Value of memory.</strong> How much does card counting change play? (Not yet tested; see Section 10.)</li>
+</ol>
+<p>The answer to the first four turned out to be one strategy. Across 60 settings and three learning methods, every agent that learned anything raced. This report documents the environment and the methods (Sections 2–3), the training results method by method (Section 4), what racing consists of and what is absent from it (Section 5), whether the reward produces it (Section 6), and what changes with more players (Section 7). Section 8 discusses why racing wins on this map, and Sections 9–11 cover limitations, future work and reproducibility.</p>
+<p><strong>Related work.</strong> Ticket to Ride has been used as a testbed for AI-based playtesting with heuristic agents (de Mesentier Silva et al., 2017). The learning methods here are standard: linear Q-learning and SARSA with eligibility traces (Watkins, 1989; Rummery and Niranjan, 1994; Sutton and Barto, 2018), Double DQN with a dueling head (Mnih et al., 2015; van Hasselt et al., 2016; Wang et al., 2016), and PPO with generalized advantage estimation and invalid-action masking (Schulman et al., 2016, 2017; Huang and Ontañón, 2022), written in the single-file style of CleanRL (Huang et al., 2022). The environment follows the PettingZoo agent-environment-cycle interface (Terry et al., 2021). Reward shaping, where used, is potential-based (Ng et al., 1999), and ratings are fitted with the Bradley–Terry model (Bradley and Terry, 1952).</p>
+
+<h2 id="game"><span class="num">2</span>The game and the environment</h2>
+<h3 id="rules"><span class="num">2.1</span>Rules and board</h3>
+<p>The engine implements the full base game on the USA map: 36 cities, 100 routes (22 of them paired as double routes), 30 destination tickets worth 4 to 22 points (11.6 on average), 110 train cards (12 of each of eight colors plus 14 locomotives), a face-up market of five cards with the three-locomotive reset, and 45 trains per player. On a turn a player draws two cards (one, if it takes a face-up locomotive), claims a route by paying cards of its color, or draws three tickets and keeps at least one. Players start with three tickets and keep at least two. The game ends one round after any player is down to two or fewer trains. Completed tickets add their points and incomplete ones subtract them, and the longest continuous path earns 10. Double routes follow the player-count rule: at two or three players, claiming one side closes the other. Edge cases the printed rules leave open are settled in a written rulings document, and the engine cites them in its code.</p>
+<p>The scoring table for routes is the single most important fact about this map for what follows. Points grow faster than length, so a train placed on a long route is worth more than a train placed on a short one:</p>
+
+<div class="tbl" id="tbl-scoring">
+  <p class="tbl-title"><span class="num">Table 1</span>Route scoring on the USA map</p>
+  <div class="route-demo">
+    <div class="tablewrap" style="flex: 1 1 280px;">
+      <table>
+        <thead><tr><th>Route length (trains)</th><th>Points</th><th>Points per train</th><th>Routes on the map</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>1</td><td>1.00</td><td>9</td></tr>
+          <tr><td>2</td><td>2</td><td>1.00</td><td>36</td></tr>
+          <tr><td>3</td><td>4</td><td>1.33</td><td>20</td></tr>
+          <tr><td>4</td><td>7</td><td>1.75</td><td>16</td></tr>
+          <tr><td>5</td><td>10</td><td>2.00</td><td>10</td></tr>
+          <tr><td>6</td><td>15</td><td>2.50</td><td>9</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <svg viewBox="0 0 300 92" role="img" aria-label="Seven 6-train routes and one 3-train route use 45 trains for 109 points">
+      <g id="route-cars"></g>
+      <text x="0" y="86" style="font: 500 11.5px var(--sans); fill: var(--ink-2);">7 × 15 + 4 = 109 points from 45 trains</text>
+    </svg>
+  </div>
+  <p class="tbl-sub" style="margin-top: 8px;">With 45 trains the most a player can score from routes alone is 109: seven 6-routes and one 3-route. The map has exactly nine 6-routes, none of them doubled.</p>
+</div>
+
+<h3 id="env"><span class="num">2.2</span>The environment</h3>
+<p>The engine is pure Python with no learning dependencies. Each turn is split into the sub-steps a player actually faces: choose an action, choose a payment (which color, how many locomotives), draw a second card, keep tickets. A PettingZoo environment wraps it with one agent step per sub-step. Splitting the turn keeps the action space small. Every engine action maps to a fixed index in a flat <code>Discrete(168)</code> space: nine face-up draws, one blind draw, 100 route claims, 49 payments, one ticket draw, seven ticket-keeping subsets and a pass. A mask allows only the current sub-step's legal actions. Merging claim and payment into one action would need about 4,900 indices.</p>
+<p>The observation is one flat vector from the acting player's point of view, so one network can play any seat: 765 numbers at two players (879, 993 and 1,107 at three to five). It holds the current sub-step, route ownership, which routes are open to the player, the market, pile sizes, every player's trains, public score, hand size and ticket count, endgame flags, the player's hand and tickets, and the tickets on offer. Two blocks are exact computations from information the player already has: card memory and ticket progress. Card memory is the face-up cards each opponent is known to hold, plus the pool of cards not yet seen (level 2 of three levels). Ticket progress is, per held ticket, whether it is already connected and the fewest trains still needed to finish it. Inferences about opponents, such as guessing their tickets, are left to the agent, since that is where blocking would come from. An optional <em>ticket-plan</em> block (224 numbers) adds per-route ticket values and per-offer fit.</p>
+<p>The reward is a setting. The default is the change in score margin between a player's decisions (its score minus the mean of its opponents' scores, scaled by 1/100), so a game's rewards sum to its final margin. The alternatives are the player's own score, and win/loss (+1 or −1 at the end). The discount factor is 1, since every game ends.</p>
+
+<h3 id="bots"><span class="num">2.3</span>Scripted opponents</h3>
+<p>Five hand-written bots serve as opponents and as reference points:</p>
+<ul>
+  <li><strong>random</strong> picks a legal action uniformly.</li>
+  <li><strong>greedy</strong> plans the cheapest path for each incomplete ticket, claims routes on those paths when it can pay, draws the colors they need, and draws more tickets once its tickets are done. It never looks at its opponents.</li>
+  <li><strong>wary</strong> is greedy that watches the tempo: once an opponent is down to 15 trains, it stops drawing tickets, drops the ones it cannot finish in time, and turns its cards into the longest claims available.</li>
+  <li><strong>racer</strong> scripts the strategy the learners found: keep the cheapest two tickets, claim only 6-routes while it can (lowering the minimum when none is left), extend its own network, end the game.</li>
+  <li><strong>collector</strong> is greedy for tickets: two or three open at a time, finished one by one, topped up whenever fewer than two are far from done.</li>
+</ul>
+<p>The racer bot was written after the learners kept converging on racing, to test whether racing alone explained their results. Its minimum route length was tuned against greedy over 300 games each: a minimum of 4 lost by 13 points a game, 5 by 3, and 6 won by 12. An early version of racer had a flaw (no fallback once the 6-routes were gone, so it drew cards to the end with trains unused). The DQN agents of pass 2 learned to exploit that flaw, and fixing it changed the picture (Section 4.2).</p>
+
+<h2 id="methods"><span class="num">3</span>Learning methods</h2>
+<p>All three tiers learn in the same setting: the learner plays one seat (later, one seat of three to five) against opponents, in a random seat each game, deciding at every one of its engine sub-steps. Between two of its decisions it receives the reward accumulated in between, opponent moves included. Appendix A lists every hyperparameter.</p>
+
+<h3 id="linear"><span class="num">3.1</span>Tier A: linear Q-learning and SARSA</h3>
+<p>The linear learner estimates Q(<em>s</em>, <em>a</em>) = <strong>v</strong> · state(<em>s</em>) + <strong>w</strong><sub>type(<em>a</em>)</sub> · ψ(<em>s</em>, <em>a</em>): a value over nine state features shared by every action, plus an advantage per action type (claim, pay, draw a color, draw a locomotive, draw blind, draw tickets, keep tickets, pass) over 1 to 12 features of that action. Features include each route's points and length, whether it lies on the cheapest path of one of the player's tickets, whether it completes one, the trains still needed for open tickets, the tempo (trains left against the fewest any opponent has), and ticket-choice features such as cost, fit with the trains not yet committed, and overlap with existing paths. Updates use a normalized least-mean-squares step (the step size is the share of the error corrected). Optional eligibility traces give SARSA(λ) and Watkins's Q(λ), with the step scaled by 1 − λ, and an exponential average of the weights can be evaluated and saved in place of the raw ones. Exploration is ε-greedy, ε falling from 0.2 to 0.02.</p>
+
+<h3 id="dqn"><span class="num">3.2</span>Tier B: deep Q-networks</h3>
+<p>The DQN agent is a Double DQN with a dueling head on the observation vector: a 765 → 512 → 256 → 168 multilayer perceptron, with the advantage centered over the legal actions only. Illegal actions get −∞ when acting and in the target's argmax. Transitions enter a 200,000-decision replay buffer a whole game at a time, so n-step returns can be formed; a gradient step of 256 samples follows every 8 decisions, and the target network is copied every 1,000 steps. Exploration is ε-greedy from 1.0 to 0.02 over the first 5% of games, and an exponential weight average over about 100 games is what gets evaluated. Games are played by CPU copies of the network, which answer a single observation in 0.16 ms, while gradient steps run on the GPU.</p>
+
+<h3 id="ppo"><span class="num">3.3</span>Tier C: proximal policy optimization</h3>
+<p>The PPO agent follows CleanRL's recipe: separate actor and critic networks (512 → 256, tanh, orthogonal initialization), illegal logits set to −10<sup>8</sup> before the softmax, 32 games per update (about 2,700 decisions), generalized advantage estimates with γ = 1 and λ = 0.95, four epochs of four minibatches, clipping at 0.2 for both policy and value, an entropy bonus of 0.01, gradient-norm clipping at 0.5, and Adam at 2.5 × 10<sup>−4</sup> annealed linearly to zero over the run. The policy samples its moves in training; evaluations and the saved agent take the most likely legal move.</p>
+
+<h3 id="pool"><span class="num">3.4</span>Opponents and self-play</h3>
+<p>Early runs trained against one fixed opponent (random, greedy, a coin flip between them, or the learner's own best checkpoint). Later runs draw each opponent seat from a <em>pool</em>: greedy, wary, racer (twice), collector, two strong linear agents, and "self", a frozen copy of the learner that is either its best checkpoint or one of its five most recently evaluated networks (greedy until the first evaluation). Five of the eight pool entries race. Pass 5 adds a self-play-only pool, in which every opponent seat is a copy of the learner. An optional potential-based shaping term rewards progress on tickets: Φ is minus a constant times the trains still needed for the player's incomplete tickets, so a game's shaping sums to zero and the optimal policy is unchanged.</p>
+
+<h3 id="eval"><span class="num">3.5</span>Evaluation</h3>
+<p>Every run evaluates at fixed intervals: 100 games against each evaluation opponent (random, greedy, wary, racer, collector and, for the network learners, the strongest linear agent, held out of their pools). Evaluation <em>k</em> of every run plays the same games (batch seed 10,000 + <em>k</em>), so runs are compared on paired games. The <em>best checkpoint</em> is the evaluation with the best mean margin over the scripted opponents other than random. Because the same evaluation picks and scores it, a best checkpoint's recorded score is optimistic, so every finished run's final policy and best checkpoint were <em>re-scored</em> on 1,000 fresh games per opponent (batch seed 9001, never used in training). Agents across methods were compared in six <em>round robins</em> of 400 fresh games per pair in random seats, with Bradley–Terry ratings on the Elo scale anchored at greedy = 1000. Margins are reported in points per game; win share counts a shared win as a fraction.</p>
+<p>Behavior was measured with instrumented games (Section 5): every claim records the route's length, and whether the route (or the double-route side it closes) lies on the cheapest path of an opponent's incomplete ticket. These measurements use the true tickets, information the agents never see.</p>
+
+<h2 id="results"><span class="num">4</span>Training results</h2>
+<p>Training proceeded in <em>passes</em>: batches of settings, each run with three to five seeds, each answering questions raised by the one before. In total <span data-v="settings"></span> settings and <span data-v="runs"></span> runs played <span data-v="games"></span> million training games. Figure 1 shows a representative learning curve for each method.</p>
+
+<figure class="fig wide" id="fig-curves">
+  <p class="fig-title"><span class="num">Figure 1</span>Learning curves against greedy, one panel per method</p>
+  <p class="fig-sub">Margin against greedy at each evaluation (100 paired games), mean over seeds; the shaded band spans the seeds. Above zero the agent beats greedy on average. Linear curves are smoothed over 5 evaluations (2,500 games). The axis stops at −150; DQN's first evaluations (to −235) lie below it.</p>
+  <div class="multiples">
+    <div class="panel"><h4>Linear (tier A)</h4><p class="note">5 seeds each, 30,000 games</p><div class="chart" data-chart="curves-linear"></div></div>
+    <div class="panel"><h4>DQN (tier B)</h4><p class="note">n-step returns, 3 seeds each</p><div class="chart" data-chart="curves-dqn"></div></div>
+    <div class="panel"><h4>PPO (tier C)</h4><p class="note">opponent pool, 4 seeds each</p><div class="chart" data-chart="curves-ppo"></div></div>
+  </div>
+  <figcaption>Linear Q-learning against greedy peaks near 5,000 games and declines at a constant step size; λ = 0.98 holds it above parity. DQN with 8- or 32-step returns learns fastest early and then drifts down; one-step DQN passes parity near 10,000 games. PPO learns slowest early but reaches the highest level, and keeps improving until its learning rate reaches zero.</figcaption>
+</figure>
+
+<h3 id="res-linear"><span class="num">4.1</span>Tier A: eight passes of linear learning</h3>
+<p>The first pass learned quickly but in a narrow sense: random was beaten within about 100 games and the margin against greedy improved from −194 (random play) to −85, but the agent never beat greedy. Reading the weights showed why it plateaued: the state features, which are the same for every action, took nearly all the weight, and the features that rank one claim against another stayed near zero. The second pass split the estimate into a shared value and per-type advantages, which let the action features carry signal, and added ticket-choice features. Every setting improved, and the best checkpoints already played the strategy every later agent would find. They claimed long routes (mean length about 4), drew blind, kept the minimum two tickets and ended the game in 75–99% of games. Greedy, which never looks at the clock, scored 80–93 against them instead of its usual 106.</p>
+<p>Passes 3 to 8 refined the learner. Weight averaging was the clearest single gain (margin −20 → −6 against greedy at 10,000 games, evaluation noise cut by two thirds). Eligibility traces with λ = 0.98 needed a larger step (the pass-3 collapse was the step α(1 − λ) being too small), and then gave the strongest linear agents. Longer runs exposed a decline: agents trained against greedy or themselves peaked near game 5,000 and then drifted toward short routes and slower games. Decaying the step size did not stop the drift, and SARSA drifted too, so it was not off-policy divergence. Keeping the best checkpoint worked: re-scored on fresh games, Q-learning against greedy with step decay beat greedy by 7 points with every seed between +6 and +9. With λ = 0.98 the best checkpoints averaged +9 to +11, and the single strongest linear agent, a SARSA(λ) checkpoint trained against random, beat greedy by 17.4 (73% wins). Further changes moved noise, not this ceiling. The likely reason is the features themselves: a ticket is worth its points only if a whole path is completed, which a sum of features cannot express.</p>
+<div class="tbl" id="tbl-linear">
+  <p class="tbl-title"><span class="num">Table 2</span>Linear agents against greedy on fresh games</p>
+  <p class="tbl-sub">1,000 games per agent (batch seed 9001), margin in points per game, mean over seeds; per-seed margins of the final weights on the right. Best = the checkpoint with the best training evaluation.</p>
+  <div class="tablewrap" data-table="linear"></div>
+</div>
+
+<h3 id="res-dqn"><span class="num">4.2</span>Tier B: DQN</h3>
+<p>The first DQN pass compared n-step returns, the deep analog of eligibility traces. Eight- and 32-step returns learned fastest (−26 and −34 against greedy at 3,000 games) and then drifted to −47 and −66, with shorter routes and fewer self-ended games: the same drift the linear agents showed. One-step DQN started slowest, passed parity near 10,000 games and kept improving. Its final networks beat greedy by 10 to 14 on fresh games, every seed better than every linear setting's final weights and as good as the linear best checkpoints, with no checkpoint picking. Why n-step returns hurt was not isolated. Two candidates are that the return mixes in the opponent's card luck over n decisions, and that uncorrected n-step returns learn the exploring policy's value. The one-step agent played pure racing: 10 claims of mean length 4.4, 97 route points, the minimum two tickets with 0.02 completed, the game ended in 99% of games after 69 turns, and the longest-path bonus in 87%.</p>
+<p>Pass 2 trained against the pool. The pool agents did not learn tickets either (0.01–0.02 completed). What changed was the racing itself: they beat the original racer bot by 22 points (90–92% wins), where the greedy-trained agents only tied it. Instrumented games showed how. The original racer claimed only 6-routes while it had six or more trains and had no fallback once they were gone; against the pool agents it ended games holding 54 cards with 11 trains unused. With racer's fallback fixed, the scripted racer beat every trained agent of the time, including the pool DQN by 15.6. The DQNs had learned to beat broken racer, not racing. Pass 3 put the fixed racer in the pool twice, and the resulting agents held even with it (+2.8) at the cost of exploiting greedy less (+3 to +6). An optional ticket-plan observation block doubled ticket completion (0.07 against 0.03 vs greedy) without changing the strategy. A side run trained against random only, which works for linear learners, failed for DQN (−93 against greedy): against random, the margin is dominated by random's own wildly varying score.</p>
+<div class="tbl" id="tbl-dqn">
+  <p class="tbl-title"><span class="num">Table 3</span>DQN agents on fresh games</p>
+  <p class="tbl-sub">1,000 games per agent and opponent, margin per game, mean over seeds: final policy / best checkpoint; win share against greedy in the last column. Pass 1 was not re-scored against collector.</p>
+  <div class="tablewrap" data-table="dqn"></div>
+</div>
+
+<h3 id="res-ppo"><span class="num">4.3</span>Tier C: PPO</h3>
+<p>PPO, trained against the same pool, was the strongest method by a clear margin, and its final policies needed no checkpoint picking (final and best within one point). Pass 1 (50,000 games) reached +24 against greedy (86% wins) and +5 against the fixed racer. Pass 2 doubled the training and the learning-rate schedule to 100,000 games and added one or two points, with the seeds converging to within four points of each other: the curves flatten from about 70,000 games. The ticket-plan block, which helped DQN slightly, hurt PPO (+18.5 against +24.2). PPO raced like the others (two tickets abandoned, about ten claims of mean length 4.4–4.8, almost only blind draws), with one addition that set it apart. It built <em>one connected network</em> and won the longest-path bonus in 96–98% of games against the racer bot and the linear agent, which won it 4–6% of the time. That is 10 points a game that the scripted racer, which extends its network but does not plan for the bonus, rarely got.</p>
+<div class="tbl" id="tbl-ppo">
+  <p class="tbl-title"><span class="num">Table 4</span>PPO agents on fresh games</p>
+  <p class="tbl-sub">1,000 games per agent and opponent, every other seat a copy of the opponent at 3–5 players; margin against the opponents' mean. Rows marked † are the last five training evaluations instead (not yet re-scored).</p>
+  <div class="tablewrap" data-table="ppo"></div>
+</div>
+
+<h3 id="compare"><span class="num">4.4</span>How the methods compare</h3>
+<p>Ranking against greedy alone does not transfer to ranking against other agents. The round robins put every method's strongest agents against each other and the bots. Figure 2 shows the latest, with 13 agents.</p>
+<figure class="fig" id="fig-elo">
+  <p class="fig-title"><span class="num">Figure 2</span>Ratings in round robin 6</p>
+  <p class="fig-sub">Bradley–Terry ratings on the Elo scale from 400 games per pair, anchored at greedy = 1000; bars start at greedy's rating. 200 points means about 3:1 odds.</p>
+  <div class="legend" data-legend="methods"></div>
+  <div class="chart" data-chart="elo"></div>
+  <figcaption>All five PPO agents trained on points or margin rate above every non-PPO agent. Random rated −181 and is left off the axis; it lost every game. The PPO agent trained on win/loss (Section 6) is the only learner below greedy.</figcaption>
+</figure>
+<p>Two comparisons in the round robins correct readings from single matchups. First, the strongest single linear agent beat the pool DQNs, which suggested linear might be the better method. Matching settings instead of single agents reversed that: every seed of the best DQN setting against every seed of the two best linear settings, 500 games per pair, left the linear settings behind by 4.4 and 7.0 points a game, winning 7 and 3 of 15 pairings. The strongest linear agent is the best of about 150 linear networks, while the DQN seeds sat within 2 points of each other. Second, when its flaw was fixed, the scripted racer beat every trained agent of the time head to head: the pool DQN by 15.6 points a game, the greedy-trained DQN by 22.5, and the best linear agent by 1.8. For a while the strongest player in the project was a 120-line script. DQN pass 3, trained against it, only tied it. PPO was the first method to beat it, by 6 to 8 points a game in the latest round robin.</p>
+
+<h2 id="behavior"><span class="num">5</span>What the agents learned</h2>
+<h3 id="anatomy"><span class="num">5.1</span>The anatomy of racing</h3>
+<p>Figure 3 breaks each agent's claims down by route length, from 200 instrumented games against greedy. The ticket players (greedy, wary, collector) spend their trains on many short routes: six or more 2-routes a game, the connections their ticket paths need. The racers do the opposite. The scripted racer claims seven 6-routes and one 3-route in essentially every game: 45 trains, 109 points, the maximum. The PPO agent trained on its own score (Section 6) independently converged on exactly that profile. The learners trained on margin mix in 4- and 5-routes, which end the game sooner.</p>
+<figure class="fig" id="fig-anatomy">
+  <p class="fig-title"><span class="num">Figure 3</span>Claims per game by route length, against greedy</p>
+  <p class="fig-sub">Two-player games against greedy, 200 per agent (fresh seeds); the strongest agent of each method. One hue, stepped from 1–2-train routes to 6-train routes.</p>
+  <div class="legend" data-legend="lengths"></div>
+  <div class="chart" data-chart="anatomy"></div>
+  <figcaption>Racing shows as one long block of 6-train routes: the score-trained PPO agent and the racer bot claim about seven 6-routes a game, the linear and DQN agents four to five, plus 4- and 5-routes. The ticket players' claims are mostly 2- and 3-routes.</figcaption>
+</figure>
+<div class="tbl" id="tbl-anatomy">
+  <p class="tbl-title"><span class="num">Table 5</span>Racing against ticket play, two players, against greedy</p>
+  <p class="tbl-sub">Means over 200 games per agent. Own turns = game turns divided by two. Ends game = share of games in which this agent triggered the final round.</p>
+  <div class="tablewrap" data-table="anatomy"></div>
+</div>
+<p>Three more features complete the picture. Racers draw blind: PPO took 42 blind draws and one or two face-up cards a game, since a 6-route needs six cards of one color and blind draws keep the options open. Racers end the game themselves: at two players the learners triggered the final round in 98–100% of games against greedy, after 31–36 turns of their own, where greedy playing itself takes <span data-v="greedy.self.turns"></span>. And racers never draw tickets after the opening. The tickets they keep at the start are a fixed cost of about 20 points a game, paid to keep every train for routes.</p>
+
+<h3 id="network"><span class="num">5.2</span>One connected network</h3>
+<p>The scripted racer extends its own network when it can, but its first priority is length. The PPO agents' distinguishing habit was to keep their routes connected, and it paid: 10 points from the longest-path bonus in nearly every game against other racers. Against greedy, whose ticket paths form long chains of short routes, the bonus was contested. PPO won it in 90–94% of two-player games against greedy and 58–77% at three and four players.</p>
+
+<h3 id="ticket-gap"><span class="num">5.3</span>Tickets are not cheap additions</h3>
+<p>If racers could complete their tickets with a few extra trains, keeping the right tickets would be free points, and the learners would be missing an easy improvement. They are not. For every opening ticket the agents were dealt, kept or returned, we measured at the end of the game how many more trains the final route network would have needed to complete it (own routes free, routes still open at their length).</p>
+<figure class="fig" id="fig-gap">
+  <p class="fig-title"><span class="num">Figure 4</span>How far the racing network ends from the tickets it abandoned</p>
+  <p class="fig-sub">PPO (margin reward) against the racer bot, 200 games; the opening tickets it kept.</p>
+  <div class="tiles" data-tiles="gap"></div>
+  <figcaption>The tickets the agents abandon end a median 7–8 trains away from their network, about what one 6-route and one 2-route would cost, or 17 route points. Only 2–10% are within three trains. Keeping the two of the three offered tickets that ended closest (with hindsight) would have changed ticket points by about 2 either way. The table below covers every matchup measured.</figcaption>
+  <details class="data"><summary>Show all matchups</summary><div class="tablewrap" data-table="gap"></div></details>
+</figure>
+
+<h3 id="blocking"><span class="num">5.4</span>Nobody blocks</h3>
+<p>Blocking means claiming a route because an opponent needs it. Counting claims that land on an opponent's ticket path is not enough to measure it: long routes are few, and a racer's 6-routes often lie on someone's path by coincidence. Each claim was therefore compared with what a random legal claim of the <em>same length</em> would have hit at that moment. Blocking would show as an observed rate above this length-matched baseline.</p>
+<figure class="fig" id="fig-blocking">
+  <p class="fig-title"><span class="num">Figure 5</span>Claims on an opponent's ticket path, observed against chance</p>
+  <p class="fig-sub">Share of each agent's claims that lie on the cheapest path of an incomplete opponent ticket (or close a double route on one), against the same share for a random legal claim of the same length. PPO arms against N − 1 greedy bots, pooled over seeds.</p>
+  <div class="legend" data-legend="blocking"></div>
+  <div class="chart" data-chart="blocking"></div>
+  <figcaption>Observed and chance rates sit within about two percentage points at every table size, for both rewards. The greedy bots at the same tables, which never look at their opponents, exceed chance by more: shared corridors, not intent.</figcaption>
+  <details class="data"><summary>Show data</summary><div class="tablewrap" data-table="blocking"></div></details>
+</figure>
+<p>The learners' excess over chance was at most about two tenths of a claim per game, with no consistent difference between the margin reward, which rewards hurting opponents, and the score reward, which does not. At four and five players the greedy bots beside them exceeded chance by three to four times as much (0.7–0.9 claims a game), only because many tickets share the same corridors. The agents interfere with each other only through competition for the same long routes and through tempo.</p>
+
+<h2 id="reward"><span class="num">6</span>Does racing come from the reward?</h2>
+<p>Every agent so far was trained on score margin: its own points minus its opponent's. A reward that counts the opponent's points could favor ending the game early and denying the opponent, so racing might be an artifact of the reward. PPO pass 3 trained the same setting (the pool, 50,000 games, four seeds) on three rewards: margin, the agent's own score only, and win/loss (+1 or −1 at the end, nothing in between).</p>
+<figure class="fig" id="fig-reward">
+  <p class="fig-title"><span class="num">Figure 6</span>PPO under three rewards, against greedy</p>
+  <p class="fig-sub">Margin against greedy at each evaluation, mean of 4 seeds, band = seed range. The win/loss and score arms are still evaluated on margin. The axis stops at −150; win/loss's first evaluation (−245) lies below it.</p>
+  <div class="legend" data-legend="reward"></div>
+  <div class="chart" data-chart="reward"></div>
+  <figcaption>Own score learns about twice as fast as margin (parity at 8–20k games against 16–32k). Win/loss barely learns in 50,000 games: it won almost no training games against the scripted bots, so its reward was a constant −1 except in self-play.</figcaption>
+</figure>
+<p><strong>Racing does not come from the opponent in the reward.</strong> The score-only agent races in its purest form: seven 6-routes and one 3-route, about 108 route points against greedy, both opening tickets abandoned. On fresh games it beats greedy by 11.8 and racer by 4.2.</p>
+<p><strong>What the margin adds is tempo.</strong> The margin agent takes fewer 6-routes (<span data-v="tempo.m.six"></span> against <span data-v="tempo.s.six"></span>) and more 4- and 5-routes, and the game ends at turn <span data-v="tempo.m.turns"></span> instead of <span data-v="tempo.s.turns"></span>. Greedy is left with <span data-v="tempo.m.opptrains"></span> trains instead of <span data-v="tempo.s.opptrains"></span>, completes <span data-v="tempo.m.opptix"></span> tickets instead of <span data-v="tempo.s.opptix"></span>, and scores <span data-v="tempo.m.oppscore"></span> instead of <span data-v="tempo.s.oppscore"></span>. The margin agent gives up <span data-v="tempo.route_given"></span> route points to take <span data-v="tempo.opp_taken"></span> from greedy: +16.7 against greedy on fresh games. Against racer, which has no tickets to deny, the same habit costs points (−2.5).</p>
+<p><strong>Head to head, score beat margin.</strong> Over the 16 seed pairings the score agents won by <span data-v="cross.2.edge"></span> points a game (± <span data-v="cross.2.se"></span>; <span data-v="cross.2.swin"></span> of games). Between two racers speed decides: the score agents had placed half their trains by their own turn <span data-v="cross.2.shalf"></span> (the margin agents by turn <span data-v="cross.2.mhalf"></span>) and took <span data-v="cross.2.ssix"></span> of the nine 6-routes to the margin agents' <span data-v="cross.2.msix"></span>. The score arm also won the shared tables at three, four and five players, by <span data-v="cross.3.edge"></span>, <span data-v="cross.4.edge"></span> and <span data-v="cross.5.edge"></span> points a game. In the latest round robin, though, the best margin seed (rated 1296) outrated the best score seed (1240), because it beats the ticket players by much more.</p>
+<p><strong>Win/loss did not learn.</strong> Its win share against every scripted bot stayed at 0–4% for the whole run, so in seven of every eight pool games the reward was nearly always −1 and only self-play carried signal. Two seeds kept 26–27 tickets at 2,000 games, since a loss by 400 points costs the same as a loss by 5. The win/loss agent ended at −35.5 against greedy. Whether a win-seeking agent would choose a different, higher-variance strategy is still open. Section 7 suggests where it would matter most.</p>
+<p>The score agent's faster learning is consistent with an explanation for an earlier failure (DQN trained against random only): the opponent's score is noise the learner cannot yet influence, and margin rewards include it. Section 7 adds support. As the number of opponents grows, the margin averages more of them and becomes less noisy, and the gap in learning speed closes.</p>
+
+<h2 id="players"><span class="num">7</span>More players</h2>
+<p>Two-player Ticket to Ride is a roomy game: with one side of each double closed, two players place 90 trains on a board of 309 track spaces, about a third of it. At four players about two thirds of the board is claimed, the nine 6-routes are split between more racers, and every ticket path is more likely to be cut. If racing were an artifact of the two-player table, it should break here. Passes 4 and 5 trained PPO with the pool at three, four and five players (margin and score rewards, three seeds each), and in self-play only at four players.</p>
+<figure class="fig wide" id="fig-tablesize">
+  <p class="fig-title"><span class="num">Figure 7</span>The learners' edge over greedy shrinks as the table grows</p>
+  <p class="fig-sub">PPO against N − 1 greedy bots, last five training evaluations, mean over seeds (two players: pass 3; three and four: pass 4; five: pass 5).</p>
+  <div class="legend" data-legend="arms"></div>
+  <div class="duo">
+    <div><h4>Margin over greedy's mean, points per game</h4><div class="chart" data-chart="size-margin"></div></div>
+    <div><h4>Win share above an even split, percentage points</h4><div class="chart" data-chart="size-win"></div></div>
+  </div>
+  <figcaption>At two to four players the learners win clearly more often than an even split. At five, the margin-trained agents still score more than the greedy bots' average but win at the even-split rate or below.</figcaption>
+  <details class="data"><summary>Show data</summary><div class="tablewrap" data-table="tablesize"></div></details>
+</figure>
+<p><strong>Racing survives, unchanged.</strong> Against greedy bots the learners play the same game at two, three, four and five players. Route points stay at 90–97 (margin) or 103–108 (score), and claims average 4.4–4.7 trains (margin) or 5.2–5.5 (score). Both opening tickets are abandoned, with at most 0.15 completed, and the learner ends the game itself in 98–100% of games. Tables of learners only play the same way. When the 6-routes are contested, the learners switch to shorter routes, not tickets. Against three racer bots a learner got 1.3–1.9 of the nine 6-routes and claimed 10–11 routes of mean length 4 instead, kept the longest-path bonus (90%; each racer 4%), and still completed at most 0.25 tickets.</p>
+<p><strong>The margin reward's tempo pays less as the table grows.</strong> Hurting one of three opponents moves the margin a third as much. On fresh games the margin arm's lead over the score arm against greedy was +4.9 points at two players, +4.9 at three and +0.1 at four. And the margin reward learned as fast as the score reward at four players (parity at 10–18k games against 10–16k), where at two players it needed about twice as long. That fits the noise explanation of Section 6.</p>
+
+<h3 id="points-wins"><span class="num">7.1</span>At five players, points and wins part ways</h3>
+<p>The scripted bots show the shift directly. Figure 8 puts one bot of a kind among N − 1 of the other. At two and three players a lone ticket planner (greedy) loses clearly to racers. At four players it wins slightly more than an even split, and at five it wins 24% of games against an even split of 20%, while the racers around it win 19% each. Yet the racers still <em>score</em> more, 68 points to the planner's 62. Racing is the strategy with the higher average; ticket play, whose payoff is all or nothing, has the wider spread, and at five players the spread wins games. In the mixed table with two greedy bots and three racers, the greedy bots won 23% each and the racers 18%. At four players the equivalent table (two and two) still went to the racers, 30% to 20%.</p>
+<figure class="fig" id="fig-lone">
+  <p class="fig-title"><span class="num">Figure 8</span>One of a kind among N − 1 of the other</p>
+  <p class="fig-sub">Win share above an even split (1/N) for a lone greedy bot among racers and a lone racer among greedy bots; 400 games per table, scripted bots only.</p>
+  <div class="legend" data-legend="lone"></div>
+  <div class="chart" data-chart="lone"></div>
+  <figcaption>At two and three players racing dominates either way round. From four players both lone bots beat the even split, a sign that the best strategy depends on what the others play. At five, a lone greedy among racers does slightly better than a lone racer among greedy bots.</figcaption>
+  <details class="data"><summary>Show all scripted tables</summary><div class="tablewrap" data-table="scripted"></div></details>
+</figure>
+<p>The PPO agents follow the points, which is what margin and score reward. At five players the margin-trained agents beat greedy by <span data-v="p5.m.greedy"></span> points a game while winning <span data-v="p5.m.win"></span> of games, and the score-trained ones by <span data-v="p5.s.greedy"></span> while winning <span data-v="p5.s.win"></span>. This is the risk-tolerance question in concrete form, and the clearest case so far for the win/loss reward. At five players an agent would win often enough (about one game in five) to learn from it.</p>
+
+<h3 id="selfplay"><span class="num">7.2</span>Self-play only <span class="interim">interim</span></h3>
+<p>Five of the pool's eight members race, so the learners might race because their opponents do. Pass 5 removed the bias: four players, every opponent seat a frozen copy of the learner. The first 2,000 games were against greedy, until a checkpoint existed to copy.</p>
+<figure class="fig wide" id="fig-self">
+  <p class="fig-title"><span class="num">Figure 9</span>Self-play against the pool, four players, against greedy</p>
+  <p class="fig-sub">Margin against 3 greedy bots at each evaluation, mean of 3 seeds, band = seed range. Pool runs are pass 4; self-play runs are pass 5.</p>
+  <div class="legend" data-legend="self"></div>
+  <div class="multiples">
+    <div class="panel"><h4>Margin reward</h4><div class="chart" data-chart="self-margin"></div></div>
+    <div class="panel"><h4>Score reward</h4><div class="chart" data-chart="self-score"></div></div>
+  </div>
+  <figcaption>Self-play reached parity with greedy sooner than the pool-trained runs (<span data-v="self.parity"></span> games, against <span data-v="pool4.parity"></span> with the pool) and raced more purely. Data through <span data-v="self.games"></span> games.</figcaption>
+</figure>
+<p>Removing the racing opponents did not remove racing. It made it purer. Against greedy, the self-play agents claim routes averaging <span data-v="self.m.len"></span> (margin) and <span data-v="self.s.len"></span> (score) trains, against 4.5 for the pool-trained margin agents, and complete <span data-v="self.m.tix"></span> tickets a game. Among copies of themselves, the equilibrium is still a race for the long routes. In the last five evaluations the margin arm beat three greedy bots by <span data-v="self.m.greedy"></span> (<span data-v="self.m.win"></span> wins) and the score arm by <span data-v="self.s.greedy"></span>; the score arm peaked at <span data-v="self.s.peak"></span> after <span data-v="self.s.peak_games"></span> games and then drifted down.</p>
+
+<h2 id="discussion"><span class="num">8</span>Discussion</h2>
+<p><strong>Why racing wins on this map.</strong> The route table rewards length steeply: a 6-route returns 2.5 points per train, a 2-route 1.0. Spending all 45 trains on long routes yields up to 109 route points, less about 20 for the abandoned tickets, in about 35 turns of the player's own. Left alone, a ticket player does better: greedy totals <span data-v="greedy.self.score"></span> points when it plays itself. But it needs about <span data-v="greedy.self.turns"></span> turns of its own to get there, and against a racer it never gets them. The racer triggers the final round while the ticket player still holds incomplete tickets, which count against it, and trains it never placed. Tickets look like points on top of the routes, but a ticket path rarely runs along the 6-routes. The racing network ends a median 7–8 trains from the tickets it drops, and those trains, spent on long routes instead, are worth about as many points as the ticket, while the short routes a ticket needs cost turns that racing saves. In two-player games against every opponent tried, the race wins.</p>
+<p><strong>Why nobody blocks.</strong> Blocking costs a turn and a few trains to cost an opponent a detour, and with one side of each double closed and only a third of the board claimed at two players, detours are usually available. Against racers, who abandon their tickets, blocking ticket paths is worth nothing. Against ticket players, ending the game early denies more points than cutting a path, and the margin reward found that route. Whether blocking emerges where detours are scarce, late in crowded games at four or five players, the measurements so far say no.</p>
+<p><strong>Methods.</strong> The three tiers learned the same strategy at different quality. Linear features could express racing but not hold a good racing policy stably against strong opponents. Performance peaked and drifted, so the best linear agents were early-stopped checkpoints, and one lucky checkpoint (+17 against greedy) outplayed whole DQN settings. DQN with one-step returns learned racing reliably without checkpoint picking, and with multi-step returns learned fast and then drifted. PPO was slowest to start and best at the end. Its seeds agreed to within a few points, and it found the one improvement on racing that no script had: a single connected network for the longest-path bonus.</p>
+<p><strong>Rewards and learning speed.</strong> Rewarding the agent on its own score made it learn about twice as fast as margin at two players, and the gap closed as more opponents were averaged into the margin. A reward that subtracts an opponent's score adds that opponent's variance to every return. This matters for anyone training on margins in high-variance games.</p>
+<p><strong>What would make tickets pay.</strong> Three conditions emerge from the data. The game must last long enough for paths to be completed, which slow opponents allow and racers do not. The tickets kept must lie near the long routes. And the objective must value winning over expected points, since ticket play's advantage at five players shows up in win share, not in average score.</p>
+
+<h2 id="limits"><span class="num">9</span>Limitations and threats to validity</h2>
+<ul>
+  <li><strong>One map.</strong> Every result is for the USA map, whose route table and nine 6-routes drive the racing economics. Other maps (Europe, with tunnels and stations; maps with more long routes) could change the balance.</li>
+  <li><strong>Few seeds.</strong> Settings ran with three to five seeds. Seed-to-seed differences were large in some settings (PPO pass 3's margin seeds ranged from −1 to +25 against greedy), and some comparisons between settings, such as the effect of shaping on PPO's early learning, reversed between passes and are within seed noise.</li>
+  <li><strong>Fixed opponents.</strong> Most strength measures are against five scripted bots and a few learned agents. The round robins show that ranking against greedy does not transfer to ranking against other agents, so "beats greedy by N" is a narrow statement.</li>
+  <li><strong>Optimistic training evaluations.</strong> Best checkpoints are picked by the same evaluations that score them. All re-scores on fresh games are reported where available; the pass-5 five-player numbers in Section 7 are training evaluations, since those runs have not been re-scored.</li>
+  <li><strong>Greedy evaluation.</strong> Evaluations and saved agents take the most likely move, so a policy's stochastic behavior in training is not what is measured.</li>
+  <li><strong>The pool.</strong> Five of eight pool entries race. Self-play only (Section 7.2) was a first check of this bias, at four players.</li>
+  <li><strong>Hyperparameters.</strong> DQN and PPO used default settings with one or two changes per pass. Neither was tuned in any systematic way.</li>
+  <li><strong>No human comparison.</strong> No agent has been tested against experienced human players.</li>
+  <li><strong>The win/loss reward failed to learn,</strong> so the risk-tolerance question has no learned answer yet.</li>
+</ul>
+
+<h2 id="future"><span class="num">10</span>Future work</h2>
+<ul>
+  <li><strong>Win/loss reward at five players,</strong> warm-started from a trained margin policy or in self-play, where an agent wins about one game in five. Section 7.1 predicts it should move toward ticket play.</li>
+  <li><strong>Search.</strong> Monte Carlo tree search with determinization (Cowling et al., 2012) is the planned non-learning contrast. A search agent does not need to assign credit for a ticket's payoff back over dozens of claims, so it tests whether tickets are hard to learn or simply not worth it.</li>
+  <li><strong>Card memory.</strong> Training with memory level 0 instead of 2 answers the fifth research question. In a racing game that rarely contests colors, little difference is expected.</li>
+  <li><strong>Representation.</strong> A graph network over cities and routes could represent ticket paths directly. It becomes worth building if tickets turn out to pay and the current learners still fail to find them.</li>
+  <li><strong>Other maps and human play.</strong> The viewer already supports human play against any agent.</li>
+</ul>
+
+<h2 id="repro"><span class="num">11</span>Reproducibility</h2>
+<p>The code is a Python package (<code>ttr</code>) with an engine (<code>game.py</code>, <code>board.py</code>, board data hand-verified against the physical board), scripted bots, a PettingZoo environment, the three learners (<code>ttr.learn.linear</code>, <code>dqn</code>, <code>ppo</code>), a Pygame viewer with replay, human play and analysis overlays, and 404 tests. Every training batch is a PowerShell launcher in <code>scripts/</code> (<code>-DryRun</code> prints its exact commands); <code>scripts/rescore.py</code> and <code>scripts/round_robin.py</code> produce the fresh-game numbers; and <code>docs/paper/</code> holds this report's pipeline. <code>compile_data.py</code> reduces the run files to the data behind every figure and table, <code>measure.py</code> runs the instrumented games of Sections 5 and 7, and <code>build.py</code> assembles this page. Training used one desktop (Intel i9-11900K, RTX 3080). A 50,000-game PPO run takes 2.5–6 hours with twelve runs sharing the machine. A late engine optimization sped up legal-move generation 2.8× (55,600 engine steps per second); it was verified to produce byte-identical games and training runs.</p>
+
+<h2 id="refs">References</h2>
+<ol class="refs">
+  <li>Bradley, R. A., and Terry, M. E. (1952). Rank analysis of incomplete block designs: I. The method of paired comparisons. <em>Biometrika</em>, 39(3/4), 324–345.</li>
+  <li>Cowling, P. I., Powley, E. J., and Whitehouse, D. (2012). Information set Monte Carlo tree search. <em>IEEE Transactions on Computational Intelligence and AI in Games</em>, 4(2), 120–143.</li>
+  <li>de Mesentier Silva, F., Lee, S., Togelius, J., and Nealen, A. (2017). AI-based playtesting of contemporary board games. <em>Proceedings of the 12th International Conference on the Foundations of Digital Games (FDG)</em>.</li>
+  <li>Huang, S., and Ontañón, S. (2022). A closer look at invalid action masking in policy gradient algorithms. <em>Proceedings of FLAIRS-35</em>.</li>
+  <li>Huang, S., Dossa, R. F. J., Ye, C., Braga, J., Chakraborty, D., Mehta, K., and Araújo, J. G. M. (2022). CleanRL: High-quality single-file implementations of deep reinforcement learning algorithms. <em>Journal of Machine Learning Research</em>, 23(274), 1–18.</li>
+  <li>Mnih, V., Kavukcuoglu, K., Silver, D., et al. (2015). Human-level control through deep reinforcement learning. <em>Nature</em>, 518, 529–533.</li>
+  <li>Moon, A. R. (2004). <em>Ticket to Ride</em> [board game]. Days of Wonder.</li>
+  <li>Ng, A. Y., Harada, D., and Russell, S. (1999). Policy invariance under reward transformations: Theory and application to reward shaping. <em>Proceedings of ICML</em>.</li>
+  <li>Rummery, G. A., and Niranjan, M. (1994). <em>On-line Q-learning using connectionist systems</em>. Technical report CUED/F-INFENG/TR 166, Cambridge University.</li>
+  <li>Schulman, J., Moritz, P., Levine, S., Jordan, M., and Abbeel, P. (2016). High-dimensional continuous control using generalized advantage estimation. <em>Proceedings of ICLR</em>.</li>
+  <li>Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. (2017). Proximal policy optimization algorithms. arXiv:1707.06347.</li>
+  <li>Sutton, R. S., and Barto, A. G. (2018). <em>Reinforcement Learning: An Introduction</em> (2nd ed.). MIT Press.</li>
+  <li>Terry, J. K., Black, B., Grammel, N., et al. (2021). PettingZoo: Gym for multi-agent reinforcement learning. <em>Advances in Neural Information Processing Systems 34</em>.</li>
+  <li>van Hasselt, H., Guez, A., and Silver, D. (2016). Deep reinforcement learning with double Q-learning. <em>Proceedings of AAAI</em>.</li>
+  <li>Wang, Z., Schaul, T., Hessel, M., van Hasselt, H., Lanctot, M., and de Freitas, N. (2016). Dueling network architectures for deep reinforcement learning. <em>Proceedings of ICML</em>.</li>
+  <li>Watkins, C. J. C. H. (1989). <em>Learning from delayed rewards</em>. PhD thesis, King's College, Cambridge.</li>
+</ol>
+
+<h2 id="appendix-a">Appendix A: Hyperparameters</h2>
+<div class="tbl">
+  <p class="tbl-title"><span class="num">Table 6</span>Learner settings (defaults; passes changed the noted ones)</p>
+  <div class="tablewrap">
+    <table class="prose">
+      <thead><tr><th>Setting</th><th>Linear (tier A)</th><th>DQN (tier B)</th><th>PPO (tier C)</th></tr></thead>
+      <tbody>
+        <tr><td>Input</td><td>9 state + 1–12 action features per type</td><td>observation, 765 numbers</td><td>observation, 765–1,107</td></tr>
+        <tr><td>Model</td><td>value + 8 per-type advantages</td><td>MLP 512–256, ReLU, dueling</td><td>actor and critic MLPs 512–256, tanh</td></tr>
+        <tr><td>Step size</td><td>NLMS α 0.05 (0.02–0.2; decay in passes 6, 8)</td><td>Adam 1×10⁻⁴</td><td>Adam 2.5×10⁻⁴, annealed to 0</td></tr>
+        <tr><td>Returns</td><td>one-step or λ 0.9–0.98 traces</td><td>n-step, n = 1 (8, 32 in pass 1)</td><td>GAE, λ 0.95</td></tr>
+        <tr><td>Discount γ</td><td>1</td><td>1</td><td>1</td></tr>
+        <tr><td>Exploration</td><td>ε-greedy 0.2 → 0.02</td><td>ε-greedy 1.0 → 0.02 over 5% of games</td><td>sampling, entropy bonus 0.01</td></tr>
+        <tr><td>Batch / update</td><td>every decision</td><td>256 samples every 8 decisions; target every 1,000 steps; replay 200,000</td><td>32 games per update; 4 epochs × 4 minibatches; clip 0.2</td></tr>
+        <tr><td>Weight averaging</td><td>exponential, ~100 games</td><td>exponential, ~100 games</td><td>none</td></tr>
+        <tr><td>Reward</td><td>margin / 100</td><td>margin / 100</td><td>margin / 100 (score, win/loss in pass 3)</td></tr>
+        <tr><td>Training games</td><td>2,000–30,000</td><td>30,000</td><td>50,000 (100,000 in pass 2)</td></tr>
+        <tr><td>Evaluation</td><td>every 200–500 games; 100 games each vs random, greedy</td><td>every 500–1,000 games; 100 games each vs every bot + best linear</td><td>every 2,000 games; 100 games each vs every bot + best linear</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h2 id="appendix-b">Appendix B: Observation layout (two players)</h2>
+<div class="tbl">
+  <div class="tablewrap">
+    <table class="prose num-last">
+      <thead><tr><th>Block</th><th>Encoding</th><th>Size</th></tr></thead>
+      <tbody>
+        <tr><td>Current sub-step</td><td>one-hot over 5 phases</td><td>5</td></tr>
+        <tr><td>Route ownership</td><td>per route: unclaimed, mine, each opponent</td><td>300</td></tr>
+        <tr><td>Route open to me</td><td>per route: claimable now by the double-route rule and trains left</td><td>100</td></tr>
+        <tr><td>Route being paid for</td><td>one-hot, payment step only</td><td>100</td></tr>
+        <tr><td>Market</td><td>counts per color</td><td>9</td></tr>
+        <tr><td>Pile sizes</td><td>train deck, discard, ticket deck</td><td>3</td></tr>
+        <tr><td>Per player</td><td>trains left, public score, hand size, ticket count</td><td>8</td></tr>
+        <tr><td>Endgame</td><td>final round started; I still have a turn in it</td><td>2</td></tr>
+        <tr><td>Card memory (level 2)</td><td>per opponent 9 known + 1 unknown; unseen pool 9</td><td>19</td></tr>
+        <tr><td>My hand</td><td>counts per color</td><td>9</td></tr>
+        <tr><td>My tickets</td><td>held, multi-hot by ticket</td><td>30</td></tr>
+        <tr><td>Ticket completed</td><td>per held ticket: already connected</td><td>30</td></tr>
+        <tr><td>Trains to finish</td><td>per held ticket: fewest trains needed, and an impossible flag</td><td>60</td></tr>
+        <tr><td>Tickets on offer</td><td>3 offer slots × one-hot ticket</td><td>90</td></tr>
+        <tr><td><strong>Total</strong></td><td></td><td><strong>765</strong></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<h2 id="appendix-c">Appendix C: Round-robin history</h2>
+<div class="tbl">
+  <p class="tbl-sub">The top four agents of each round robin (ratings anchored at greedy = 1000; rosters differ, so ratings compare within a round robin, not across).</p>
+  <div class="tablewrap" data-table="rr"></div>
+</div>
+
+<footer>
+  <p>Racing to the End · William Parker · draft built from data of <span data-v="generated"></span> · <span data-v="rescores"></span> fresh-game re-scores, 6 round robins.</p>
+</footer>
+</main>
+
+<script id="paper-data" type="application/json">__PAPER_DATA__</script>
+<script>
+(() => {
+"use strict";
+const P = JSON.parse(document.getElementById("paper-data").textContent);
+const NS = "http://www.w3.org/2000/svg";
+const S = (tag, attrs, parent) => {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "css") for (const [p, q] of Object.entries(v)) e.style.setProperty(p, q);
+    else if (k === "text") e.textContent = v;
+    else e.setAttribute(k, v);
+  }
+  if (parent) parent.appendChild(e);
+  return e;
+};
+const H = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const minus = "−";
+const sgn = (v, d = 1) => v == null || isNaN(v) ? "–" : (v < 0 ? minus : v > 0 && +v.toFixed(d) !== 0 ? "+" : "") + Math.abs(v).toFixed(d);
+const num = (v, d = 1) => v == null || isNaN(v) ? "–" : (v < 0 ? minus : "") + Math.abs(v).toFixed(d);
+const pct = (v, d = 0) => v == null || isNaN(v) ? "–" : (100 * v).toFixed(d) + "%";
+const kgames = x => x >= 1000 ? (x / 1000).toFixed(x % 1000 ? 1 : 0) + "k" : String(x);
+
+// numbers bound into the text
+for (const el of document.querySelectorAll("[data-v]")) el.textContent = P.vals[el.dataset.v] ?? "–";
+
+// route-scoring illustration: seven 6-routes and one 3-route
+(() => {
+  const g = document.getElementById("route-cars");
+  if (!g) return;
+  const car = 9, gap = 2;
+  let x = 0, y = 0;
+  for (let r = 0; r < 8; r++) {
+    const n = r < 7 ? 6 : 3;
+    const row = Math.floor(r / 4), col = r % 4;
+    x = col * 74; y = row * 20 + 8;
+    for (let i = 0; i < n; i++) S("rect", { x: x + i * (car + gap), y, width: car, height: 12, rx: 2, css: { fill: r < 7 ? "var(--s1)" : "var(--r1)" } }, g);
+  }
+})();
+
+// ------------------------------------------------------------------ tooltip
+const tip = H("div", "tip"); tip.hidden = true; tip.setAttribute("role", "status"); document.body.appendChild(tip);
+function showTip(clientX, clientY, title, rows) {
+  tip.replaceChildren();
+  if (title) tip.append(H("div", "tip-title", title));
+  for (const r of rows) {
+    const row = H("div", "tip-row");
+    if (r.color) { const k = H("span", "tip-key" + (r.rect ? " rect" : "")); k.style.background = r.color; row.append(k); }
+    row.append(H("strong", null, r.value), H("span", "l", r.label));
+    tip.append(row);
+  }
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+  let x = clientX + 14, y = clientY + 14;
+  if (x + w > vw - 8) x = clientX - w - 14;
+  if (y + h > vh - 8) y = clientY - h - 14;
+  tip.style.left = Math.max(8, x) + "px"; tip.style.top = Math.max(8, y) + "px";
+}
+const hideTip = () => { tip.hidden = true; };
+window.addEventListener("scroll", hideTip, { passive: true });
+
+// ------------------------------------------------------------------ helpers
+function niceStep(range, count) {
+  const raw = range / Math.max(1, count), p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+}
+function ticks(lo, hi, count) {
+  const step = niceStep(hi - lo, count), out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function legend(host, items) {
+  host.replaceChildren();
+  for (const it of items) {
+    const s = H("span", "item"), k = H("span", "key-" + (it.shape || "line"));
+    if (it.shape === "ring") k.style.borderColor = it.color; else k.style.background = it.color;
+    s.append(k, document.createTextNode(it.label)); host.append(s);
+  }
+}
+function table(host, columns, rows, opts = {}) {
+  const t = document.createElement("table"), thead = t.createTHead(), tr = thead.insertRow();
+  for (const c of columns) { const th = H("th", c.cls ? "l" : null, c.label); if (c.title) th.title = c.title; tr.append(th); }
+  const tb = t.createTBody();
+  for (const r of rows) {
+    const row = tb.insertRow();
+    if (r._group) { row.className = "group"; const td = row.insertCell(); td.colSpan = columns.length; td.textContent = r._group; continue; }
+    for (const c of columns) {
+      const td = row.insertCell(), v = c.get(r);
+      td.textContent = v;
+      if (c.cls) td.className = c.cls;
+      if (c.neg && typeof v === "string" && v.startsWith(minus)) td.classList.add("neg");
+    }
+  }
+  host.replaceChildren(t);
+}
+function pathFrom(points) { return points.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(""); }
+function measureText(texts, size = 12) {
+  const c = measureText.c || (measureText.c = document.createElement("canvas").getContext("2d"));
+  c.font = `${size}px "IBM Plex Sans", system-ui, sans-serif`;
+  return Math.max(0, ...texts.map(t => c.measureText(t).width));
+}
+
+// ------------------------------------------------------------------ line chart (crosshair + tooltip)
+function lineChart(host, o) {
+  const W = Math.max(260, host.clientWidth), Hh = o.height || 230;
+  const m = { l: 42, r: 10, t: 10, b: o.xTitle ? 40 : 26 };
+  const all = o.series.flatMap(s => s.x.map((x, i) => [x, s.y[i], s.lo ? s.lo[i] : s.y[i], s.hi ? s.hi[i] : s.y[i]]));
+  const xs = o.xDomain || [o.xMin ?? 0, Math.max(...all.map(d => d[0]))];
+  let ylo = o.yDomain ? o.yDomain[0] : Math.min(0, ...all.map(d => d[2])), yhi = o.yDomain ? o.yDomain[1] : Math.max(0, ...all.map(d => d[3]));
+  const yt = ticks(ylo, yhi, o.yTicks || 5); ylo = Math.min(ylo, yt[0]); yhi = Math.max(yhi, yt[yt.length - 1]);
+  const X = x => m.l + (x - xs[0]) / (xs[1] - xs[0] || 1) * (W - m.l - m.r);
+  const Y = y => m.t + (1 - (y - ylo) / (yhi - ylo || 1)) * (Hh - m.t - m.b);
+  const svg = S("svg", { viewBox: `0 0 ${W} ${Hh}`, width: W, height: Hh, role: "img", "aria-label": o.aria || "" });
+  const clipId = "clip" + Math.random().toString(36).slice(2, 9);
+  S("rect", { x: m.l, y: m.t - 6, width: W - m.l - m.r + 6, height: Hh - m.t - m.b + 6 }, S("clipPath", { id: clipId }, S("defs", {}, svg)));
+  for (const v of yt) {
+    S("line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), class: v === 0 ? "zero" : "grid" }, svg);
+    S("text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end", text: o.yFmt ? o.yFmt(v) : sgn(v, 0) }, svg);
+  }
+  const xt = o.xTickValues || ticks(xs[0], xs[1], o.xTicks || Math.max(3, Math.floor((W - m.l) / 90)));
+  for (const v of xt) S("text", { x: X(v), y: Hh - m.b + 16, "text-anchor": "middle", text: o.xFmt ? o.xFmt(v) : kgames(v) }, svg);
+  S("line", { x1: m.l, x2: W - m.r, y1: Hh - m.b, y2: Hh - m.b, class: "axis" }, svg);
+  if (o.xTitle) S("text", { x: m.l + (W - m.l - m.r) / 2, y: Hh - 4, "text-anchor": "middle", text: o.xTitle }, svg);
+  const plot = S("g", { "clip-path": `url(#${clipId})` }, svg);
+  for (const s of o.series) {
+    if (s.lo && s.hi) {
+      const top = s.x.map((x, i) => [X(x), Y(s.hi[i])]), bot = s.x.map((x, i) => [X(x), Y(s.lo[i])]).reverse();
+      S("path", { d: pathFrom(top.concat(bot)) + "Z", css: { fill: s.color, "fill-opacity": "0.10", stroke: "none" } }, plot);
+    }
+  }
+  for (const s of o.series) {
+    S("path", { d: pathFrom(s.x.map((x, i) => [X(x), Y(s.y[i])])), css: { fill: "none", stroke: s.color, "stroke-width": "2", "stroke-linejoin": "round", "stroke-linecap": "round" } }, plot);
+    if (o.markers) s.x.forEach((x, i) => S("circle", { cx: X(x), cy: Y(s.y[i]), r: 4, css: { fill: s.color, stroke: "var(--surface)", "stroke-width": "2" } }, plot));
+  }
+  // crosshair layer
+  const xsAll = [...new Set(o.series.flatMap(s => s.x))].sort((a, b) => a - b);
+  const hair = S("line", { y1: m.t, y2: Hh - m.b, class: "hair", visibility: "hidden" }, svg);
+  const dots = o.series.map(s => S("circle", { r: 4.5, visibility: "hidden", css: { fill: s.color, stroke: "var(--surface)", "stroke-width": "2" } }, svg));
+  const hit = S("rect", { x: m.l, y: m.t, width: W - m.l - m.r, height: Hh - m.t - m.b, css: { fill: "transparent" } }, svg);
+  let idx = -1;
+  const show = (i, cx, cy) => {
+    idx = Math.max(0, Math.min(xsAll.length - 1, i));
+    const xv = xsAll[idx];
+    hair.setAttribute("x1", X(xv)); hair.setAttribute("x2", X(xv)); hair.setAttribute("visibility", "visible");
+    const rows = [];
+    o.series.forEach((s, k) => {
+      let j = -1, best = Infinity;
+      s.x.forEach((x, q) => { const d = Math.abs(x - xv); if (d < best) { best = d; j = q; } });
+      const tol = (xs[1] - xs[0]) * 0.02;
+      if (j >= 0 && best <= tol) {
+        dots[k].setAttribute("cx", X(s.x[j])); dots[k].setAttribute("cy", Y(s.y[j])); dots[k].setAttribute("visibility", "visible");
+        rows.push({ color: s.color, value: o.yFmt ? o.yFmt(s.y[j]) : sgn(s.y[j]), label: s.label + (s.lo ? ` (seeds ${sgn(s.lo[j], 0)} to ${sgn(s.hi[j], 0)})` : ""), v: s.y[j] });
+      } else dots[k].setAttribute("visibility", "hidden");
+    });
+    rows.sort((a, b) => b.v - a.v);
+    const r = svg.getBoundingClientRect();
+    showTip(cx ?? r.left + X(xv) * r.width / W, cy ?? r.top + r.height / 3, o.xFmtLong ? o.xFmtLong(xv) : (o.xFmt ? o.xFmt(xv) : `${xv.toLocaleString()} games`), rows);
+  };
+  const clear = () => { hair.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); hideTip(); };
+  hit.addEventListener("pointermove", e => {
+    const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * W / r.width;
+    const xv = xs[0] + (x - m.l) / (W - m.l - m.r) * (xs[1] - xs[0]);
+    let i = 0, best = Infinity;
+    xsAll.forEach((v, q) => { const d = Math.abs(v - xv); if (d < best) { best = d; i = q; } });
+    show(i, e.clientX, e.clientY);
+  });
+  hit.addEventListener("pointerleave", clear);
+  host.tabIndex = 0;
+  host.setAttribute("aria-label", (o.aria || "chart") + ". Use the left and right arrow keys to read values.");
+  host.onkeydown = e => {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft") { e.preventDefault(); show(idx < 0 ? xsAll.length - 1 : idx + (e.key === "ArrowRight" ? 1 : -1)); }
+    else if (e.key === "Escape") clear();
+  };
+  host.onblur = clear;
+  host.replaceChildren(svg);
+}
+
+// ------------------------------------------------------------------ horizontal bars from a baseline
+function barChart(host, o) {
+  const W = Math.max(280, host.clientWidth), row = 26, labW = Math.min(W * 0.42, measureText(o.rows.map(r => r.label)) + 12);
+  const Hh = o.rows.length * row + 30, m = { l: labW, r: 46, t: 4, b: 24 };
+  const lo0 = Math.min(o.base, ...o.rows.map(r => r.value)), hi0 = Math.max(o.base, ...o.rows.map(r => r.value)), pad = (hi0 - lo0) * 0.09;
+  const lo = lo0 < o.base ? lo0 - pad : lo0, hi = hi0 > o.base ? hi0 + pad : hi0;
+  const tk = ticks(lo0, hi0, 5), xlo = Math.min(lo, tk[0]), xhi = Math.max(hi, tk[tk.length - 1]);
+  const X = v => m.l + (v - xlo) / (xhi - xlo) * (W - m.l - m.r);
+  const svg = S("svg", { viewBox: `0 0 ${W} ${Hh}`, width: W, height: Hh, role: "img", "aria-label": o.aria || "" });
+  for (const v of tk) { S("line", { x1: X(v), x2: X(v), y1: m.t, y2: Hh - m.b, class: v === o.base ? "zero" : "grid" }, svg); S("text", { x: X(v), y: Hh - 6, "text-anchor": "middle", text: String(v) }, svg); }
+  o.rows.forEach((r, i) => {
+    const yc = m.t + i * row + row / 2, x0 = X(o.base), x1 = X(r.value), th = 14, dir = x1 >= x0 ? 1 : -1, len = Math.abs(x1 - x0);
+    S("text", { x: m.l - 10, y: yc + 4, "text-anchor": "end", class: "lab", text: r.label }, svg);
+    const rr = Math.min(4, len / 2), xa = x0, xb = x1;
+    const d = dir > 0
+      ? `M${xa},${yc - th / 2}H${xb - rr}Q${xb},${yc - th / 2} ${xb},${yc - th / 2 + rr}V${yc + th / 2 - rr}Q${xb},${yc + th / 2} ${xb - rr},${yc + th / 2}H${xa}Z`
+      : `M${xa},${yc - th / 2}H${xb + rr}Q${xb},${yc - th / 2} ${xb},${yc - th / 2 + rr}V${yc + th / 2 - rr}Q${xb},${yc + th / 2} ${xb + rr},${yc + th / 2}H${xa}Z`;
+    const bar = S("path", { d, class: "mark", tabindex: 0, css: { fill: r.color } }, svg);
+    S("text", { x: x1 + dir * 6, y: yc + 4, "text-anchor": dir > 0 ? "start" : "end", class: "val", text: o.fmt(r.value) }, svg);
+    const tipOn = (cx, cy) => showTip(cx, cy, r.label, [{ color: r.color, rect: true, value: o.fmt(r.value), label: r.note || "" }]);
+    bar.addEventListener("pointermove", e => tipOn(e.clientX, e.clientY));
+    bar.addEventListener("pointerleave", hideTip);
+    bar.addEventListener("focus", () => { const b = bar.getBoundingClientRect(); tipOn(b.right, b.top); });
+    bar.addEventListener("blur", hideTip);
+  });
+  host.replaceChildren(svg);
+}
+
+// ------------------------------------------------------------------ stacked horizontal bars (2px surface gaps)
+function stackChart(host, o) {
+  const W = Math.max(280, host.clientWidth), row = 28, labW = Math.min(W * 0.36, measureText(o.rows.map(r => r.label)) + 12);
+  const Hh = o.rows.length * row + 30, m = { l: labW, r: 40, t: 4, b: 24 };
+  const tot = r => r.values.reduce((a, b) => a + b, 0), hi = Math.max(...o.rows.map(tot));
+  const tk = ticks(0, hi, 5), xhi = Math.max(hi, tk[tk.length - 1]);
+  const X = v => m.l + v / xhi * (W - m.l - m.r);
+  const svg = S("svg", { viewBox: `0 0 ${W} ${Hh}`, width: W, height: Hh, role: "img", "aria-label": o.aria || "" });
+  for (const v of tk) { S("line", { x1: X(v), x2: X(v), y1: m.t, y2: Hh - m.b, class: v === 0 ? "axis" : "grid" }, svg); S("text", { x: X(v), y: Hh - 6, "text-anchor": "middle", text: String(v) }, svg); }
+  o.rows.forEach((r, i) => {
+    const yc = m.t + i * row + row / 2, th = 16;
+    S("text", { x: m.l - 10, y: yc + 4, "text-anchor": "end", class: "lab", text: r.label }, svg);
+    let acc = 0;
+    const last = r.values.reduce((li, v, k) => v > 0.02 ? k : li, -1);
+    r.values.forEach((v, k) => {
+      if (v <= 0.02) { acc += v; return; }
+      const xa = X(acc) + (acc > 0 ? 1 : 0), xb = X(acc + v) - (k === last ? 0 : 1), w = Math.max(0.5, xb - xa);
+      const rr = k === last ? Math.min(4, w / 2) : 0;
+      const d = rr ? `M${xa},${yc - th / 2}H${xa + w - rr}Q${xa + w},${yc - th / 2} ${xa + w},${yc - th / 2 + rr}V${yc + th / 2 - rr}Q${xa + w},${yc + th / 2} ${xa + w - rr},${yc + th / 2}H${xa}Z`
+                   : `M${xa},${yc - th / 2}h${w}v${th}h${-w}Z`;
+      const seg = S("path", { d, class: "mark", tabindex: 0, css: { fill: o.colors[k] } }, svg);
+      const tipOn = (cx, cy) => showTip(cx, cy, r.label, [{ color: o.colors[k], rect: true, value: num(v, 1), label: o.keys[k] + " per game" }]);
+      seg.addEventListener("pointermove", e => tipOn(e.clientX, e.clientY));
+      seg.addEventListener("pointerleave", hideTip);
+      seg.addEventListener("focus", () => { const b = seg.getBoundingClientRect(); tipOn(b.right, b.top); });
+      seg.addEventListener("blur", hideTip);
+      acc += v;
+    });
+    S("text", { x: X(acc) + 6, y: yc + 4, class: "val", text: num(acc, 1) }, svg);
+  });
+  host.replaceChildren(svg);
+}
+
+// ------------------------------------------------------------------ dumbbell (observed vs chance)
+function dumbbell(host, o) {
+  const W = Math.max(280, host.clientWidth), row = 26, labW = Math.min(W * 0.42, measureText(o.rows.map(r => r.label)) + 12);
+  const Hh = o.rows.length * row + 30, m = { l: labW, r: 16, t: 4, b: 24 };
+  const hi = Math.max(...o.rows.filter(r => !r.group).flatMap(r => [r.a, r.b])), tk = ticks(0, hi, 5), xhi = Math.max(hi, tk[tk.length - 1]);
+  const X = v => m.l + v / xhi * (W - m.l - m.r);
+  const svg = S("svg", { viewBox: `0 0 ${W} ${Hh}`, width: W, height: Hh, role: "img", "aria-label": o.aria || "" });
+  for (const v of tk) { S("line", { x1: X(v), x2: X(v), y1: m.t, y2: Hh - m.b, class: v === 0 ? "axis" : "grid" }, svg); S("text", { x: X(v), y: Hh - 6, "text-anchor": "middle", text: o.fmt(v) }, svg); }
+  o.rows.forEach((r, i) => {
+    const yc = m.t + i * row + row / 2;
+    if (r.group) { S("text", { x: 0, y: yc + 4, class: "lab", text: r.label, css: { "font-weight": "600", fill: "var(--ink)" } }, svg); return; }
+    S("text", { x: m.l - 10, y: yc + 4, "text-anchor": "end", class: "lab", text: r.label }, svg);
+    S("line", { x1: X(Math.min(r.a, r.b)), x2: X(Math.max(r.a, r.b)), y1: yc, y2: yc, css: { stroke: "var(--axis)", "stroke-width": "2" } }, svg);
+    S("circle", { cx: X(r.b), cy: yc, r: 4.5, css: { fill: "var(--surface)", stroke: "var(--muted)", "stroke-width": "2" } }, svg);
+    S("circle", { cx: X(r.a), cy: yc, r: 5, css: { fill: r.color || "var(--s1)", stroke: "var(--surface)", "stroke-width": "2" } }, svg);
+    const hit = S("rect", { x: m.l, y: yc - row / 2, width: W - m.l - m.r, height: row, class: "mark", tabindex: 0, css: { fill: "transparent" } }, svg);
+    const tipOn = (cx, cy) => showTip(cx, cy, r.label, [
+      { color: r.color || "var(--s1)", value: o.fmt(r.a), label: o.aLabel }, { color: "var(--muted)", value: o.fmt(r.b), label: o.bLabel },
+      ...(r.extra ? [{ value: r.extra, label: "" }] : [])]);
+    hit.addEventListener("pointermove", e => tipOn(e.clientX, e.clientY));
+    hit.addEventListener("pointerleave", hideTip);
+    hit.addEventListener("focus", () => { const b = hit.getBoundingClientRect(); tipOn(b.left + b.width / 2, b.top); });
+    hit.addEventListener("blur", hideTip);
+  });
+  host.replaceChildren(svg);
+}
+
+// ------------------------------------------------------------------ the figures
+const C = ["var(--s1)", "var(--s2)", "var(--s3)"];
+const METHOD = { "Linear": "var(--s1)", "DQN": "var(--s2)", "PPO": "var(--s3)", "Scripted bot": "var(--bot)" };
+const RAMP = ["var(--r1)", "var(--r2)", "var(--r3)", "var(--r4)", "var(--r5)"];
+const LENGTH_KEYS = ["1–2-train routes", "3-train routes", "4-train routes", "5-train routes", "6-train routes"];
+const series = (list, colors = C) => list.map((s, i) => ({ ...s, color: colors[i] }));
+const curveRange = (() => {
+  const all = ["linear", "dqn", "ppo"].flatMap(k => P.curves[k]).flatMap(s => (s.lo || s.y).concat(s.hi || s.y));
+  return [Math.max(-150, Math.floor(Math.min(...all) / 50) * 50), Math.ceil(Math.max(...all) / 10) * 10];
+})();
+
+const charts = {
+  "curves-linear": h => lineChart(h, { series: series(P.curves.linear), yDomain: curveRange, aria: "Linear learning curves against greedy" }),
+  "curves-dqn": h => lineChart(h, { series: series(P.curves.dqn), yDomain: curveRange, aria: "DQN learning curves against greedy" }),
+  "curves-ppo": h => lineChart(h, { series: series(P.curves.ppo), yDomain: curveRange, aria: "PPO learning curves against greedy" }),
+  "reward": h => lineChart(h, { series: series(P.curves.reward), height: 280, yDomain: [-150, 30], xTitle: "training games", aria: "PPO under three rewards" }),
+  "self-margin": h => lineChart(h, { series: series(P.curves.self_margin, ["var(--bot)", "var(--s1)"]), yDomain: [-80, 25], aria: "Self-play against pool, margin reward" }),
+  "self-score": h => lineChart(h, { series: series(P.curves.self_score, ["var(--bot)", "var(--s1)"]), yDomain: [-80, 25], aria: "Self-play against pool, score reward" }),
+  "elo": h => barChart(h, { rows: P.elo.filter(r => r.name !== "random").map(r => ({ label: r.label, value: r.elo, color: METHOD[r.method], note: r.method })), base: 1000, fmt: v => String(Math.round(v)), aria: "Round robin 6 ratings" }),
+  "anatomy": h => stackChart(h, { rows: P.anatomy.map(r => ({ label: r.label, values: r.bins })), keys: LENGTH_KEYS, colors: RAMP, aria: "Claims per game by route length" }),
+  "blocking": h => {
+    const rows = [];
+    for (const n of [2, 3, 4, 5]) {
+      const at = P.blocking.filter(r => r.players === n && r.bot === "greedy" && !r.reference);
+      if (!at.length) continue;
+      rows.push({ group: true, label: `${n} players` });
+      for (const r of at) rows.push({ label: `PPO, ${r.arm} reward`, a: r.blocks, b: r.chance, extra: `excess ${sgn(r.excess, 2)} ± ${num(r.excess_se, 2)} claims a game` });
+      const ref = P.blocking.filter(r => r.players === n && r.reference && r.bot === "greedy");
+      if (ref.length) {
+        const cl = ref.reduce((a, r) => a + r.games, 0);
+        const a = ref.reduce((s, r) => s + r.blocks * r.games, 0) / cl, b = ref.reduce((s, r) => s + r.chance * r.games, 0) / cl;
+        rows.push({ label: "greedy bots at those tables", a, b, color: "var(--bot)" });
+      }
+    }
+    dumbbell(h, { rows, aLabel: "observed", bLabel: "chance (same length)", fmt: v => pct(v, v < 0.1 && v > 0 ? 1 : 0), aria: "Blocking against chance" });
+  },
+  "size-margin": h => {
+    const arm = a => P.table_size.filter(r => r.arm === a);
+    lineChart(h, { series: [{ label: "margin reward", color: C[0], x: arm("margin").map(r => r.players), y: arm("margin").map(r => r.margin_greedy) },
+                            { label: "score reward", color: C[1], x: arm("score").map(r => r.players), y: arm("score").map(r => r.margin_greedy) }],
+                   xDomain: [1.8, 5.2], xTickValues: [2, 3, 4, 5], xFmt: v => v + "p", xFmtLong: v => v + " players", markers: true, yDomain: [0, 20], aria: "Margin against greedy by table size" });
+  },
+  "size-win": h => {
+    const arm = a => P.table_size.filter(r => r.arm === a);
+    lineChart(h, { series: [{ label: "margin reward", color: C[0], x: arm("margin").map(r => r.players), y: arm("margin").map(r => 100 * (r.win_greedy - r.baseline)) },
+                            { label: "score reward", color: C[1], x: arm("score").map(r => r.players), y: arm("score").map(r => 100 * (r.win_greedy - r.baseline)) }],
+                   xDomain: [1.8, 5.2], xTickValues: [2, 3, 4, 5], xFmt: v => v + "p", xFmtLong: v => v + " players", markers: true, yFmt: v => sgn(v, 0) + " pp", yDomain: [-5, 30], aria: "Win share above an even split by table size" });
+  },
+  "lone": h => {
+    const lone = (kind, other) => P.lone.filter(r => r.lone === kind && r.others === other).sort((a, b) => a.players - b.players);
+    const g = lone("greedy", "racer"), r = lone("racer", "greedy");
+    lineChart(h, { series: [{ label: "lone greedy among racers", color: C[0], x: g.map(d => d.players), y: g.map(d => 100 * (d.lone_win - d.baseline)) },
+                            { label: "lone racer among greedy bots", color: C[1], x: r.map(d => d.players), y: r.map(d => 100 * (d.lone_win - d.baseline)) }],
+                   xDomain: [1.8, 5.2], xTickValues: [2, 3, 4, 5], xFmt: v => v + "p", xFmtLong: v => v + " players", markers: true, yFmt: v => sgn(v, 0) + " pp", height: 250, aria: "Lone bot win share above an even split" });
+  },
+};
+
+const legends = {
+  "methods": [["Linear", METHOD.Linear, "rect"], ["DQN", METHOD.DQN, "rect"], ["PPO", METHOD.PPO, "rect"], ["Scripted bot", METHOD["Scripted bot"], "rect"]],
+  "lengths": LENGTH_KEYS.map((k, i) => [k, RAMP[i], "rect"]),
+  "reward": P.curves.reward.map((s, i) => [s.label, C[i]]),
+  "self": [["pool-trained (pass 4)", "var(--bot)"], ["self-play (pass 5)", "var(--s1)"]],
+  "arms": [["margin reward", C[0]], ["score reward", C[1]]],
+  "lone": [["lone greedy among racers", C[0]], ["lone racer among greedy bots", C[1]]],
+  "blocking": [["observed", "var(--s1)", "dot"], ["chance, same length", "var(--muted)", "ring"], ["greedy bots beside the learner", "var(--bot)", "dot"]],
+};
+for (const el of document.querySelectorAll("[data-legend]")) legend(el, legends[el.dataset.legend].map(([label, color, shape]) => ({ label, color, shape })));
+// the three method panels share one legend per panel
+for (const [key, list] of [["curves-linear", P.curves.linear], ["curves-dqn", P.curves.dqn], ["curves-ppo", P.curves.ppo], ["self-margin", null], ["self-score", null]]) {
+  if (!list) continue;
+  const host = document.querySelector(`[data-chart="${key}"]`), lg = H("div", "legend");
+  legend(lg, list.map((s, i) => ({ label: s.label, color: C[i] })));
+  host.before(lg);
+}
+
+// ------------------------------------------------------------------ tables
+const OPP = ["greedy", "wary", "racer", "collector"];
+const tables = {
+  "linear": h => table(h, [
+    { label: "Setting", get: r => r.label },
+    { label: "Final", get: r => sgn(r.final_greedy), neg: true }, { label: "win", get: r => pct(r.final_greedy_win) },
+    { label: "Best", get: r => sgn(r.best_greedy), neg: true }, { label: "win", get: r => pct(r.best_greedy_win) },
+    { label: "Final, per seed", get: r => (r.final_seeds || []).map(v => sgn(v, 0)).join(", ") }], P.linear_rows),
+  "dqn": h => table(h, [{ label: "Setting", get: r => r.label },
+    ...OPP.map(o => ({ label: "vs " + o, get: r => r["final_" + o] != null ? sgn(r["final_" + o]) + (r["best_" + o] != null ? " / " + sgn(r["best_" + o]) : "") : "–" })),
+    { label: "win vs greedy", get: r => pct(r.final_greedy_win) }], P.dqn_rows),
+  "ppo": h => table(h, [{ label: "Setting", get: r => r.label + (r.training_evals ? " †" : "") },
+    ...OPP.map(o => ({ label: "vs " + o, get: r => r["final_" + o] != null ? sgn(r["final_" + o]) : "–", neg: true })),
+    { label: "win vs greedy", get: r => pct(r.final_greedy_win) }, { label: "win vs racer", get: r => pct(r.final_racer_win) },
+    { label: "per seed vs greedy", get: r => (r.final_seeds || []).map(v => sgn(v, 0)).join(", ") }], P.ppo_rows),
+  "anatomy": h => table(h, [{ label: "Agent", get: r => r.label },
+    { label: "Margin", get: r => sgn(r.margin), neg: true }, { label: "Route points", get: r => num(r.route_points, 1) },
+    { label: "Ticket points", get: r => sgn(r.ticket_points), neg: true }, { label: "Tickets kept / done", get: r => num(r.tickets_kept, 1) + " / " + num(r.tickets_completed, 2) },
+    { label: "Claims", get: r => num(r.claims, 1) }, { label: "6-routes", get: r => num(r.bins[4], 1) },
+    { label: "Own turns", get: r => num(r.own_turns, 1) }, { label: "Ends game", get: r => pct(r.triggered_end) }, { label: "Longest bonus", get: r => pct(r.longest_bonus) }], P.anatomy),
+  "gap": h => table(h, [{ label: "Agent vs opponent", get: r => `${r.agent} vs ${r.opponent}` },
+    { label: "Median trains short", get: r => num(r.kept_median_trains, 0) }, { label: "Within 3", get: r => pct(r.kept_within_3, 1) },
+    { label: "Within 6", get: r => pct(r.kept_within_6, 0) }, { label: "Ticket points as kept", get: r => sgn(r.ticket_points_kept) },
+    { label: "Closest two, hindsight", get: r => sgn(r.ticket_points_best_two) }], P.gap),
+  "blocking": h => table(h, [{ label: "Players · seat", get: r => `${r.players}p · ${r.reference ? r.arm : "PPO " + r.arm} vs ${r.bot}` },
+    { label: "Claims", get: r => num(r.claims, 1) }, { label: "Observed", get: r => pct(r.blocks, 1) }, { label: "Chance, same length", get: r => pct(r.chance, 1) },
+    { label: "Chance, any legal", get: r => pct(r.uniform, 1) }, { label: "Excess / game", get: r => sgn(r.excess, 2) + " ± " + num(r.excess_se, 2) }], P.blocking),
+  "tablesize": h => table(h, [{ label: "Players · reward", get: r => `${r.players} · ${r.arm}` },
+    { label: "vs greedy", get: r => sgn(r.margin_greedy) }, { label: "win", get: r => pct(r.win_greedy) }, { label: "even split", get: r => pct(r.baseline) },
+    { label: "vs racer", get: r => sgn(r.margin_racer) }, { label: "win", get: r => pct(r.win_racer) },
+    { label: "Route points", get: r => num(r.route_points, 1) }, { label: "Claim length", get: r => num(r.claim_length, 2) }, { label: "Tickets done", get: r => num(r.tickets_completed, 2) }], P.table_size),
+  "scripted": h => table(h, [{ label: "Table", get: r => r.agents.join(" + ") },
+    { label: "Players", get: r => String(r.players) },
+    { label: "Win share by kind", get: r => Object.entries(r.by_kind).map(([k, v]) => `${k} ${pct(v.win)}`).join(" · ") },
+    { label: "Points by kind", get: r => Object.entries(r.by_kind).map(([k, v]) => `${k} ${num(v.score, 1)}`).join(" · ") },
+    { label: "Tickets done", get: r => Object.entries(r.by_kind).map(([k, v]) => `${k} ${num(v.tickets_completed, 2)}`).join(" · ") }], P.scripted),
+  "rr": h => table(h, [{ label: "Round robin", get: r => r.file.replace("round_robin_", "") },
+    { label: "Agents", get: r => String(r.n) },
+    { label: "Top four (rating)", cls: "l lines", get: r => r.top.map(([n, e]) => `${n}  ${e}`).join("\n") }], P.rr_history),
+};
+for (const el of document.querySelectorAll("[data-table]")) tables[el.dataset.table](el);
+
+// tiles: the ticket gap
+(() => {
+  const host = document.querySelector('[data-tiles="gap"]');
+  const r = P.gap.find(g => g.agent === "PPO margin" && g.opponent === "racer");
+  if (!host || !r) return;
+  for (const [label, value, detail] of [
+    ["Median trains still needed", num(r.kept_median_trains, 0), "per kept ticket, at the end of the game"],
+    ["Kept tickets within 3 trains", pct(r.kept_within_3, 0), `${pct(r.kept_within_6, 0)} within 6`],
+    ["Ticket points, as kept", sgn(r.ticket_points_kept, 1), `closest two in hindsight: ${sgn(r.ticket_points_best_two, 1)}`]]) {
+    const t = H("div", "tile"); t.append(H("p", "label", label), H("div", "value", value), H("p", "detail", detail)); host.append(t);
+  }
+})();
+
+// render charts at their real width, again on resize
+const render = () => { for (const el of document.querySelectorAll("[data-chart]")) { try { charts[el.dataset.chart](el); } catch (e) { el.textContent = "Chart unavailable: " + e.message; } } };
+render();
+let last = 0, timer = 0;
+new ResizeObserver(() => { const w = document.querySelector("main").clientWidth; if (Math.abs(w - last) < 2) return; last = w; clearTimeout(timer); timer = setTimeout(render, 120); }).observe(document.querySelector("main"));
+document.fonts && document.fonts.ready.then(render);
+
+// contents: built from the headings, with the current section marked
+const heads = [...document.querySelectorAll("main h2[id], main h3[id]")].filter(h => h.closest(".abstract") === null);
+for (const nav of document.querySelectorAll("nav.toc")) {
+  const ol = H("ol");
+  for (const hd of heads) {
+    const li = H("li", hd.tagName === "H3" ? "sub" : ""), a = H("a");
+    a.href = "#" + hd.id; a.textContent = hd.textContent.replace(/interim$/i, "").trim(); li.append(a); ol.append(li);
+  }
+  nav.append(ol);
+}
+const links = [...document.querySelectorAll("nav.toc.rail a")];
+const io = new IntersectionObserver(entries => {
+  for (const e of entries) if (e.isIntersecting) {
+    links.forEach(a => a.classList.toggle("active", a.getAttribute("href") === "#" + e.target.id));
+  }
+}, { rootMargin: "0px 0px -70% 0px" });
+heads.forEach(h => io.observe(h));
+})();
+</script>
