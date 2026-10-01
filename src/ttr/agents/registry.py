@@ -11,6 +11,8 @@
     dqn:PATH@best              the same run's best checkpoint
     ppo:PATH                   a trained PPO run's final policy, most likely move (ttr.learn.ppo; `[deep]` extra)
     ppo:PATH@best              the same run's best checkpoint
+    mcts                       MCTSAgent: search with determinization, no training (ttr.agents.mcts)
+    mcts:OPTIONS               the same with options, e.g. mcts:iterations=800,rollout=racer
 
 `make_agent(spec, seed)` builds one; `agent_spec` validates a spec for argparse.
 Weight files are read once per path and shared.
@@ -27,7 +29,8 @@ from ttr.agents.greedy import CollectorAgent, GreedyAgent, WaryAgent
 from ttr.agents.racer import RacerAgent
 from ttr.agents.random_agent import RandomAgent
 
-KINDS = ("random", "greedy", "wary", "racer", "collector", "linear:PATH", "linear:PATH@best", "dqn:PATH", "dqn:PATH@best", "ppo:PATH", "ppo:PATH@best")
+KINDS = ("random", "greedy", "wary", "racer", "collector", "linear:PATH", "linear:PATH@best", "dqn:PATH", "dqn:PATH@best", "ppo:PATH", "ppo:PATH@best", "mcts",
+         "mcts:OPTIONS")
 _linear_weights: Dict[str, dict] = {}
 _dqn_nets: Dict[str, Tuple[object, dict]] = {}  # spec argument -> (network, its observation settings)
 _ppo_nets: Dict[str, Tuple[object, dict]] = {}
@@ -45,6 +48,10 @@ def make_agent(spec: str, seed: int) -> Agent:
         return RacerAgent(seed)
     if kind == "collector" and not arg:
         return CollectorAgent(seed)
+    if kind == "mcts":
+        from ttr.agents.mcts import MCTSAgent
+
+        return MCTSAgent.from_spec(arg, seed, name=spec)
     if kind == "linear" and arg:
         from ttr.learn.linear import LinearAgent
 

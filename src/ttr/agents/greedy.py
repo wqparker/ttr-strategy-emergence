@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import heapq
 import random
-import weakref
 from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Set, Tuple
 
@@ -59,21 +58,37 @@ def _adjacency(board: Board) -> Dict[str, List[Route]]:
     return hit[1]
 
 
-# game -> (route ownership it was computed for, {(p, a, b): (cost, path)}). A path
-# depends only on who owns which route, so an answer holds until the next claim;
-# bots, linear features and the observation ask the same questions many times a turn.
-_PATHS: "weakref.WeakKeyDictionary[Game, Tuple[tuple, Dict[Tuple[int, str, str], Tuple[float, List[int]]]]]" = (
-    weakref.WeakKeyDictionary())
+# (board, player count, route ownership) -> (board, {(p, a, b): (cost, path)}). A path
+# depends only on those, so an answer holds for every game in that position until the
+# next claim: bots, linear features and the observation ask the same questions many
+# times a turn, and MCTS's sampled worlds (ttr.agents.mcts) share their positions.
+# The least recently used positions are dropped past _PATHS_KEPT.
+_PATHS: Dict[tuple, Tuple[Board, Dict[Tuple[int, str, str], Tuple[float, List[int]]]]] = {}
+_PATHS_KEPT = 4096
+# (board, routes, tickets) -> (board, the tickets those routes don't connect yet).
+_OPEN: Dict[tuple, Tuple[Board, List[Ticket]]] = {}
+_OPEN_KEPT = 4096
+
+
+def _remembered(cache: Dict[tuple, tuple], key: tuple, board: Board, kept: int):
+    """`cache`'s entry for `key` as the most recently used, or None."""
+    hit = cache.pop(key, None)
+    if hit is not None and hit[0] is board:
+        cache[key] = hit
+        return hit
+    if len(cache) >= kept:
+        del cache[next(iter(cache))]
+    return None
 
 
 def cheapest_path(game: Game, p: int, a: str, b: str) -> Tuple[float, List[int]]:
     """Dijkstra from a to b. Own routes cost 0, open routes cost their length,
     anything else is impassable. Returns (cost, unclaimed route ids on the path),
     remembered until the route ownership changes."""
-    owners = tuple(game.route_owner.items())
-    hit = _PATHS.get(game)
-    if hit is None or hit[0] != owners:
-        hit = _PATHS[game] = (owners, {})
+    key = (id(game.board), game.num_players, tuple(game.route_owner.items()))
+    hit = _remembered(_PATHS, key, game.board, _PATHS_KEPT)
+    if hit is None:
+        hit = _PATHS[key] = (game.board, {})
     memo = hit[1]
     found = memo.get((p, a, b))
     if found is None:
@@ -152,12 +167,14 @@ class GreedyAgent:
     # ------------------------------------------------------------ planning
 
     def _open_tickets(self, game: Game, p: int) -> List[Ticket]:
-        mine = [game.board.routes[r] for r in game.players[p].routes]
-        return [
-            t
-            for t in (game.board.tickets[i] for i in game.players[p].tickets)
-            if not connected(mine, t.a, t.b)
-        ]
+        board, player = game.board, game.players[p]
+        key = (id(board), tuple(player.routes), tuple(player.tickets))
+        hit = _remembered(_OPEN, key, board, _OPEN_KEPT)
+        if hit is None:
+            mine = [board.routes[r] for r in player.routes]
+            hit = _OPEN[key] = (board, [t for t in (board.tickets[i] for i in player.tickets)
+                                        if not connected(mine, t.a, t.b)])
+        return list(hit[1])
 
     def _alert(self, game: Game, p: int) -> bool:
         """The end is near: an opponent is down to `alert_trains`, or the final round is on."""

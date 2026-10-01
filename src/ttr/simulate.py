@@ -44,6 +44,18 @@ def seating(num_agents: int, seed: int, game: int = 0) -> List[int]:
     return slots
 
 
+def match_game(
+    agent_names: Sequence[str], board: Board, seed: int, g: int, max_turns: Optional[int] = 1000,
+):
+    """Game `g` of batch `seed`, as `run_matches` plays it: the agents dealt into random
+    seats, each built with its own seed, and a random first seat (drawn from the game's
+    seed). Returns (game, agents by seat, agent slot by seat)."""
+    slot_of = seating(len(agent_names), seed, g)
+    agents_by_seat = [make_agent(agent_names[slot], seed * 1000 + g * 10 + slot) for slot in slot_of]
+    game = Game(board, num_players=len(agent_names), seed=seed * 100000 + g, max_turns=max_turns)
+    return game, agents_by_seat, slot_of
+
+
 def play_game(
     game: Game,
     agents: Sequence[Agent],
@@ -103,13 +115,10 @@ def run_matches(
     turns: List[int] = []
     truncated = 0
     for g in range(games):
-        # Random seats and a random first seat (drawn from the game's seed).
-        slot_of = seating(n, seed, g)  # agent slot by seat
+        game, agents_by_seat, slot_of = match_game(agent_names, board, seed, g, max_turns)
         seat_of = [slot_of.index(slot) for slot in range(n)]
-        agents_by_seat = [make_agent(agent_names[slot], seed * 1000 + g * 10 + slot) for slot in slot_of]
         names_by_seat = [agent_names[slot] for slot in slot_of]
         game_seed = seed * 100000 + g
-        game = Game(board, num_players=n, seed=game_seed, max_turns=max_turns)
         actions: List[Action] = []
         result = play_game(game, agents_by_seat, actions_out=actions if record_dir else None)
         _save_record(
@@ -194,7 +203,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--agents", nargs="+", default=["greedy", "random"], type=agent_spec,
                         help="random, greedy, wary, racer, collector, linear:PATH, dqn:PATH or ppo:PATH (trained runs; append @best for the "
-                             "best checkpoint)")
+                             "best checkpoint), or mcts[:OPTIONS] (tree search, ttr.agents.mcts)")
     parser.add_argument("--games", type=int, default=100)
     parser.add_argument("--board", default="usa")
     parser.add_argument(

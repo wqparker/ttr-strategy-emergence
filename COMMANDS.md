@@ -22,7 +22,7 @@ ttr-view [--record FILE] [--agents NAME ...] [--human SEAT]
 | Flag | Default | Meaning |
 | --- | --- | --- |
 | `--record FILE` | — | replay a saved game instead of playing one live |
-| `--agents NAME ...` | `greedy random` | one per seat, 2–5 of `greedy`, `wary`, `racer`, `collector`, `random`, `linear:PATH`, `dqn:PATH` (see ttr-sim) |
+| `--agents NAME ...` | `greedy random` | one per seat, 2–5 of `greedy`, `wary`, `racer`, `collector`, `random`, `linear:PATH`, `dqn:PATH`, `ppo:PATH`, `mcts[:OPTIONS]` (see ttr-sim) |
 | `--human SEAT` | — | play that seat yourself (live games only) |
 | `--perspective` | `all` | `all` sees every hand; a seat sees only its own |
 | `--memory-level` | `2` | what a seat's view knows: 0 none, 1 seen cards, 2 + unseen pool |
@@ -154,8 +154,9 @@ ttr-sim [--agents AGENT ...] [--games N] [--seed N]
 | `ttr-sim --games 20 --record runs/records` | save replayable games |
 | `ttr-sim --agents linear:runs/linear/q_greedy.json greedy --games 200` | a trained agent vs greedy |
 
-An agent is `random`, `greedy`, `linear:PATH` (trained linear Q / SARSA weights, needs the
-`[env]` extra) or `linear:PATH@best` (that run's best checkpoint). `ttr-view --agents` takes the same names.
+An agent is a scripted bot (`random`, `greedy`, `wary`, `racer`, `collector`), a trained run (`linear:PATH`,
+`dqn:PATH`, `ppo:PATH`, each with `@best` for that run's best checkpoint; see Training), or `mcts[:OPTIONS]`
+(tree search, see MCTS). `ttr-view --agents` takes the same names.
 
 Each game deals the agents into random seats and starts at a random seat, so every order of play comes up and first-player advantage averages out. The seed is printed at the
 start of every run; `--seed N` replays that batch exactly. A record is a seed plus a list of
@@ -273,6 +274,34 @@ ttr-sim --agents ppo:runs/ppo/pool_s0.json@best racer
 
 `RUN.json` adds `updates` (per update: policy and value loss, entropy, approximate KL, clip fraction). In the
 per-game rows `epsilon` is 0 and `mean_abs_td` is the value error \|G − V(s)\|, the PPO analog of the TD error.
+
+### MCTS
+
+Tree search with determinization (`ttr.agents.mcts`, tier D): no training, a search at every decision. An
+agent spec like the bots: `mcts` with the defaults, or `mcts:OPTIONS` with comma-separated `key=value`.
+
+```text
+ttr-sim --agents mcts greedy --games 2
+python scripts/eval_agents.py mcts "mcts:reward=score" "mcts:iterations=1600" \
+    --opponents greedy racer --games 100 --out runs/mcts/NAME
+```
+
+| Option | Default | |
+| --- | --- | --- |
+| `iterations` | `400` | iterations per decision (about 7 ms each mid-game; forced moves take none) |
+| `c` | `0.5` | exploration constant, on the reward's scale (margin / 100) |
+| `prior` | `0.5` | PUCT, with that share of the prior on the rollout policy's move. 0: UCB1 over every legal move (loses to greedy) |
+| `steps` | `main` | search only a turn's main action and ticket choices; second draws and payments are the rollout policy's. `all`: every decision |
+| `rollout` / `opponent` | `greedy` / `greedy` | scripted bots playing the searcher's seat below the tree, and modelling the opponents |
+| `reward` | `margin` | `margin`, `score` or `win` |
+| `memory` | `2` | card memory level for dealing the opponents' hands (0 forgets the cards they took face up) |
+| `known_tickets` | `0` | `1` keeps the opponents' true tickets (cheating; a diagnostic) |
+
+`scripts/eval_agents.py` plays each agent against each opponent on `run_matches`' games (batch seed 9001, as
+`rescore.py`), in chunks of `--chunk` games over `--workers` processes. Rows go to `OUT.csv` as chunks finish
+(rerun the same command to resume or add `--games`); `OUT.txt` gets the summary: margin ± standard error, win
+share, tickets, claims, minutes a game and seconds a search. Any agent spec works, so bots give references on
+the same games.
 
 ### Round robin
 

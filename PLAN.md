@@ -70,7 +70,7 @@ for 2 players).
 
 ## Current progress
 
-*Updated at the end of each session. Last updated: 2026-09-30.*
+*Updated at the end of each session. Last updated: 2026-10-01.*
 
 - **Earlier: engine ready, and every RL design question settled.**
   - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view,
@@ -915,6 +915,34 @@ for 2 players).
     `measure.py` → `measured.json` (the behavior instrumentation, moved out of scratch scripts:
     anatomy, blocking against chance and cross-play, the ticket gap, scripted tables),
     `build.py` + `template.html` → `paper.html`; text values are bound to the data.
+  - Decided (2026-10-01): tier D (MCTS) next, before the remaining PPO options.
+  - Done: tier D, MCTS with determinization (`src/ttr/agents/mcts.py`, `mcts[:OPTIONS]` in the
+    registry, so every match runner plays it; design in "Methods to compare"). No training: a
+    search of 400 iterations at each decision, 3–5 min a 2-player game. `scripts/eval_agents.py`
+    plays slow agents on the re-score games (batch seed 9001) in chunks over 12 processes,
+    resumable. Greedy's path and open-ticket answers are now cached by board position, which
+    the search's sampled worlds share (bot play unchanged: same hash over 300 games at 2–5
+    players).
+    - Tuning against greedy (`runs/mcts/tune1.*`, 10–12 games each, 400 iterations, greedy
+      rollouts and opponent model; margin ± standard error):
+
+      | Search | Reward | vs greedy | Win | Tickets kept / done | Ticket draws | Score |
+      | --- | --- | --- | --- | --- | --- | --- |
+      | UCB1, every sub-step | margin | −40 ± 13 | 25% | 2.1 / 1.2 | 0.0 | 70 to 110 |
+      | UCB1, every sub-step | score | −44 ± 13 | 10% | 2.3 / 1.8 | 0.3 | 81 to 125 |
+      | PUCT, greedy's move as prior, main steps | margin | +17 ± 8 | 75% | 3.4 / 3.3 | 0.8 | 113 to 97 |
+      | PUCT, greedy's move as prior, main steps | score | **+34 ± 8** | 83% | 5.5 / 5.5 | 2.4 | 140 to 106 |
+
+    - Readings (small samples): plain UCB1 drifts (see the design notes: rollout noise of 30+
+      points against move differences of a few) and loses by 40. With greedy's move as the
+      prior the search improves on greedy, and under own score by a lot. **It is the first
+      agent in the project that wins by tickets**: it keeps 5.5 and completes all of them
+      (draws tickets 2.4 times a game), scores 140, and still ends the game itself 75% of the
+      time. Against racer (`runs/mcts/tune2.*`, 4 games each): margin −6, score +30. Prior and
+      `steps=main` were changed together; which one matters is untested.
+    - MCTS pass 1 running (`scripts/mcts_pass1.ps1`, `runs/mcts/pass1.*`, started 14:39, ~5 h):
+      the default search under margin and own score, 100 games against greedy, racer, wary,
+      collector, the reference PPO agent `p2b_pool_s3` and the best linear agent `p7b…s3@best`.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -927,7 +955,11 @@ for 2 players).
       scratch against this pool. Either warm-start it from a trained margin policy (needs an
       `--init` option in `ttr-train-ppo`) or train it in self-play only, where every game
       carries signal.
-    - MCTS (tier D), a non-learning contrast with no credit-assignment problem for tickets.
+    - MCTS (tier D): built; pass 1 running (above). Follow-ups once it reports: which of the
+      prior and `steps=main` makes the difference; racer rollouts (does the search still find
+      tickets when its own continuation races?); more iterations; `known_tickets=1` (what
+      inferring the opponent's tickets would be worth, and whether it then blocks); 3–5
+      players; behavior instrumentation (`docs/paper/measure.py`) and a round robin entry.
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
@@ -1222,6 +1254,40 @@ not just to find the strongest one. Each tier teaches something different:
   exploration); evaluations and `ppo:PATH` take its most likely move. `--players N` trains
   at 3–5 players: every opponent seat drawn on its own, evaluations against N − 1 copies of
   the evaluation opponent.
+- **Tier D design (`src/ttr/agents/mcts.py`, `mcts[:OPTIONS]` in the registry).** No training:
+  each decision is a fresh search of `--iterations` (400) iterations, played by any match runner
+  like a bot. Information Set MCTS with a single observer (Cowling, Powley & Whitehouse 2012):
+  - **Determinization.** Each iteration deals what the seat can't see afresh, consistent with
+    what it can (RULES.md §9 #17): the opponents' cards outside its Level 2 card memory and the
+    draw deck from the unseen pool, the opponents' tickets (held and on offer) and the ticket
+    deck from the tickets it doesn't hold, a fresh random state for reshuffles. Only public
+    information and its own cards and tickets are read, in a fixed order, so two games that
+    differ only in hidden information give the same search (tested). Opponents' tickets are
+    sampled uniformly: guessing them from their claims is inference left to the agent (see
+    "Card memory"), not done yet. `known_tickets=1` keeps the true ones, a diagnostic upper
+    bound on what that inference could be worth.
+  - **The tree holds only the searcher's decisions.** A node is a sequence of its own actions,
+    shared by every sampled world in which they were legal (availability counts). Opponents'
+    moves are chance: an opponent model (a scripted bot, `opponent`, default greedy) plays the
+    sampled hand and tickets. A tree over opponents' moves too (max^n) would get a few visits
+    per node at this budget, so their first moves would be near random.
+  - **Rollouts** play the searcher's seat with a scripted bot (`rollout`, default greedy) to the
+    end of the game; the value is the final reward of `ttr.env.reward` (`reward`, margin by
+    default, / 100). Ticket offers drawn inside the search differ between worlds, so the
+    rollout policy chooses from them; only an offer already in hand (the root) is searched.
+  - **Selection: PUCT with the rollout policy's move as the prior** (`prior` 0.5: half the
+    prior probability on the policy's move, the rest shared evenly; `c` 0.5), and only the main
+    action of a turn and ticket choices are searched (`steps=main`; second draws and payments
+    are the policy's). Plain UCB1 over every sub-step (`prior=0 steps=all`) was tried first and
+    lost to greedy by about 40 points a game: a rollout's final margin has a standard deviation
+    of 31-36 points (13-20 for own score), while most moves differ by 0-6, so 400 iterations
+    spread over ~30 root actions pick nearly at random and the plan falls apart. Pairing
+    rollouts on the same sampled world doesn't help (correlation 0.3-0.6). With the prior,
+    the search keeps the policy's move unless another does clearly better.
+  - Cost: about 7 ms an iteration (a greedy rollout from mid-game), so 400 iterations is ~3 s
+    a decision and a 2-player game 3-5 min; `scripts/eval_agents.py` spreads games over
+    processes. Greedy's path and open-ticket answers are cached by position (not by game
+    object), so the sampled worlds share them; bot play is unchanged (hash of 300 games).
 - **Why linear rather than tabular for tier A:** tabular methods are only feasible on a
   tiny map, and there is none. Linear features keep the same update rules and the same
   Q-learning vs. SARSA comparison on the full map.
