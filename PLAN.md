@@ -849,15 +849,23 @@ for 2 players).
     - `scripts/run_queue.ps1` (58 lines): the run queue each of the 13 launchers carried a copy
       of (351 lines gone). `-DryRun` prints a launcher's command lines; every launcher was
       checked against its old ones.
+  - PPO pass 5 (`scripts/ppo_pass5.ps1`, `runs/ppo/pass5/`, launched 2026-09-30, estimated 4–5 h):
+    the two settings left after pass 4. 5 players against the pool (the nine 6-routes shared
+    five ways), and 4 players in self-play only (`--pool self`: every opponent seat a frozen copy
+    of the learner, the best network or one of the 5 latest evaluated, greedy until the first
+    evaluation), which removes the pool's racing bias. Margin and score rewards each, 3 seeds,
+    50000 games, pass 4's setting otherwise, evaluated against the bots as in pass 4. Smoke
+    timing: a 5-player game costs about 1.1× a 4-player one against the pool, self-play about
+    1.6× (three networks choose moves instead of bots).
 - **Next:**
   - Every method, every reward that learned and every player count tried (2–4) converges on
     racing (PPO adding the connected network); tickets and blocking never appeared, and the
     scripted bots agree that ticket planning doesn't beat racing on this map (at 4 players it
     is competitive, not better). Racing is the finding for the tempo question; pass 3 shows it
     isn't an artifact of the margin reward (only the denial part is). Options:
-    - 5 players, the table size left: the nine 6-routes shared five ways.
-    - 4 players in self-play only: the pool is 5 of 8 racers (tables of learners only still
-      race, but they were trained against the pool).
+    - Analyze PPO pass 5 (running): 5 players, and 4 players in self-play only. Re-score with
+      `rescore.py`; the behavior instrumentation (blocking against chance, tempo, the 6-route
+      race) is still in scratch scripts, so moving it into the repo first would help.
     - MCTS (tier D), a non-learning contrast with no credit-assignment problem for tickets.
     - Phase 6: write up racing across methods, rewards and player counts, and move the behavior
       instrumentation (blocking against chance, tempo, the 6-route race, the ticket gap) from
