@@ -4,12 +4,14 @@ import pytest
 
 pygame = pytest.importorskip("pygame")
 
+from ttr.game import GameResult, PlayerResult  # noqa: E402
 from ttr.viz import panels  # noqa: E402
 from ttr.viz.perspective import Perspective  # noqa: E402
 
 from helpers import started_game  # noqa: E402
 
 SENTINEL = (255, 0, 255)
+LONG_NAMES = ["ppo:runs/ppo/pass2/p2b_pool_s3.json", "dqn:runs/dqn/" + "d" * 90 + ".json@best"]
 
 
 def seat_with_long_tickets(count):
@@ -39,6 +41,50 @@ def test_side_panel_fits_full_names(k):
     rect = pygame.Rect(round(10 * k), round(10 * k), round(190 * k), round(380 * k))  # SIDE_W - gaps
     panels.draw_seat(surface, rect, facts, k=k)
     assert not drawn_outside(surface, rect)
+
+
+@pytest.mark.parametrize("k", [0.6, 1.0])
+def test_side_panel_fits_a_long_agent_name(k):
+    facts = Perspective().view(started_game(), names=LONG_NAMES).seats[1]
+    surface = pygame.Surface((round(260 * k), round(420 * k)))
+    surface.fill(SENTINEL)
+    rect = pygame.Rect(round(10 * k), round(10 * k), round(190 * k), round(380 * k))
+    panels.draw_seat(surface, rect, facts, k=k)
+    assert not drawn_outside(surface, rect)
+
+
+@pytest.mark.parametrize("spec,shown", [
+    ("ppo:runs/ppo/pass2/p2b_pool_s3.json", "ppo:p2b_pool_s3"),
+    ("linear:runs\\linear\\pass7\\p7b_sarsa_lam98_random_s3.json@best", "linear:p7b_sarsa_lam98_random_s3@best"),
+    ("greedy", "greedy"),
+    ("human", "human"),
+])
+def test_short_name_keeps_the_run_name(spec, shown):
+    assert panels.short_name(spec) == shown
+
+
+@pytest.mark.parametrize("k", [0.6, 1.0])
+def test_scoreboard_names_stay_clear_of_the_score_columns(monkeypatch, k):
+    drawn = []
+    real = panels.text
+
+    def spy(s, body, pos, size, color=panels.theme.PANEL_TEXT, bold=False, right=False):
+        drawn.append((body, pos[0], size, bold))
+        return real(s, body, pos, size, color, bold, right)
+
+    monkeypatch.setattr(panels, "text", spy)
+    players = [PlayerResult(54, 52, 5, 0, 27, True, 116), PlayerResult(98, -21, 0, 2, 18, False, 77),
+               PlayerResult(60, -4, 1, 1, 9, False, 56)]
+    surface = pygame.Surface((round(1100 * k), round(700 * k)))
+    panels.draw_result(surface, surface.get_rect(), GameResult(players, [0], False), ["human"] + LONG_NAMES, k=k)
+
+    first = next(x for body, x, _, _ in drawn if body == "ROUTES")
+    rows = drawn[drawn.index(next(d for d in drawn if d[0] == "TOTAL")) + 1:]  # after the title and headers
+    labels = [(body, x, size, bold) for body, x, size, bold in rows if body[:1] == "P" and body[1:2].isdigit()]
+    assert [body for body, *_ in labels[:2]] == ["P0 human", "P1 ppo:p2b_pool_s3"]
+    assert labels[2][0].startswith("P2 dqn:ddd") and labels[2][0].endswith("…")
+    for body, x, size, bold in labels:
+        assert x + panels._text_w(body, size, bold) < first
 
 
 @pytest.mark.parametrize("count", [3, 9, 16])

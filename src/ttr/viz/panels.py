@@ -298,10 +298,12 @@ def draw_seat(
     pygame.draw.rect(s, accent, swatch, border_radius=radius)
     # A light rim: the black seat's swatch would vanish into the panel otherwise.
     pygame.draw.rect(s, theme.PANEL_DIM, swatch, max(1, round(k)), border_radius=radius)
-    name = f"P{facts.seat}" + (f" {facts.name}" if facts.name else "")
+    name = f"P{facts.seat}" + (f" {short_name(facts.name)}" if facts.name else "")
     if facts.is_viewer:
         name += " (you)"
-    text(s, name, (x + 16 * k, y), 13 * k, theme.PANEL_TEXT, bold=True)
+    room = rect.right - pad - (x + 16 * k) - _text_w("TO ACT", 10 * k, bold=True) - 8 * k
+    label, size = fit_label(name, room, 13 * k, k, bold=True)
+    text(s, label, (x + 16 * k, y + (13 * k - size) * 0.7), size, theme.PANEL_TEXT, bold=True)
     if facts.to_act:
         text(s, "TO ACT", (rect.right - pad, y + 1 * k), 10 * k, theme.HIGHLIGHT, bold=True, right=True)
     y += 20 * k
@@ -550,14 +552,38 @@ def completion_pct(completed: int, held: int) -> str:
     return f"{100 * completed / held:.0f}%" if held else "–"
 
 
+def short_name(spec: str) -> str:
+    """An agent spec as a seat label: a run file shortened to its name
+    ("ppo:runs/ppo/pass2/p2b_pool_s3.json@best" -> "ppo:p2b_pool_s3@best")."""
+    kind, sep, arg = spec.partition(":")
+    if not sep:
+        return spec
+    best = arg.endswith("@best")
+    stem = arg.removesuffix("@best").replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".json")
+    return f"{kind}:{stem}" + ("@best" if best else "")
+
+
+RESULT_NAME_W = (81, 220)  # the scoreboard's name column, narrowest and widest, at scale 1
+
+
+def result_name_w(labels: Sequence[str], k: float = 1.0) -> float:
+    """Width of the scoreboard's name column: its longest label plus a gap,
+    within RESULT_NAME_W (longer labels are fitted to it)."""
+    widest = max((_text_w(label, 12 * k, bold=True) for label in labels), default=0.0)
+    return min(RESULT_NAME_W[1] * k, max(RESULT_NAME_W[0] * k, widest + 10 * k))
+
+
 def draw_result(s: pygame.Surface, area: pygame.Rect, result, names=None, k: float = 1.0,
                 colors: Optional[Sequence[theme.RGB]] = None) -> None:
     """The final scoreboard, over the board: winner first, then every seat's
     points. The columns follow render.render_result in the terminal, except that
-    tickets completed show as a share of the tickets held, not done/failed."""
+    tickets completed show as a share of the tickets held, not done/failed. The
+    name column widens for long agent names (run files show by name only)."""
     cols = ("routes", "tickets", "completed", "longest", "bonus", "total")
     rows = len(result.players)
-    w, h = 500 * k, (74 + 26 * rows) * k
+    labels = [f"P{seat}" + (f" {short_name(names[seat])}" if names and names[seat] else "") for seat in range(rows)]
+    name_w = result_name_w(labels, k)
+    w, h = 500 * k + name_w - RESULT_NAME_W[0] * k, (74 + 26 * rows) * k
     box = pygame.Rect(round(area.centerx - w / 2), round(area.centery - h / 2), round(w), round(h))
     pygame.draw.rect(s, theme.PANEL_BG, box, border_radius=round(8 * k))
     pygame.draw.rect(s, theme.HIGHLIGHT, box, max(2, round(2 * k)), border_radius=round(8 * k))
@@ -568,22 +594,24 @@ def draw_result(s: pygame.Surface, area: pygame.Rect, result, names=None, k: flo
          (box.left + 16 * k, box.top + 12 * k), 17 * k, theme.HIGHLIGHT, bold=True)
 
     left, top = box.left + 16 * k, box.top + 44 * k
+    first = left + 15 * k + name_w  # the first value column
     for i, name in enumerate(cols):
-        text(s, name.upper(), (left + 96 * k + i * 64 * k, top), 9 * k, theme.PANEL_LABEL, bold=True)
+        text(s, name.upper(), (first + i * 64 * k, top), 9 * k, theme.PANEL_LABEL, bold=True)
     for seat, r in enumerate(result.players):
         y = top + 16 * k + seat * 26 * k
         swatch = pygame.Rect(round(left), round(y + 3 * k), round(10 * k), round(10 * k))
         fill = colors[seat] if colors else theme.seat_color(seat)
         pygame.draw.rect(s, fill, swatch, border_radius=max(1, round(2 * k)))
         pygame.draw.rect(s, theme.PANEL_DIM, swatch, max(1, round(k)), border_radius=max(1, round(2 * k)))
-        label = f"P{seat}" + (f" {names[seat]}" if names and names[seat] else "")
-        text(s, label, (left + 15 * k, y), 12 * k, theme.PANEL_TEXT, bold=seat in result.winners)
+        won = seat in result.winners
+        label, size = fit_label(labels[seat], name_w - 10 * k, 12 * k, k, bold=won)
+        text(s, label, (left + 15 * k, y + (12 * k - size) * 0.7), size, theme.PANEL_TEXT, bold=won)
         held = r.tickets_completed + r.tickets_failed
         values = (str(r.route_points), f"{r.ticket_points:+d}",
                   completion_pct(r.tickets_completed, held), str(r.longest_path),
                   "+10" if r.longest_path_bonus else "–", str(r.total))
         for i, v in enumerate(values):
-            text(s, v, (left + 96 * k + i * 64 * k, y), 12 * k,
+            text(s, v, (first + i * 64 * k, y), 12 * k,
                  theme.HIGHLIGHT if i == len(values) - 1 else theme.PANEL_TEXT,
                  bold=(i == len(values) - 1))
 
