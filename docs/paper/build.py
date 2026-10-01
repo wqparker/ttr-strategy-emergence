@@ -255,11 +255,16 @@ if p5c and p5d:
     V["self.parity"] = ", ".join(str(g // 1000) + "k" for g in p5c["parity_games"] + p5d["parity_games"] if g)
     V["pool4.parity"] = ", ".join(str(g // 1000) + "k" for g in SET["ppo/pass4/p4c_4p_margin"]["parity_games"]
                                   + SET["ppo/pass4/p4d_4p_score"]["parity_games"] if g)
-for key in ("ppo/pass5/p5a_5p_margin", "ppo/pass5/p5b_5p_score"):
+fresh5 = True
+for key in ("ppo/pass5/p5a_5p_margin", "ppo/pass5/p5b_5p_score"):  # fresh games once re-scored
     arm = "m" if "margin" in key else "s"
-    V[f"p5.{arm}.greedy"] = sgn(last5(key))
-    V[f"p5.{arm}.win"] = pct(last5(key, field="win"))
-    V[f"p5.{arm}.racer"] = sgn(last5(key, "racer"))
+    group, setting = key.rsplit("/", 1)
+    g, r = RS.get((group, setting, "final", "greedy")), RS.get((group, setting, "final", "racer"))
+    fresh5 = fresh5 and bool(g and r)
+    V[f"p5.{arm}.greedy"] = sgn(g["margin"] if g else last5(key))
+    V[f"p5.{arm}.win"] = pct(g["win"] if g else last5(key, field="win"))
+    V[f"p5.{arm}.racer"] = sgn(r["margin"] if r else last5(key, "racer"))
+V["p5.source"] = "on fresh games" if fresh5 else "in training evaluations"
 if p5d:  # where the self-play score arm peaked
     c = p5d["curve"]
     k = max(range(len(c["games"])), key=lambda i: c["greedy"][i])
