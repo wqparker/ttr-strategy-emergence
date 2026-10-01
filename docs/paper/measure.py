@@ -2,7 +2,8 @@
 
     python docs/paper/measure.py anatomy      # one agent per method vs greedy and racer (2 players)
     python docs/paper/measure.py blocking     # PPO passes 3-5: blocking against chance, tempo, cross-play
-    python docs/paper/measure.py blocking-self  # the same for pass 5's 4-player self-play arms
+    python docs/paper/measure.py blocking-self  # the same for pass 5's 4-player self-play arms, and
+                                                # self-play against pool-trained agents at one table
     python docs/paper/measure.py ticket-gap   # how far racing networks end from the tickets they drop
     python docs/paper/measure.py scripted     # scripted bots at 2-5 players: ticket planners vs racers
     (--workers N, --games N; results merge into docs/paper/measured.json, one key per measurement)
@@ -189,6 +190,13 @@ def blocking(games: int, workers: int, self_play: bool = False) -> dict:
             for s in seeds:
                 for bot in ("greedy", "racer"):
                     tasks.append(([arm] + [bot] * 3, [spec(f"{arm}_s{s}")] + [bot] * 3, games, 424242, f"4p {arm} vs {bot}"))
+        # head to head: two self-play agents and two pool-trained agents (pass 4) of the same reward
+        pool, pool_sc, pool_seeds = ARMS[4]
+        for arm, other, reward in ((m, pool, "margin"), (sc, pool_sc, "score")):
+            for i in seeds:
+                for j in pool_seeds:
+                    a, b = spec(f"{arm}_s{i}"), spec(f"{other}_s{j}")
+                    tasks.append(([arm, arm, other, other], [a, a, b, b], games // 2, 535353, f"4p selfpool {reward}"))
     rows = run(tasks, workers)
     # every seat at learner tables, pooled over seeds: the arms, and the bots beside them as reference
     return {"games_per_seed": games, "rows": summarize(rows)}

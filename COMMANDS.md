@@ -290,6 +290,19 @@ longest left once those are gone) and ends the game fast (the strategy the train
 time, drawing more as soon as fewer than 2 are far from done, finishing the nearest one first (tempo-aware
 like wary). It completes the most tickets (about 5 a game) and is the weakest of the four.
 
+### Research paper
+
+```text
+python docs/paper/measure.py blocking     # instrumented games -> docs/paper/measured.json (also: anatomy,
+                                          #   blocking-self, ticket-gap, scripted; --games, --workers)
+python docs/paper/compile_data.py         # runs/, re-scores, round robins -> docs/paper/data.json
+python docs/paper/build.py                # template.html + data.json + measured.json -> paper.html
+```
+
+`compile_data.py` needs the local run files (`runs/`, not in git); `data.json` and `measured.json` are
+committed, so `build.py` runs without them. Numbers in the text are bound to the data through `data-v`
+attributes in `template.html`, so a rebuild updates them.
+
 ## ttr-dash
 
 Agent analysis: a full-screen matplotlib window over one or more training runs (`[analysis]`

@@ -190,13 +190,18 @@ ARM_LABEL = {"pass3/p3a_margin": "margin", "pass3/p3b_score": "score", "pass4/p4
              "pass4/p4b_3p_score": "score", "pass4/p4c_4p_margin": "margin", "pass4/p4d_4p_score": "score",
              "pass5/p5a_5p_margin": "margin", "pass5/p5b_5p_score": "score",
              "pass5/p5c_4p_self_margin": "self-play margin", "pass5/p5d_4p_self_score": "self-play score"}
-BLOCKING, CROSS = [], []
+BLOCKING, CROSS, SELFPOOL = [], [], []
 for src in ("blocking", "blocking-self"):
     for r in MEAS.get(src, {}).get("rows", []):
         tag, label = r["key"]
         if " cross" in tag:
             CROSS.append({"players": r["players"], "arm": ARM_LABEL.get(label, label), "games": r["games"], "score": r["score"],
                           "win": r["win_share"], "rank": r["rank"], "margin": r["margin"]})
+            continue
+        if " selfpool " in tag:  # two self-play seats against two pool-trained seats
+            SELFPOOL.append({"reward": tag.rsplit(" ", 1)[1], "self": label.startswith("pass5/"), "games": r["games"],
+                             "score": r["score"], "win": r["win_share"], "six": r["len6"],
+                             "claim_length": r["mean_claim_length"], "longest": r["longest_bonus"]})
             continue
         n, arm, _, bot = tag.split(" ")
         if label == arm:  # the learner's seat
@@ -288,6 +293,16 @@ for n in (2, 3, 4, 5):
         V[f"cross.{n}.msix"] = f"{cm['len6']:.1f}"
         V[f"cross.{n}.shalf"] = f"{cs['half_turn']:.0f}"
         V[f"cross.{n}.mhalf"] = f"{cm['half_turn']:.0f}"
+for reward, arm in (("margin", "m"), ("score", "s")):
+    a = next((r for r in SELFPOOL if r["reward"] == reward and r["self"]), None)
+    b = next((r for r in SELFPOOL if r["reward"] == reward and not r["self"]), None)
+    if a and b:  # per seat; each kind holds two of the four seats
+        V[f"selfpool.{arm}.edge"] = sgn(a["score"] - b["score"])
+        V[f"selfpool.{arm}.swin"] = pct(2 * a["win"])
+        V[f"selfpool.{arm}.ssix"] = f"{a['six']:.1f}"
+        V[f"selfpool.{arm}.psix"] = f"{b['six']:.1f}"
+        V[f"selfpool.{arm}.slongest"] = pct(a["longest"])
+        V[f"selfpool.{arm}.plongest"] = pct(b["longest"])
 gg = next((r for r in ANATOMY if r["label"] == "greedy"), None)
 if gg:
     V["greedy.self.score"] = f"{gg['score']:.0f}"
