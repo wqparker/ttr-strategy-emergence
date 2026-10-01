@@ -265,6 +265,15 @@ for key in ("ppo/pass5/p5a_5p_margin", "ppo/pass5/p5b_5p_score"):  # fresh games
     V[f"p5.{arm}.win"] = pct(g["win"] if g else last5(key, field="win"))
     V[f"p5.{arm}.racer"] = sgn(r["margin"] if r else last5(key, "racer"))
 V["p5.source"] = "on fresh games" if fresh5 else "in training evaluations"
+# four players on fresh games: self-play (pass 5) against pool-trained (pass 4)
+for key, name in (("ppo/pass5/p5c_4p_self_margin", "self.m"), ("ppo/pass5/p5d_4p_self_score", "self.s"),
+                  ("ppo/pass4/p4c_4p_margin", "pool4.m"), ("ppo/pass4/p4d_4p_score", "pool4.s")):
+    group, setting = key.rsplit("/", 1)
+    for opp in OPPS:
+        v = RS.get((group, setting, "final", opp))
+        if v:
+            V[f"{name}.fresh.{opp}"] = sgn(v["margin"])
+            V[f"{name}.fresh.{opp}_win"] = pct(v["win"])
 if p5d:  # where the self-play score arm peaked
     c = p5d["curve"]
     k = max(range(len(c["games"])), key=lambda i: c["greedy"][i])
@@ -303,15 +312,35 @@ for reward, arm in (("margin", "m"), ("score", "s")):
     b = next((r for r in SELFPOOL if r["reward"] == reward and not r["self"]), None)
     if a and b:  # per seat; each kind holds two of the four seats
         V[f"selfpool.{arm}.edge"] = sgn(a["score"] - b["score"])
+        V[f"selfpool.{arm}.ss"] = f"{a['score']:.1f}"
+        V[f"selfpool.{arm}.ps"] = f"{b['score']:.1f}"
         V[f"selfpool.{arm}.swin"] = pct(2 * a["win"])
+        V[f"selfpool.{arm}.games"] = f"{a['games'] // 2:,}"
         V[f"selfpool.{arm}.ssix"] = f"{a['six']:.1f}"
         V[f"selfpool.{arm}.psix"] = f"{b['six']:.1f}"
         V[f"selfpool.{arm}.slongest"] = pct(a["longest"])
         V[f"selfpool.{arm}.plongest"] = pct(b["longest"])
+for r in BLOCKING:  # excess over length-matched chance, per learner arm and table
+    if not r.get("reference"):
+        name = f"block.{r['players']}.{r['arm'].replace(' ', '_')}.{r['bot']}"
+        V[name + ".obs"] = pct(r["blocks"], 1)
+        V[name + ".chance"] = pct(r["chance"], 1)
+        V[name + ".excess"] = f"{r['excess']:.2f} ± {r['excess_se']:.2f}"
 gg = next((r for r in ANATOMY if r["label"] == "greedy"), None)
 if gg:
     V["greedy.self.score"] = f"{gg['score']:.0f}"
     V["greedy.self.turns"] = f"{gg['own_turns']:.0f}"
+short, n_short = [], 0  # runs that ended before their planned games (still training, or stopped)
+for k, s in SET.items():
+    total = s["config"].get("games")
+    cut = [(seed, g) for seed, g in zip(s["seeds"], s["games_done"]) if total and g < total]
+    if cut and not s["finished"]:
+        n_short += len(cut)
+        short.append(f"{k} seeds {', '.join(str(seed) for seed, _ in cut)} ended at {min(g for _, g in cut):,}–"
+                     f"{max(g for _, g in cut):,} of {total:,} games")
+n_runs = sum(len(s["seeds"]) for s in SET.values())
+V["status"] = (f"{n_runs - n_short} of {n_runs} runs had finished; {'; '.join(short)}, and their last save is used."
+               if short else f"All {n_runs} runs had finished.")
 V["generated"] = DATA["generated"].replace("T", " ")
 V["runs"] = str(sum(len(s["seeds"]) for s in SET.values()))
 V["settings"] = str(len(SET))

@@ -849,7 +849,8 @@ for 2 players).
     - `scripts/run_queue.ps1` (58 lines): the run queue each of the 13 launchers carried a copy
       of (351 lines gone). `-DryRun` prints a launcher's command lines; every launcher was
       checked against its old ones.
-  - PPO pass 5 (`scripts/ppo_pass5.ps1`, `runs/ppo/pass5/`, launched 2026-09-30, estimated 4–5 h):
+  - PPO pass 5 (`scripts/ppo_pass5.ps1`, `runs/ppo/pass5/`, 2026-09-30; 4 h 13 min for the 5-player
+    runs, 6 h 17 min for self-play):
     the two settings left after pass 4. 5 players against the pool (the nine 6-routes shared
     five ways), and 4 players in self-play only (`--pool self`: every opponent seat a frozen copy
     of the learner, the best network or one of the 5 latest evaluated, greedy until the first
@@ -878,34 +879,70 @@ for 2 players).
       all-or-nothing payoff, so more spread). The learners, trained on margin or score, follow
       points: +3.8 against greedy with 18% wins. This is the risk-tolerance question in
       concrete form, and a case for the win/loss reward at 5 players.
+    - Final (23:21, all 12 runs finished). Fresh games (`runs/ppo/rescore_pass5_5p.*`,
+      `rescore_pass5_self.*`; 1000 per agent and opponent, final policies, mean over 3 seeds,
+      win share in brackets; pass 4's 4-player pool runs for reference):
+
+      | Setting | vs greedy | vs wary | vs racer | vs collector |
+      | --- | --- | --- | --- | --- |
+      | 5p margin | +3.5 (17%) | +0.2 (12%) | −2.9 (20%) | +19.2 (41%) |
+      | 5p score | +6.0 (21%) | +4.6 (17%) | −0.6 (26%) | +16.9 (33%) |
+      | 4p self-play margin | +10.7 (36%) | +8.1 (32%) | +0.2 (31%) | +23.9 (56%) |
+      | 4p self-play score | +2.7 (23%); best checkpoint +9.3 | +2.3 (20%) | +1.0 (34%) | +12.9 (34%) |
+      | 4p pool margin (pass 4) | +11.0 (39%) | +5.9 (29%) | −1.5 (27%) | +27.0 (64%) |
+      | 4p pool score (pass 4) | +10.9 (40%) | +7.9 (33%) | 0.0 (30%) | +20.0 (52%) |
+
+    - The margin arm's lead over the score arm against greedy, on fresh games: +4.9, +4.9,
+      +0.1, −2.5 at 2–5 players. Learning speed (parity with greedy) evened out at 4 players
+      (10–18k vs 10–16k games) but not at 5 (18–26k vs 12–18k), so the noise explanation for
+      margin's slower learning is supported at 4 players and inconclusive at 5.
+    - Self-play still races, more purely: claims of mean length 5.4 (margin) and 5.6 (score)
+      against greedy (pool-trained 4.5 and 5.2), 0.0 tickets completed, parity with greedy at
+      6–8k games (pool 10–18k). The score arm peaked at +9.5 after 12k games and drifted:
+      trained only against racers, it lost its edge over ticket players.
+    - Head to head (`docs/paper/measure.py blocking-self`): two self-play and two pool-trained
+      agents of the same reward at one 4-player table, 450 games per reward over the 9 seed
+      pairings. Margin: self-play 65.9 points to 59.6, 73% of the games, 2.8 six-routes each
+      to 1.6. Score: 65.8 to 62.7, 60%.
+    - Blocking against chance, self-play arms: the margin arm against greedy 11.0% of claims on
+      a greedy ticket path vs 6.9% for a same-length random claim (excess 0.34 ± 0.04 claims a
+      game), the largest of any learner; but the score arm against racer is as large (0.38 ±
+      0.06) and has no reason to block, and pool-trained score arms reach 0.28. Route
+      preference explains it as well as intent; at most one claim in three games either way.
+  - Research paper (`docs/paper/`, 2026-09-30): "Racing to the End", every run, re-score, round
+    robin and instrumented measurement so far, published as a private artifact
+    (<https://claude.ai/artifact/1xj2ZqhsW8KRgennhuyFQ2>). `compile_data.py` → `data.json`,
+    `measure.py` → `measured.json` (the behavior instrumentation, moved out of scratch scripts:
+    anatomy, blocking against chance and cross-play, the ticket gap, scripted tables),
+    `build.py` + `template.html` → `paper.html`; text values are bound to the data.
 - **Next:**
-  - Every method, every reward that learned and every player count tried (2–4) converges on
-    racing (PPO adding the connected network); tickets and blocking never appeared, and the
-    scripted bots agree that ticket planning doesn't beat racing on this map (at 4 players it
-    is competitive, not better). Racing is the finding for the tempo question; pass 3 shows it
-    isn't an artifact of the margin reward (only the denial part is). Options:
-    - Analyze PPO pass 5 (running): 5 players, and 4 players in self-play only. Re-score with
-      `rescore.py`; the behavior instrumentation (blocking against chance, tempo, the 6-route
-      race) is still in scratch scripts, so moving it into the repo first would help.
+  - Every method, every reward that learned, every player count (2–5) and self-play converge
+    on racing (PPO adding the connected network); tickets never appeared and blocking is at
+    most marginal (≤ 0.4 claims a game over chance, score arms included). The scripted bots
+    agree that ticket planning doesn't beat racing on points; at 5 players it wins more often
+    while scoring less. Racing is the finding for the tempo question; pass 3 shows it isn't an
+    artifact of the margin reward (only the denial part is), pass 5 that it isn't the pool's.
+    The write-up is `docs/paper/` (rebuild it after new results). Options:
+    - Win/loss reward at 5 players, for the risk-tolerance question: it doesn't learn from
+      scratch against this pool. Either warm-start it from a trained margin policy (needs an
+      `--init` option in `ttr-train-ppo`) or train it in self-play only, where every game
+      carries signal.
     - MCTS (tier D), a non-learning contrast with no credit-assignment problem for tickets.
-    - Phase 6: write up racing across methods, rewards and player counts, and move the behavior
-      instrumentation (blocking against chance, tempo, the 6-route race, the ticket gap) from
-      scratch scripts into the repo.
+    - Self-play share: self-play won head to head but lost edge over ticket players; a pool
+      with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
-    needed for pass 4's questions; the cross-play covered margin against score.
-  - Win/loss reward, for the risk-tolerance question: it doesn't learn from scratch against
-    this pool. Either warm-start it from a trained margin policy (needs an `--init` option in
-    `ttr-train-ppo`) or train it in self-play only, where every game carries signal.
+    needed for passes 4–5; the cross-play and the self-play head to head (2 + 2 seats) covered
+    their questions.
   - Own score against greedy alone (cheap): does a score learner find tickets when its
     opponent doesn't race? Separates "racing is the best response to this pool" from
     "tickets are too hard to learn".
   - Ticket choice: PPO abandons pricier tickets than racer does (−21 to −23 vs −19 a game).
-  - Phase 6 strategy analysis on the agents we have (PLAN "Roadmap"): the longest-path
-    bonus as an emergent sub-strategy, tempo (passes 3–4 measured the margin agents' denial),
-    the race for the nine 6-routes, blocking (none, measured against chance at 2–4 players).
+  - Phase 6 strategy analysis on the agents we have (PLAN "Roadmap"): done in `docs/paper/` for
+    the longest-path bonus, tempo, the race for the nine 6-routes, blocking against chance
+    (2–5 players and self-play) and the ticket gap.
   - Tickets never appeared in any learner. With the collector result (more tickets
     loses in 2-player games), racing may be close to right for 2 players on this map;
-    3–4 players didn't change it (pass 4); 5 is untested.
+    3–5 players didn't change it (passes 4–5).
   - Cheap side experiment: DQN against random with `--reward score`, to test the
     noise explanation for random-only training failing (PPO passes 3–4 support it
     indirectly).

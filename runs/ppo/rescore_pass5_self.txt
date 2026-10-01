@@ -1,0 +1,20 @@
+vs greedy, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p5c_4p_self_margin       final  +10.7 (+8, +12, +11)  win  36%  tickets 0.00/2.00
+p5c_4p_self_margin       best   +11.6 (+10, +13, +12)  win  39%  tickets 0.01/1.99
+p5d_4p_self_score        final   +2.7 (+1, +1, +6)  win  23%  tickets 0.00/2.00
+p5d_4p_self_score        best    +9.3 (+12, +11, +5)  win  34%  tickets 0.01/1.99
+vs wary, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p5c_4p_self_margin       final   +8.1 (+6, +9, +9)  win  32%  tickets 0.00/2.00
+p5c_4p_self_margin       best    +8.8 (+8, +9, +9)  win  35%  tickets 0.01/1.99
+p5d_4p_self_score        final   +2.3 (+1, +1, +4)  win  20%  tickets 0.00/2.00
+p5d_4p_self_score        best    +6.0 (+7, +6, +4)  win  28%  tickets 0.01/1.99
+vs racer, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p5c_4p_self_margin       final   +0.2 (+0, +1, -0)  win  31%  tickets 0.10/1.90
+p5c_4p_self_margin       best    -0.8 (-2, +0, -0)  win  28%  tickets 0.09/1.91
+p5d_4p_self_score        final   +1.0 (+0, +2, +1)  win  34%  tickets 0.08/1.92
+p5d_4p_self_score        best    -2.7 (-4, -5, +1)  win  23%  tickets 0.11/1.89
+vs collector, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p5c_4p_self_margin       final  +23.9 (+23, +23, +25)  win  56%  tickets 0.00/2.00
+p5c_4p_self_margin       best   +24.7 (+23, +25, +26)  win  59%  tickets 0.01/2.00
+p5d_4p_self_score        final  +12.9 (+11, +11, +16)  win  34%  tickets 0.00/2.00
+p5d_4p_self_score        best   +21.7 (+23, +23, +19)  win  52%  tickets 0.01/2.00
