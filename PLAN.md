@@ -857,6 +857,27 @@ for 2 players).
     50000 games, pass 4's setting otherwise, evaluated against the bots as in pass 4. Smoke
     timing: a 5-player game costs about 1.1× a 4-player one against the pool, self-play about
     1.6× (three networks choose moves instead of bots).
+    - Interim (21:30): the 5-player runs finished in 4 h 13 min; self-play was at 34–36k games
+      (about 920 s per 2000, slower than the smoke suggested). Training evaluations, last 5,
+      mean over 3 seeds (win share; the baseline is 20% at 5 players):
+
+      | 5 players | vs greedy | vs wary | vs racer | vs collector | vs linear | Parity (k games) |
+      | --- | --- | --- | --- | --- | --- | --- |
+      | margin | +3.8 (18%) | −0.0 (11%) | −2.9 (22%) | +18.9 (43%) | +14.1 (32%) | 18, 26, 26 |
+      | score | +7.2 (23%) | +4.6 (19%) | −0.1 (28%) | +16.3 (33%) | +16.2 (39%) | 18, 12, 18 |
+
+    - Still racing at 5 players: 2 tickets kept, 0.02–0.08 completed, the end triggered in
+      99–100% of games against greedy, claims of mean length 4.4 (margin) or 5.2 (score); against 4
+      racers, 12 claims of length 3.4–3.5 and 3–4 trains unused. The edge over greedy shrinks
+      with the table: margin arm +16.9, +16.2, +10.6, +3.8 at 2–5 players.
+    - **At 5 players, points and wins part ways.** Scripted tables (400 games each): a lone
+      greedy among 4 racers wins 24%, the racers 19% each, though they average more points
+      (68 vs 62); 2 greedy + 3 racers: greedy 23%, racers 18%; a lone wary among racers 26%; a
+      lone racer among 4 greedy 24%. At 4 players 2 greedy + 2 racers went to the racers (30% vs
+      19%). Racing earns the most points on average, ticket play wins more often (an
+      all-or-nothing payoff, so more spread). The learners, trained on margin or score, follow
+      points: +3.8 against greedy with 18% wins. This is the risk-tolerance question in
+      concrete form, and a case for the win/loss reward at 5 players.
 - **Next:**
   - Every method, every reward that learned and every player count tried (2–4) converges on
     racing (PPO adding the connected network); tickets and blocking never appeared, and the
