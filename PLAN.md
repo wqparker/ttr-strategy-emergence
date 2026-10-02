@@ -978,6 +978,22 @@ for 2 players).
     - Non-transitive at the top: score search > racer by 15.9, PPO > racer by 6.2, PPO > score
       search by 5.6.
     - Cost: 2.1–2.8 min a game, 33–46 searches of 3.5–3.9 s.
+  - Decided (2026-10-01): pass 2 goes after the head-to-head loss to PPO, all arms under own
+    score with pass 1's own-score games as the paired control. New option: a mixed opponent
+    model (`opponent=greedy+racer`: each sampled world plays every opponent seat with one of the
+    listed bots, evenly); settings that existed before give the same searches as in pass 1
+    (hash of searches unchanged).
+  - MCTS pass 2 running (`scripts/mcts_pass2.ps1`, `runs/mcts/pass2.*`, started 19:17, ~5–6 h):
+    - `opponent=racer`: the tempo forecast fixed by hand. Against PPO, linear, racer and greedy
+      (does it hurt where the model is now wrong?), 100 games each.
+    - `opponent=greedy+racer`: the version that doesn't know who it plays. Same opponents.
+    - `prior=0.25`: a weaker pull toward greedy's move (own-score values are about half as noisy
+      as margin's). Against PPO, racer and greedy.
+    - `iterations=1600`: is the search limited by its budget or by the prior? Against PPO and
+      racer, 50 games (~9 min a game).
+    - Left for later: which of the prior and `steps=main` matters, racer rollouts,
+      `known_tickets=1`, 3–5 players. Depending on the result: infer the opponent's type from its
+      play (ticket count, claim lengths), and PPO's policy as the prior (search on top of PPO).
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -988,20 +1004,19 @@ for 2 players).
     **MCTS pass 1 qualifies it:** a search with no training plays tickets (5 kept and finished a
     game) and does as well as PPO against every third party, better against racer, but loses to
     PPO head to head. Racing is what learners find, and it beats the ticket search directly;
-    it is not the only strong strategy. The write-up is `docs/paper/` (rebuild it after new
-    results; it has no MCTS section yet). Options:
+    it is not the only strong strategy. `docs/paper/` is a draft write-up, not a deliverable.
+    Options:
     - Win/loss reward at 5 players, for the risk-tolerance question: it doesn't learn from
       scratch against this pool. Either warm-start it from a trained margin policy (needs an
       `--init` option in `ttr-train-ppo`) or train it in self-play only, where every game
       carries signal.
-    - MCTS (tier D): pass 1 done (above): the own-score search wins by tickets against every
-      scripted bot, beats racer by more than PPO does, and loses to PPO head to head. Follow-ups:
-      racer as the opponent model against PPO and linear (is the loss the tempo forecast?), or
-      choosing the model from the opponent's play so far; which of the prior and `steps=main`
-      matters; racer rollouts (does it still find tickets when its own continuation races?);
-      more iterations; `known_tickets=1` (what inferring the opponent's tickets is worth, and
-      whether it then blocks); 3–5 players; blocking instrumentation (`docs/paper/measure.py`);
-      the paper, whose racing conclusion this qualifies.
+    - MCTS (tier D): pass 1 done, pass 2 running (above). The own-score search wins by tickets
+      against every scripted bot, beats racer by more than PPO does, and loses to PPO head to
+      head. Follow-ups after pass 2: choosing the opponent model from the opponent's play so
+      far; PPO's policy as the prior; which of the prior and `steps=main` matters; racer
+      rollouts (does it still find tickets when its own continuation races?); `known_tickets=1`
+      (what inferring the opponent's tickets is worth, and whether it then blocks); 3–5
+      players; blocking instrumentation (`docs/paper/measure.py`).
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't

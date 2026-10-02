@@ -14,7 +14,8 @@ information afresh (`determinize`) and plays that sampled world forward:
   points while most moves differ by a few, so a few hundred iterations spread over ~30
   moves choose nearly at random (PLAN.md "Tier D design").
 - Opponents' moves, in the tree and below it, come from an opponent model: a scripted
-  bot playing the sampled hand and tickets. They are chance events, not tree nodes.
+  bot playing the sampled hand and tickets (with several, `greedy+racer`, each sampled
+  world draws one per opponent seat). They are chance events, not tree nodes.
 - Ticket offers drawn inside the search differ from world to world, so the rollout
   policy chooses what to keep from them; only an offer already in hand (at the root) is
   searched.
@@ -34,7 +35,8 @@ Options (also as a registry spec, `mcts:iterations=800,rollout=racer`), defaults
     steps           main: search only the main action of a turn and ticket choices; second
                     draws and payments are the rollout policy's. all: search every decision
     rollout         greedy: scripted bot playing the searcher's seat below the tree
-    opponent        greedy: scripted bot modelling every opponent seat
+    opponent        greedy: scripted bot modelling every opponent seat. Several joined by
+                    `+` (greedy+racer): each sampled world draws one per seat, evenly
     reward          margin | score | win (ttr.env.reward)
     memory          2: card memory level (ttr.memory). 0 deals opponents' whole hands from
                     the unseen cards; 1 and 2 keep the cards known to be in their hands
@@ -141,8 +143,9 @@ class MCTSAgent:
     def __init__(self, seed: Optional[int] = None, iterations: int = 400, c: float = 0.5, prior: float = 0.5,
                  steps: str = "main", rollout: str = "greedy", opponent: str = "greedy", reward: str = "margin",
                  memory: int = 2, known_tickets: bool = False, name: str = "mcts") -> None:
-        if rollout not in POLICIES or opponent not in POLICIES:
-            raise ValueError(f"rollout and opponent must be one of {', '.join(POLICIES)}")
+        if rollout not in POLICIES or not all(k in POLICIES for k in opponent.split("+")):
+            raise ValueError(f"rollout and opponent must be one of {', '.join(POLICIES)} "
+                             "(opponent: several joined by +)")
         if reward not in REWARD_MODES:
             raise ValueError(f"reward must be one of {', '.join(REWARD_MODES)}")
         if memory not in (0, 1, 2):
@@ -162,6 +165,7 @@ class MCTSAgent:
         self._policy = POLICIES[rollout](self.rng.getrandbits(32))  # plays the delegated decisions
         self.rollout = rollout
         self.opponent = opponent
+        self._opponent_kinds = opponent.split("+")
         self.reward = reward
         self.memory = memory
         self.known_tickets = known_tickets
@@ -199,10 +203,12 @@ class MCTSAgent:
         root = Node()
         if carry is not None and carry[0] == self._signature(game):
             root = carry[1]
-        models = [POLICIES[self.rollout if q == player else self.opponent](self.rng.getrandbits(32))
-                  for q in range(game.num_players)]
+        # per seat, the bots a sampled world can play it with: the rollout policy for mine
+        choices = [[POLICIES[k](self.rng.getrandbits(32))
+                    for k in ([self.rollout] if q == player else self._opponent_kinds)]
+                   for q in range(game.num_players)]
         while root.visits < self.iterations:
-            self._iterate(root, game, player, models)
+            self._iterate(root, game, player, choices)
         action = max((a for a in legal if a in root.children), key=lambda a: root.children[a].visits)
         if isinstance(action, ClaimRoute):
             self._carry = (self._signature(game, action.route_id), root.children[action])
@@ -221,8 +227,9 @@ class MCTSAgent:
             route = game.pending_route
         return id(game), game.turn, route, len(game.log)
 
-    def _iterate(self, root: Node, game: Game, me: int, models: List) -> None:
+    def _iterate(self, root: Node, game: Game, me: int, choices: List[List]) -> None:
         world = determinize(game, me, self.rng, self.memory, self.known_tickets)
+        models = [bots[0] if len(bots) == 1 else self.rng.choice(bots) for bots in choices]
         node, path, in_tree = root, [root], True
         while not world.game_over:
             p = world.current_player

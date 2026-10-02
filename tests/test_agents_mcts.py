@@ -7,6 +7,7 @@ import pytest
 
 from helpers import set_hand, started_game
 from ttr.actions import ClaimRoute, DrawTickets, KeepTickets, Pay
+from ttr.agents import mcts
 from ttr.agents.greedy import GreedyAgent
 from ttr.agents.mcts import MCTSAgent, determinize
 from ttr.agents.registry import agent_spec, make_agent
@@ -225,6 +226,26 @@ def test_main_steps_leave_second_draws_and_payments_to_the_policy():
     assert agent.act(game, 0) == GreedyAgent().act(game, 0) and agent.searches == 1
 
 
+@pytest.mark.parametrize("opponent,played", [("racer", {"racer"}), ("greedy+racer", {"greedy", "racer"})])
+def test_opponent_models(monkeypatch, opponent, played):
+    """Every sampled world plays the opponent with one of the listed bots; with
+    several, each of them in some worlds."""
+    calls = Counter()
+
+    def counted(kind):
+        class Counted(mcts.POLICIES[kind]):
+            def act(self, game, player):
+                calls[kind] += 1
+                return super().act(game, player)
+        return Counted
+
+    for kind in ("greedy", "racer"):
+        monkeypatch.setitem(mcts.POLICIES, kind, counted(kind))
+    game = greedy_game(2, 3, 60)
+    MCTSAgent(seed=0, iterations=40, rollout="random", opponent=opponent).act(game, game.current_player)
+    assert set(calls) == played
+
+
 @pytest.mark.parametrize("players", [2, 3])
 def test_plays_whole_games(players):
     game = Game(load_board("usa"), num_players=players, seed=players, max_turns=1000)
@@ -240,7 +261,8 @@ def test_registry_specs():
     assert (agent.iterations, agent.c, agent.prior, agent.steps, agent.rollout, agent.opponent, agent.reward,
             agent.memory, agent.known_tickets) == (7, 0.3, 0.4, "main", "racer", "wary", "score", 0, True)
     assert (make_agent("mcts", 0).iterations, make_agent("mcts", 0).prior, make_agent("mcts", 0).steps) == (400, 0.5, "main")
-    for bad in ("mcts:depth=3", "mcts:rollout=ppo", "mcts:iterations=x", "mcts:reward=points", "mcts:iterations=",
+    assert make_agent("mcts:opponent=greedy+racer", 0).opponent == "greedy+racer"
+    for bad in ("mcts:depth=3", "mcts:rollout=ppo", "mcts:opponent=greedy+ppo", "mcts:iterations=x", "mcts:reward=points", "mcts:iterations=",
                 "mcts:prior=1", "mcts:steps=some"):
         with pytest.raises(ValueError):
             make_agent(bad, 0)
