@@ -1022,6 +1022,29 @@ for 2 players).
       and is the best result against racer (+19.8, 84%, longest-path bonus 100%), at 9.5 min a
       game.
     - Every arm keeps the ticket game: 3.3–5.5 kept, 3–5.4 completed.
+  - Decided (2026-10-02): pass 3 tries the three recommendations; settings that existed before
+    search exactly as in passes 1–2 (hash of searches unchanged). New options:
+    - **`opponent=infer`**: the opponent's style is part of what each sampled world deals.
+      `racer_belief` is the probability that a seat plays like a racer rather than a ticket
+      player, given its public play: naive Bayes over its opening keep (2 or 3), each claim's
+      length and whether each of its turns drew tickets, with even odds before it plays. The
+      likelihoods (`STYLES` in `mcts.py`) were measured by `scripts/opponent_styles.py` (2400
+      games): ticket players (greedy, wary, collector) keep 3 opening tickets 55% of the time,
+      draw tickets on 3.5% of later turns, and 2% of their claims are 6-routes; racers (racer,
+      PPO p2b, linear p7b) never kept 3 or drew again in 1200 games, and 55% of their claims are
+      6-routes. In test games the belief passes 0.94 for racer, PPO and linear by turn 20 and
+      falls under 0.04 for greedy, wary and collector by turn 12. Each world then plays the seat
+      with racer at that probability, else greedy.
+    - **`guide=ppo:PATH`**: a PPO policy's probabilities as the PUCT prior (`prior` 0.5 of it,
+      the rest even) in place of greedy's move; greedy rollouts still judge the moves. The root's
+      prior is computed once a search (the guide sees only the searcher's view); deeper nodes ask
+      it per world. 3.7 s a decision against 2.8.
+  - MCTS pass 3 running (`scripts/mcts_pass3.ps1`, `runs/mcts/pass3.*`, started 02:29, ~6–7 h),
+    own score, pass 1's own-score search as the paired control:
+    - `opponent=infer` against every opponent (PPO, linear, racer, greedy, wary, collector), 100
+      games each: racer's gains against racers without its cost against ticket players?
+    - `guide=ppo:runs/ppo/pass2/p2b_pool_s3.json` against PPO, linear, racer and greedy, 100 each.
+    - `opponent=racer,iterations=1600` against PPO, 200 games: pass 2's two gains together.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -1038,14 +1061,11 @@ for 2 players).
       scratch against this pool. Either warm-start it from a trained margin policy (needs an
       `--init` option in `ttr-train-ppo`) or train it in self-play only, where every game
       carries signal.
-    - MCTS (tier D): passes 1–2 done (above). The own-score search wins by tickets against every
-      scripted bot, beats racer by more than PPO does; racer as the opponent model or 4× the
-      search bring it to about parity with PPO head to head (each under 2 SE). Follow-ups:
-      racer model + 1600 iterations against PPO on 200+ games (can it pass PPO?); choosing the
-      opponent model from the opponent's play so far (racer's model helps against racers and
-      costs against greedy); PPO's policy as the prior; which of the prior and `steps=main`
-      matters; racer rollouts; `known_tickets=1`; 3–5 players; blocking instrumentation
-      (`docs/paper/measure.py`).
+    - MCTS (tier D): passes 1–2 done, pass 3 running (above). The own-score search wins by
+      tickets against every scripted bot, beats racer by more than PPO does; racer as the
+      opponent model or 4× the search bring it to about parity with PPO head to head (each under
+      2 SE). Left after pass 3: which of the prior and `steps=main` matters; racer rollouts;
+      `known_tickets=1`; 3–5 players; blocking instrumentation (`docs/paper/measure.py`).
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't

@@ -226,6 +226,68 @@ def test_main_steps_leave_second_draws_and_payments_to_the_policy():
     assert agent.act(game, 0) == GreedyAgent().act(game, 0) and agent.searches == 1
 
 
+def bot_game(bot, steps=None, seed=2):
+    """Seat 0 played by `bot` (racer or greedy), seat 1 by greedy, to the end or `steps` sub-steps."""
+    game = Game(load_board("usa"), num_players=2, seed=seed, first_player=0)
+    bots = [mcts.POLICIES[bot](seed), GreedyAgent(seed + 1)]
+    while not game.game_over and (steps is None or steps > 0):
+        p = game.current_player
+        game.step(bots[p].act(game, p))
+        steps = None if steps is None else steps - 1
+    return game
+
+
+def test_racer_belief_tells_racers_from_ticket_players():
+    assert mcts.racer_belief(Game(load_board("usa"), seed=1), 0) == 0.5  # even odds before any play
+    assert mcts.racer_belief(bot_game("racer"), 0) > 0.99
+    assert mcts.racer_belief(bot_game("greedy"), 0) < 0.01
+    game = bot_game("racer")
+    assert mcts.racer_belief(game, 1) < 0.01  # each seat on its own
+
+
+@pytest.mark.parametrize("bot", ["racer", "greedy"])
+def test_inferred_opponent_model_plays_the_likely_style(monkeypatch, bot):
+    calls = Counter()
+
+    def counted(kind):
+        class Counted(mcts.POLICIES[kind]):
+            def act(self, game, player):
+                calls[kind] += 1
+                return super().act(game, player)
+        return Counted
+
+    game = bot_game(bot, steps=70)
+    for kind in ("greedy", "racer"):
+        monkeypatch.setitem(mcts.POLICIES, kind, counted(kind))
+    agent = MCTSAgent(seed=0, iterations=30, rollout="random", opponent="infer")
+    while game.current_player != 1:  # the searcher is seat 1; seat 0 is the bot being inferred
+        game.step(mcts.POLICIES[bot](0).act(game, 0))
+    calls.clear()
+    agent.act(game, 1)
+    belief = agent.last_beliefs[0]
+    assert (belief > 0.95) if bot == "racer" else (belief < 0.05)
+    other = "greedy" if bot == "racer" else "racer"
+    assert calls[bot] > 10 * calls[other]
+
+
+def test_a_guide_policy_gives_the_prior():
+    torch = pytest.importorskip("torch")
+    from ttr.env.observation import ObservationEncoder
+    from ttr.learn.ppo import ActorCritic, PPOAgent
+
+    torch.manual_seed(0)
+    guide = PPOAgent(ActorCritic(ObservationEncoder(2).size, (32,)))
+    game = greedy_game(2, 3, 60)
+    me = game.current_player
+    agent = MCTSAgent(seed=0, iterations=30, guide=guide)
+    weights = agent._guide_weights(game, me)
+    assert set(weights) == set(game.legal_actions()) and sum(weights.values()) == pytest.approx(1)
+    agent.act(game, me)
+    assert sum(n.visits for n in agent.last_root.children.values()) == 30
+    with pytest.raises(ValueError):
+        MCTSAgent(prior=0, guide=guide)
+
+
 @pytest.mark.parametrize("opponent,played", [("racer", {"racer"}), ("greedy+racer", {"greedy", "racer"})])
 def test_opponent_models(monkeypatch, opponent, played):
     """Every sampled world plays the opponent with one of the listed bots; with
@@ -262,7 +324,9 @@ def test_registry_specs():
             agent.memory, agent.known_tickets) == (7, 0.3, 0.4, "main", "racer", "wary", "score", 0, True)
     assert (make_agent("mcts", 0).iterations, make_agent("mcts", 0).prior, make_agent("mcts", 0).steps) == (400, 0.5, "main")
     assert make_agent("mcts:opponent=greedy+racer", 0).opponent == "greedy+racer"
-    for bad in ("mcts:depth=3", "mcts:rollout=ppo", "mcts:opponent=greedy+ppo", "mcts:iterations=x", "mcts:reward=points", "mcts:iterations=",
+    assert make_agent("mcts:opponent=infer", 0).opponent == "infer"
+    for bad in ("mcts:depth=3", "mcts:rollout=ppo", "mcts:opponent=greedy+ppo", "mcts:guide=dqn:x.json",
+                "mcts:prior=0,guide=ppo:x.json", "mcts:opponent=infer+racer", "mcts:iterations=x", "mcts:reward=points", "mcts:iterations=",
                 "mcts:prior=1", "mcts:steps=some"):
         with pytest.raises(ValueError):
             make_agent(bad, 0)

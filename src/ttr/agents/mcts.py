@@ -9,13 +9,16 @@ information afresh (`determinize`) and plays that sampled world forward:
   shared by every sampled world in which they were legal. Among the actions legal in the
   current world PUCT picks (as in AlphaZero), with the rollout policy's move as the prior:
   most visits go to the policy's move, and another needs better results to draw visits
-  away from it. With `prior=0`, UCB1 with availability counts picks instead, every action
-  tried once first. Plain UCB1 loses to greedy: a rollout's final margin varies by 30+
+  away from it. With `guide`, a trained PPO policy's probabilities are the prior instead.
+  With `prior=0`, UCB1 with availability counts picks, every action tried once first. Plain UCB1 loses to greedy: a rollout's final margin varies by 30+
   points while most moves differ by a few, so a few hundred iterations spread over ~30
   moves choose nearly at random (PLAN.md "Tier D design").
 - Opponents' moves, in the tree and below it, come from an opponent model: a scripted
   bot playing the sampled hand and tickets (with several, `greedy+racer`, each sampled
-  world draws one per opponent seat). They are chance events, not tree nodes.
+  world draws one per opponent seat). They are chance events, not tree nodes. With
+  `opponent=infer` the bot is part of what each world samples: racer with the probability
+  that the opponent plays like a racer, given its public play so far (`racer_belief`),
+  else greedy.
 - Ticket offers drawn inside the search differ from world to world, so the rollout
   policy chooses what to keep from them; only an offer already in hand (at the root) is
   searched.
@@ -31,12 +34,16 @@ Options (also as a registry spec, `mcts:iterations=800,rollout=racer`), defaults
     iterations      400: search iterations per decision (forced moves take none)
     c               0.5: exploration constant (PUCT's, or UCB1's), on the reward's scale
     prior           0.5: PUCT, the prior probability being `prior` on the rollout policy's
-                    move plus an even share of the rest on every move. 0: UCB1
+                    move (or spread as the guide's probabilities) plus an even share of the
+                    rest on every move. 0: UCB1
+    guide           none: a PPO run (ppo:PATH[@best]) whose policy gives the prior instead of
+                    the rollout policy's move (needs the [env] and [deep] extras)
     steps           main: search only the main action of a turn and ticket choices; second
                     draws and payments are the rollout policy's. all: search every decision
     rollout         greedy: scripted bot playing the searcher's seat below the tree
     opponent        greedy: scripted bot modelling every opponent seat. Several joined by
-                    `+` (greedy+racer): each sampled world draws one per seat, evenly
+                    `+` (greedy+racer): each sampled world draws one per seat, evenly.
+                    infer: racer or greedy per world and seat, by `racer_belief`
     reward          margin | score | win (ttr.env.reward)
     memory          2: card memory level (ttr.memory). 0 deals opponents' whole hands from
                     the unseen cards; 1 and 2 keep the cards known to be in their hands
@@ -66,6 +73,49 @@ POLICIES = {"random": RandomAgent, "greedy": GreedyAgent, "wary": WaryAgent, "ra
             "collector": CollectorAgent}
 TICKET_PHASES = (Phase.CHOOSE_INITIAL_TICKETS, Phase.KEEP_TICKETS)
 MINOR_PHASES = (Phase.DRAW_SECOND_CARD, Phase.CHOOSE_PAYMENT)  # left to the policy with steps=main
+
+# The two play styles `opponent=infer` tells apart, each named for the bot that plays it in
+# the sampled worlds: ticket players (greedy, wary, collector) and racers (racer, PPO p2b,
+# linear p7b). From their public record against greedy and racer, 200 games per agent and
+# opponent, add-one smoothed (scripts/opponent_styles.py, 2026-10-02): the chance of keeping
+# 3 opening tickets, of drawing tickets on a later turn, and the share of claims by length.
+STYLES = {
+    "greedy": {"keep3": 0.555, "ticket_draw": 0.0348,
+               "length": {1: 0.1354, 2: 0.4582, 3: 0.2140, 4: 0.1212, 5: 0.0489, 6: 0.0223}},
+    "racer": {"keep3": 0.000832, "ticket_draw": 2.53e-05,
+              "length": {1: 0.0388, 2: 0.0393, 3: 0.0723, 4: 0.1084, 5: 0.1914, 6: 0.5496}},
+}
+
+
+def racer_belief(game: Game, q: int) -> float:
+    """The probability that seat q plays like a racer rather than a ticket player, given
+    its public play so far (its opening keep, its claims' lengths, whether each of its turns
+    drew tickets), from STYLES with even odds before it has played. Naive Bayes: each
+    observation counts independently."""
+    racer, greedy = STYLES["racer"], STYLES["greedy"]
+    odds = 0.0  # log(P(play | racer) / P(play | greedy))
+    turns = draws = 0
+    card_turns = set()
+    for e in game.log:
+        if e.player != q:
+            continue
+        if e.kind == "keep_initial_tickets":
+            three = e.public["count"] == 3
+            odds += math.log((racer["keep3"] if three else 1 - racer["keep3"])
+                             / (greedy["keep3"] if three else 1 - greedy["keep3"]))
+        elif e.kind == "claim_route":
+            n = game.board.routes[e.public["route"]].length
+            odds += math.log(racer["length"][n] / greedy["length"][n])
+            turns += 1
+        elif e.kind == "draw_tickets":
+            draws += 1
+            turns += 1
+        elif e.kind in ("draw_face_up", "draw_blind"):
+            card_turns.add(e.turn)
+    turns += len(card_turns)
+    odds += draws * math.log(racer["ticket_draw"] / greedy["ticket_draw"])
+    odds += (turns - draws) * math.log((1 - racer["ticket_draw"]) / (1 - greedy["ticket_draw"]))
+    return 1 / (1 + math.exp(-max(-50.0, min(50.0, odds))))
 
 
 def determinize(game: Game, viewer: int, rng: random.Random, memory_level: int = 2,
@@ -142,8 +192,9 @@ class Node:
 class MCTSAgent:
     def __init__(self, seed: Optional[int] = None, iterations: int = 400, c: float = 0.5, prior: float = 0.5,
                  steps: str = "main", rollout: str = "greedy", opponent: str = "greedy", reward: str = "margin",
-                 memory: int = 2, known_tickets: bool = False, name: str = "mcts") -> None:
-        if rollout not in POLICIES or not all(k in POLICIES for k in opponent.split("+")):
+                 memory: int = 2, known_tickets: bool = False, guide=None, name: str = "mcts") -> None:
+        """`guide` is a PPO agent spec (or an agent with `net` and `encoder`, as PPOAgent has)."""
+        if rollout not in POLICIES or not (opponent == "infer" or all(k in POLICIES for k in opponent.split("+"))):
             raise ValueError(f"rollout and opponent must be one of {', '.join(POLICIES)} "
                              "(opponent: several joined by +)")
         if reward not in REWARD_MODES:
@@ -156,6 +207,10 @@ class MCTSAgent:
             raise ValueError("prior must be in [0, 1)")
         if steps not in ("all", "main"):
             raise ValueError("steps must be all or main")
+        if guide is not None and not prior:
+            raise ValueError("a guide gives the PUCT prior: it needs prior > 0")
+        if isinstance(guide, str) and not guide.startswith("ppo:"):
+            raise ValueError("guide must be a PPO run, ppo:PATH[@best]")
         self.rng = random.Random(seed)
         self.iterations = iterations
         self.c = c
@@ -165,7 +220,15 @@ class MCTSAgent:
         self._policy = POLICIES[rollout](self.rng.getrandbits(32))  # plays the delegated decisions
         self.rollout = rollout
         self.opponent = opponent
-        self._opponent_kinds = opponent.split("+")
+        self._infer = opponent == "infer"
+        self._opponent_kinds = ["greedy", "racer"] if self._infer else opponent.split("+")
+        self.guide = guide if guide is None or isinstance(guide, str) else getattr(guide, "name", "guide")
+        self._guide = guide
+        if isinstance(guide, str):
+            from ttr.agents.registry import make_agent
+
+            self._guide = make_agent(guide, self.rng.getrandbits(32))
+        self.last_beliefs: Dict[int, float] = {}  # opponent seat -> racer_belief, with opponent=infer
         self.reward = reward
         self.memory = memory
         self.known_tickets = known_tickets
@@ -178,7 +241,8 @@ class MCTSAgent:
     @classmethod
     def from_spec(cls, options: str, seed: Optional[int] = None, name: str = "mcts") -> "MCTSAgent":
         """`iterations=800,rollout=racer,...` (the part of a registry spec after `mcts:`)."""
-        types = {"iterations": int, "c": float, "prior": float, "steps": str, "rollout": str, "opponent": str, "reward": str,
+        types = {"iterations": int, "c": float, "prior": float, "steps": str, "rollout": str, "opponent": str,
+                 "guide": str, "reward": str,
                  "memory": int, "known_tickets": lambda v: {"1": True, "true": True, "0": False,
                                                            "false": False}[v.lower()]}
         kwargs = {}
@@ -207,6 +271,10 @@ class MCTSAgent:
         choices = [[POLICIES[k](self.rng.getrandbits(32))
                     for k in ([self.rollout] if q == player else self._opponent_kinds)]
                    for q in range(game.num_players)]
+        if self._infer:
+            self.last_beliefs = {q: racer_belief(game, q) for q in range(game.num_players) if q != player}
+        # the guide sees only this seat's view, the same in every sampled world: once for the root
+        self._root_weights = self._guide_weights(game, player) if self._guide is not None and self.prior else None
         while root.visits < self.iterations:
             self._iterate(root, game, player, choices)
         action = max((a for a in legal if a in root.children), key=lambda a: root.children[a].visits)
@@ -229,7 +297,10 @@ class MCTSAgent:
 
     def _iterate(self, root: Node, game: Game, me: int, choices: List[List]) -> None:
         world = determinize(game, me, self.rng, self.memory, self.known_tickets)
-        models = [bots[0] if len(bots) == 1 else self.rng.choice(bots) for bots in choices]
+        models = [bots[0] if len(bots) == 1 else
+                  (bots[1] if self.rng.random() < self.last_beliefs[q] else bots[0]) if self._infer else
+                  self.rng.choice(bots)
+                  for q, bots in enumerate(choices)]
         node, path, in_tree = root, [root], True
         while not world.game_over:
             p = world.current_player
@@ -239,7 +310,11 @@ class MCTSAgent:
                 continue
             legal = world.legal_actions()
             if self.prior:
-                action = self._select_puct(node, legal, models[me].act(world, me))
+                if self._guide is None:
+                    weights = {models[me].act(world, me): 1.0}
+                else:
+                    weights = self._root_weights if node is root else self._guide_weights(world, me)
+                action = self._select_puct(node, legal, weights)
             else:
                 action = self._select_ucb(node, legal, models[me], world)
             child = node.children.get(action)
@@ -275,15 +350,31 @@ class MCTSAgent:
     def _ucb(self, node: Node) -> float:
         return node.total / node.visits + self.c * math.sqrt(math.log(node.available) / node.visits)
 
-    def _select_puct(self, node: Node, legal: List[Action], preferred: Action) -> Action:
-        """PUCT: mean value + c * prior * sqrt(parent visits) / (1 + visits); an untried
-        action counts at the parent's mean value."""
+    def _guide_weights(self, world: Game, me: int) -> Dict[Action, float]:
+        """The guide policy's probability of each legal move, as it would play `me` here."""
+        import numpy as np
+        import torch
+
+        from ttr.learn.common import observe
+
+        obs, mask, by_index = observe(self._guide.encoder, world, me)
+        with torch.no_grad():
+            logits = self._guide.net.logits(torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0),
+                                            torch.as_tensor(mask).unsqueeze(0))[0].double()
+            p = torch.softmax(logits, 0).numpy()
+        return {by_index[i]: float(p[i]) for i in np.flatnonzero(mask)}
+
+    def _select_puct(self, node: Node, legal: List[Action], weights: Dict[Action, float]) -> Action:
+        """PUCT: mean value + c * prior * sqrt(parent visits) / (1 + visits), the prior being
+        `prior` spread by `weights` (the rollout policy's move, or the guide's probabilities)
+        plus an even share of the rest; an untried action counts at the parent's mean value."""
         children = node.children
         share = (1 - self.prior) / len(legal)
         scale = self.c * math.sqrt(max(node.visits, 1))
         best, best_score = None, -math.inf
         for a in legal:
-            prior = share + self.prior if a == preferred else share
+            w = weights.get(a)
+            prior = share + self.prior * w if w else share
             child = children.get(a)
             if child is None:
                 score = node.mean + scale * prior

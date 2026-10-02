@@ -290,9 +290,10 @@ python scripts/eval_agents.py mcts "mcts:reward=score" "mcts:iterations=1600" \
 | --- | --- | --- |
 | `iterations` | `400` | iterations per decision (about 7 ms each mid-game; forced moves take none) |
 | `c` | `0.5` | exploration constant, on the reward's scale (margin / 100) |
-| `prior` | `0.5` | PUCT, with that share of the prior on the rollout policy's move. 0: UCB1 over every legal move (loses to greedy) |
+| `prior` | `0.5` | PUCT, with that share of the prior on the rollout policy's move (or spread as the guide's probabilities). 0: UCB1 over every legal move (loses to greedy) |
+| `guide` | — | `ppo:PATH[@best]`: that PPO policy's probabilities are the prior instead of the rollout policy's move (`[env]` + `[deep]` extras; ~1.3× slower) |
 | `steps` | `main` | search only a turn's main action and ticket choices; second draws and payments are the rollout policy's. `all`: every decision |
-| `rollout` / `opponent` | `greedy` / `greedy` | scripted bots playing the searcher's seat below the tree, and modelling the opponents (`opponent=greedy+racer`: each sampled world draws one of them per seat) |
+| `rollout` / `opponent` | `greedy` / `greedy` | scripted bots playing the searcher's seat below the tree, and modelling the opponents (`opponent=greedy+racer`: each sampled world draws one of them per seat; `opponent=infer`: racer or greedy per world, by how much the opponent's public play so far looks like a racer's) |
 | `reward` | `margin` | `margin`, `score` or `win` |
 | `memory` | `2` | card memory level for dealing the opponents' hands (0 forgets the cards they took face up) |
 | `known_tickets` | `0` | `1` keeps the opponents' true tickets (cheating; a diagnostic) |
