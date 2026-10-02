@@ -983,7 +983,7 @@ for 2 players).
     model (`opponent=greedy+racer`: each sampled world plays every opponent seat with one of the
     listed bots, evenly); settings that existed before give the same searches as in pass 1
     (hash of searches unchanged).
-  - MCTS pass 2 running (`scripts/mcts_pass2.ps1`, `runs/mcts/pass2.*`, started 19:17, ~5–6 h):
+  - MCTS pass 2 (`scripts/mcts_pass2.ps1`, `runs/mcts/pass2.*`, 2026-10-01, 4 h 42 min):
     - `opponent=racer`: the tempo forecast fixed by hand. Against PPO, linear, racer and greedy
       (does it hurt where the model is now wrong?), 100 games each.
     - `opponent=greedy+racer`: the version that doesn't know who it plays. Same opponents.
@@ -992,8 +992,36 @@ for 2 players).
     - `iterations=1600`: is the search limited by its budget or by the prior? Against PPO and
       racer, 50 games (~9 min a game).
     - Left for later: which of the prior and `steps=main` matters, racer rollouts,
-      `known_tickets=1`, 3–5 players. Depending on the result: infer the opponent's type from its
-      play (ticket count, claim lengths), and PPO's policy as the prior (search on top of PPO).
+      `known_tickets=1`, 3–5 players.
+
+    Results, margin ± standard error (win share), and paired against the control (pass 1's
+    own-score search on the same games):
+
+    | Arm | vs PPO p2b | vs linear p7b | vs racer | vs greedy |
+    | --- | --- | --- | --- | --- |
+    | control (pass 1) | −5.6 ± 2.4 (41%) | +5.9 ± 2.3 | +15.9 ± 2.1 | +31.5 ± 2.7 |
+    | `opponent=racer` | −1.2 ± 2.3 (52%); paired **+4.4 ± 2.5** | +11.5; paired **+5.6 ± 3.0** | +15.4; −0.5 ± 2.6 | +27.8; −3.7 ± 3.6 |
+    | `opponent=greedy+racer` | −5.5 ± 2.4 (38%); +0.1 ± 3.2 | +7.6; +1.8 ± 2.9 | +15.1; −0.8 ± 2.6 | +27.8; −3.7 ± 3.6 |
+    | `prior=0.25` | −7.3 ± 2.6 (44%); −1.7 ± 3.2 | — | +10.8; −5.1 ± 2.7 | +31.8; +0.3 ± 3.6 |
+    | `iterations=1600` (50 games) | −0.2 ± 3.8 (56%); +5.5 ± 4.0 | — | +19.8; +1.7 ± 3.1 | — |
+
+    Readings: nothing is decisive at 100 games: pairing on the same games barely narrows the
+    error (the games diverge after a few moves), so a paired difference has an SE of 2.5–4 and
+    effects of 3–5 points need about 400 games to settle.
+    - **Racer as the opponent model helps against the two racing agents**: +4.4 against PPO and
+      +5.6 against linear, each about 1.8 SE, together about 2.6 SE; against PPO it is now at
+      parity (−1.2, 52% wins). It costs 3.7 against greedy (1 SE), where the model is wrong. The
+      behavior barely moves against PPO (it still never ends the game; failed tickets 0.53 →
+      0.45, longest-path bonus 32% → 37%, score 81 → 83), so the gain isn't clearly the tempo
+      forecast it was meant to fix; it may be the forecast of which routes PPO will take.
+    - **The mixed model gains nothing against PPO** (+0.1): half the worlds playing racer does
+      not give half the gain. Within the noise of a half-size effect (expected ~+2).
+    - **A weaker prior doesn't help** and may hurt against racer (−5.1, 1.9 SE): more departures
+      from greedy's move are mostly noise at 400 iterations.
+    - **4× the search** reaches parity with PPO too (−0.2, 56% wins; +5.5 ± 4.0 paired, 1.4 SE)
+      and is the best result against racer (+19.8, 84%, longest-path bonus 100%), at 9.5 min a
+      game.
+    - Every arm keeps the ticket game: 3.3–5.5 kept, 3–5.4 completed.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -1010,13 +1038,14 @@ for 2 players).
       scratch against this pool. Either warm-start it from a trained margin policy (needs an
       `--init` option in `ttr-train-ppo`) or train it in self-play only, where every game
       carries signal.
-    - MCTS (tier D): pass 1 done, pass 2 running (above). The own-score search wins by tickets
-      against every scripted bot, beats racer by more than PPO does, and loses to PPO head to
-      head. Follow-ups after pass 2: choosing the opponent model from the opponent's play so
-      far; PPO's policy as the prior; which of the prior and `steps=main` matters; racer
-      rollouts (does it still find tickets when its own continuation races?); `known_tickets=1`
-      (what inferring the opponent's tickets is worth, and whether it then blocks); 3–5
-      players; blocking instrumentation (`docs/paper/measure.py`).
+    - MCTS (tier D): passes 1–2 done (above). The own-score search wins by tickets against every
+      scripted bot, beats racer by more than PPO does; racer as the opponent model or 4× the
+      search bring it to about parity with PPO head to head (each under 2 SE). Follow-ups:
+      racer model + 1600 iterations against PPO on 200+ games (can it pass PPO?); choosing the
+      opponent model from the opponent's play so far (racer's model helps against racers and
+      costs against greedy); PPO's policy as the prior; which of the prior and `steps=main`
+      matters; racer rollouts; `known_tickets=1`; 3–5 players; blocking instrumentation
+      (`docs/paper/measure.py`).
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
