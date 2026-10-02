@@ -940,9 +940,44 @@ for 2 players).
       (draws tickets 2.4 times a game), scores 140, and still ends the game itself 75% of the
       time. Against racer (`runs/mcts/tune2.*`, 4 games each): margin −6, score +30. Prior and
       `steps=main` were changed together; which one matters is untested.
-    - MCTS pass 1 running (`scripts/mcts_pass1.ps1`, `runs/mcts/pass1.*`, started 14:39, ~5 h):
-      the default search under margin and own score, 100 games against greedy, racer, wary,
-      collector, the reference PPO agent `p2b_pool_s3` and the best linear agent `p7b…s3@best`.
+  - MCTS pass 1 (`scripts/mcts_pass1.ps1`, `runs/mcts/pass1.*`, 2026-10-01, 4 h): the default
+    search (400 iterations, greedy's move as the prior, greedy rollouts and opponent model) under
+    margin and own score, 100 games per opponent on the re-score games (batch seed 9001).
+    PPO `p2b_pool_s3` and racer on the same 100 games (`runs/mcts/pass1_reference.*`) for paired
+    comparisons. Margin ± standard error (win share):
+
+    | Opponent | MCTS margin | MCTS score | PPO p2b | racer | Score − PPO, paired |
+    | --- | --- | --- | --- | --- | --- |
+    | greedy | +18.4 ± 3.2 (74%) | **+31.5 ± 2.7** (88%) | +28.4 (90%) | +12.1 | +3.0 ± 3.1 |
+    | wary | +14.1 ± 3.4 (66%) | **+26.4 ± 2.9** (77%) | +23.5 (89%) | +7.7 | +2.9 ± 3.5 |
+    | racer | +6.2 ± 2.4 (62%) | **+15.9 ± 2.1** (83%) | +6.2 (65%) | −2.6 | **+9.7 ± 2.6** |
+    | collector | +37.1 ± 3.6 (80%) | **+47.9 ± 2.8** (95%) | +44.9 (97%) | +22.4 | +3.0 ± 3.3 |
+    | linear `p7b…s3@best` | −1.4 ± 2.6 (53%) | **+5.9 ± 2.3** (65%) | +4.4 (65%) | −2.4 | +1.5 ± 2.7 |
+    | PPO `p2b_pool_s3` | −10.1 ± 2.7 (38%) | −5.6 ± 2.4 (41%) | +1.5 (self) | −9.9 | −7.0 ± 2.7 |
+
+    Readings:
+    - **Search without training matches the best learned agent against third parties, and wins by
+      tickets.** The own-score search does at least as well as PPO against every scripted bot and
+      the linear agent, and clearly better against racer (+9.7 paired, 83% wins). Its play is the
+      opposite of PPO's: against the bots it keeps 4.5–5.5 tickets and completes 95–98% of them
+      (5.4 a game against greedy, 4.2 against racer), draws more 1.5–2.3 times a game, claims
+      14–15 routes of mean length 2.7–3.0 (PPO: 9–10 of 4.4–5.0, 2 tickets abandoned), and scores
+      107–140 to PPO's 79–90. So tickets aren't a losing strategy in 2-player games: they lose when played by a bot
+      that can't judge which ones to take (collector) and they were never found by learners that
+      have to assign credit across ~50 decisions. The search judges each offer by playing it out.
+    - **But PPO beats it head to head** (−5.6, 41% wins; the margin search −10.1, 38%). Against PPO
+      the games last 63 turns, the search never ends one (0%), keeps 3.75 tickets and fails 0.53 a
+      game, and gets the longest-path bonus 32% of the time (against the bots 87–96%). Its
+      opponent model is greedy, which plays a long game; PPO races, so the search's rollouts
+      likely expect more turns than it gets. Untested: the same search with racer as the opponent
+      model. Against linear (also a racer) the same pattern, smaller: ended 0%, failed 0.36.
+    - **Own score beats margin**: by 10–13 against the bots, 7 against linear, 4.5 against PPO,
+      as in PPO pass 3. The margin search keeps fewer tickets (3.4–3.8) and draws fewer (0.8). A
+      likely cause, untested: margin's rollout values are about twice as noisy (the opponent's
+      sampled tickets), so fewer moves beat the prior and it stays closer to greedy's.
+    - Non-transitive at the top: score search > racer by 15.9, PPO > racer by 6.2, PPO > score
+      search by 5.6.
+    - Cost: 2.1–2.8 min a game, 33–46 searches of 3.5–3.9 s.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -950,16 +985,23 @@ for 2 players).
     agree that ticket planning doesn't beat racing on points; at 5 players it wins more often
     while scoring less. Racing is the finding for the tempo question; pass 3 shows it isn't an
     artifact of the margin reward (only the denial part is), pass 5 that it isn't the pool's.
-    The write-up is `docs/paper/` (rebuild it after new results). Options:
+    **MCTS pass 1 qualifies it:** a search with no training plays tickets (5 kept and finished a
+    game) and does as well as PPO against every third party, better against racer, but loses to
+    PPO head to head. Racing is what learners find, and it beats the ticket search directly;
+    it is not the only strong strategy. The write-up is `docs/paper/` (rebuild it after new
+    results; it has no MCTS section yet). Options:
     - Win/loss reward at 5 players, for the risk-tolerance question: it doesn't learn from
       scratch against this pool. Either warm-start it from a trained margin policy (needs an
       `--init` option in `ttr-train-ppo`) or train it in self-play only, where every game
       carries signal.
-    - MCTS (tier D): built; pass 1 running (above). Follow-ups once it reports: which of the
-      prior and `steps=main` makes the difference; racer rollouts (does the search still find
-      tickets when its own continuation races?); more iterations; `known_tickets=1` (what
-      inferring the opponent's tickets would be worth, and whether it then blocks); 3–5
-      players; behavior instrumentation (`docs/paper/measure.py`) and a round robin entry.
+    - MCTS (tier D): pass 1 done (above): the own-score search wins by tickets against every
+      scripted bot, beats racer by more than PPO does, and loses to PPO head to head. Follow-ups:
+      racer as the opponent model against PPO and linear (is the loss the tempo forecast?), or
+      choosing the model from the opponent's play so far; which of the prior and `steps=main`
+      matters; racer rollouts (does it still find tickets when its own continuation races?);
+      more iterations; `known_tickets=1` (what inferring the opponent's tickets is worth, and
+      whether it then blocks); 3–5 players; blocking instrumentation (`docs/paper/measure.py`);
+      the paper, whose racing conclusion this qualifies.
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't

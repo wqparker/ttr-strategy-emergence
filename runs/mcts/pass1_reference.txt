@@ -1,0 +1,54 @@
+greedy vs collector (2p, 100 games): margin +14.9 ± 3.4, win 69%, score 113 to 98
+    tickets kept 4.88, done 4.75, failed 0.13, draws 1.47; claims 15.9 x 2.74 (1.4 of 5-6); ended it 56%, longest bonus 54%, 85 turns
+    0.0 min a game
+greedy vs greedy (2p, 100 games): margin -9.0 ± 3.2, win 33%, score 108 to 117
+    tickets kept 4.91, done 4.67, failed 0.24, draws 1.35; claims 15.3 x 2.75 (1.4 of 5-6); ended it 44%, longest bonus 40%, 84 turns
+    0.0 min a game
+greedy vs linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best (2p, 100 games): margin -20.9 ± 2.6, win 20%, score 68 to 89
+    tickets kept 4.33, done 3.28, failed 1.05, draws 0.89; claims 12.4 x 2.52 (0.8 of 5-6); ended it 0%, longest bonus 62%, 67 turns
+    0.0 min a game
+greedy vs ppo:runs/ppo/pass2/p2b_pool_s3.json (2p, 100 games): margin -30.5 ± 2.0, win 8%, score 58 to 89
+    tickets kept 3.88, done 2.89, failed 0.99, draws 0.69; claims 11.6 x 2.58 (0.8 of 5-6); ended it 0%, longest bonus 7%, 64 turns
+    0.0 min a game
+greedy vs racer (2p, 100 games): margin -15.9 ± 2.5, win 24%, score 79 to 95
+    tickets kept 4.49, done 3.73, failed 0.76, draws 1.05; claims 12.8 x 2.58 (0.9 of 5-6); ended it 1%, longest bonus 56%, 70 turns
+    0.0 min a game
+greedy vs wary (2p, 100 games): margin -12.0 ± 3.1, win 27%, score 103 to 115
+    tickets kept 4.88, done 4.53, failed 0.35, draws 1.32; claims 14.8 x 2.73 (1.4 of 5-6); ended it 22%, longest bonus 39%, 82 turns
+    0.0 min a game
+ppo:runs/ppo/pass2/p2b_pool_s3.json vs collector (2p, 100 games): margin +44.9 ± 2.3, win 97%, score 90 to 45
+    tickets kept 2.00, done 0.02, failed 1.98, draws 0.00; claims 9.1 x 4.97 (6.2 of 5-6); ended it 100%, longest bonus 97%, 64 turns
+    0.0 min a game
+ppo:runs/ppo/pass2/p2b_pool_s3.json vs greedy (2p, 100 games): margin +28.4 ± 2.1, win 90%, score 89 to 61
+    tickets kept 2.00, done 0.02, failed 1.98, draws 0.00; claims 9.0 x 5.00 (6.2 of 5-6); ended it 100%, longest bonus 91%, 64 turns
+    0.0 min a game
+ppo:runs/ppo/pass2/p2b_pool_s3.json vs linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best (2p, 100 games): margin +4.4 ± 1.6, win 65%, score 80 to 76
+    tickets kept 2.00, done 0.02, failed 1.98, draws 0.00; claims 10.1 x 4.40 (5.2 of 5-6); ended it 84%, longest bonus 90%, 63 turns
+    0.0 min a game
+ppo:runs/ppo/pass2/p2b_pool_s3.json vs ppo:runs/ppo/pass2/p2b_pool_s3.json (2p, 100 games): margin +1.5 ± 1.5, win 55%, score 74 to 72
+    tickets kept 2.00, done 0.00, failed 2.00, draws 0.00; claims 9.9 x 4.40 (5.2 of 5-6); ended it 49%, longest bonus 53%, 62 turns
+    0.0 min a game
+ppo:runs/ppo/pass2/p2b_pool_s3.json vs racer (2p, 100 games): margin +6.2 ± 1.7, win 65%, score 79 to 73
+    tickets kept 2.00, done 0.01, failed 1.99, draws 0.00; claims 10.1 x 4.38 (5.2 of 5-6); ended it 86%, longest bonus 94%, 63 turns
+    0.0 min a game
+ppo:runs/ppo/pass2/p2b_pool_s3.json vs wary (2p, 100 games): margin +23.5 ± 2.1, win 89%, score 89 to 66
+    tickets kept 2.00, done 0.03, failed 1.97, draws 0.00; claims 9.0 x 4.98 (6.2 of 5-6); ended it 100%, longest bonus 91%, 64 turns
+    0.0 min a game
+racer vs collector (2p, 100 games): margin +22.4 ± 2.6, win 74%, score 95 to 73
+    tickets kept 2.00, done 0.00, failed 2.00, draws 0.00; claims 8.1 x 5.59 (7.0 of 5-6); ended it 99%, longest bonus 49%, 70 turns
+    0.0 min a game
+racer vs greedy (2p, 100 games): margin +12.1 ± 2.7, win 68%, score 94 to 82
+    tickets kept 2.00, done 0.00, failed 2.00, draws 0.00; claims 8.0 x 5.60 (7.0 of 5-6); ended it 99%, longest bonus 38%, 70 turns
+    0.0 min a game
+racer vs linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best (2p, 100 games): margin -2.4 ± 2.1, win 44%, score 82 to 84
+    tickets kept 2.00, done 0.00, failed 2.00, draws 0.00; claims 7.4 x 5.54 (6.6 of 5-6); ended it 34%, longest bonus 53%, 66 turns
+    0.0 min a game
+racer vs ppo:runs/ppo/pass2/p2b_pool_s3.json (2p, 100 games): margin -9.9 ± 1.5, win 21%, score 69 to 79
+    tickets kept 2.00, done 0.00, failed 2.00, draws 0.00; claims 6.7 x 5.62 (6.2 of 5-6); ended it 10%, longest bonus 3%, 62 turns
+    0.0 min a game
+racer vs racer (2p, 100 games): margin -2.6 ± 1.7, win 44%, score 83 to 86
+    tickets kept 2.00, done 0.00, failed 2.00, draws 0.00; claims 8.2 x 5.25 (7.0 of 5-6); ended it 42%, longest bonus 52%, 65 turns
+    0.0 min a game
+racer vs wary (2p, 100 games): margin +7.7 ± 2.5, win 57%, score 93 to 85
+    tickets kept 2.00, done 0.00, failed 2.00, draws 0.00; claims 8.0 x 5.61 (7.0 of 5-6); ended it 85%, longest bonus 36%, 70 turns
+    0.0 min a game

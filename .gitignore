@@ -20,14 +20,19 @@ venv/
 
 # Training outputs stay on this machine (development is on one machine; run data is
 # not shared through the repo). Tracked: only the small summaries behind PLAN.md's
-# tables (fresh-game re-scores, round robins, the overnight log).
+# tables (fresh-game re-scores, round robins, the overnight log, MCTS evaluations: one
+# row per game, no networks).
 runs/*
 !runs/linear/
 !runs/dqn/
 !runs/ppo/
+!runs/mcts/
 runs/linear/*
 runs/dqn/*
 runs/ppo/*
+runs/mcts/*
+!runs/mcts/*.csv
+!runs/mcts/*.txt
 !runs/linear/overnight-*.md
 !runs/linear/rescore_*
 !runs/dqn/rescore_*

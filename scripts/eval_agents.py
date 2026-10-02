@@ -94,9 +94,24 @@ def summarize(rows: list) -> str:
     return "\n".join(lines)
 
 
+def report(csv_path: Path, log_path: Path, every: float) -> None:
+    while True:
+        rows = read_rows(csv_path)
+        lines = log_path.read_text(encoding="utf-8").splitlines() if log_path.exists() else []
+        progress = next((x for x in reversed(lines) if " games, " in x or "finished" in x), "")
+        text = f"{time.strftime('%H:%M:%S')}  {progress.split(':')[0] if ' games, ' in progress else progress}\n\n"
+        text += summarize(rows) if rows else f"no games in {csv_path} yet"
+        if every:
+            print("\033[2J\033[H" + text, flush=True)  # clear the screen, then redraw
+            time.sleep(every)
+        else:
+            print(text)
+            return
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("agents", nargs="+", help="agent specs (ttr.agents.registry)")
+    ap.add_argument("agents", nargs="*", help="agent specs (ttr.agents.registry)")
     ap.add_argument("--opponents", nargs="+", default=["greedy"], metavar="SPEC")
     ap.add_argument("--players", type=int, default=2)
     ap.add_argument("--games", type=int, default=100, help="games per agent and opponent")
@@ -105,11 +120,19 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--max-turns", type=int, default=1000)
     ap.add_argument("--out", type=Path, required=True, help="output prefix: OUT.csv, OUT.txt")
+    ap.add_argument("--report", nargs="?", type=float, const=0, metavar="SECONDS",
+                    help="play nothing: print the summary of the games in OUT.csv so far, and with SECONDS "
+                         "keep reprinting it that often (a live view of a running evaluation; Ctrl+C stops)")
     args = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"):  # Windows consoles and pipes default to cp1252
         sys.stdout.reconfigure(encoding="utf-8")
 
     csv_path, txt_path, log_path = (args.out.with_suffix(x) for x in (".csv", ".txt", ".log"))
+    if args.report is not None:
+        report(csv_path, log_path, args.report)
+        return
+    if not args.agents:
+        ap.error("give at least one agent (or --report)")
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     done = {(r["agent"], r["opponent"], int(r["players"]), int(r["seed"]), int(r["game"])) for r in read_rows(csv_path)}
     pairs = [(a, o) for o in args.opponents for a in args.agents]

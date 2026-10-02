@@ -301,7 +301,8 @@ python scripts/eval_agents.py mcts "mcts:reward=score" "mcts:iterations=1600" \
 `rescore.py`), in chunks of `--chunk` games over `--workers` processes. Rows go to `OUT.csv` as chunks finish
 (rerun the same command to resume or add `--games`); `OUT.txt` gets the summary: margin ± standard error, win
 share, tickets, claims, minutes a game and seconds a search. Any agent spec works, so bots give references on
-the same games.
+the same games. While it runs, `python scripts/eval_agents.py --report 30 --out runs/mcts/NAME` redraws the
+summary of the games so far every 30 s (`--report` alone prints it once); progress lines are in `OUT.log`.
 
 ### Round robin
 
