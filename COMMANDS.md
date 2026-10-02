@@ -301,7 +301,8 @@ python scripts/eval_agents.py mcts "mcts:reward=score" "mcts:iterations=1600" \
 `rescore.py`), in chunks of `--chunk` games over `--workers` processes. Rows go to `OUT.csv` as chunks finish
 (rerun the same command to resume or add `--games`); `OUT.txt` gets the summary: margin ± standard error, win
 share, tickets, claims, minutes a game and seconds a search. Any agent spec works, so bots give references on
-the same games. While it runs, `python scripts/eval_agents.py --report 30 --out runs/mcts/NAME` redraws the
+the same games. While it runs, `ttr-dash runs/mcts/NAME.csv --live` shows it in a window (see ttr-dash), and
+`python scripts/eval_agents.py --report 30 --out runs/mcts/NAME` redraws the
 summary of the games so far every 30 s (`--report` alone prints it once); progress lines are in `OUT.log`.
 
 ### Round robin
@@ -415,6 +416,26 @@ A live save of a full 2000-game run takes about 20 ms, so `--live 25` adds about
 Keys: `1`-`7` or `←`/`→` pages, `o` next evaluation opponent (greedy, random, and any others the runs have), `r` next run
 (pages 4-7), `PgUp`/`PgDn`/`Home`/`End` raw games, `s` save the page as PNG, `f` full screen,
 `q` quit. `--opponent`, `--page` and `--windowed` set the start.
+
+### Evaluations (MCTS passes)
+
+Given the per-game CSVs of `scripts/eval_agents.py` instead of runs, `ttr-dash` opens the evaluation view
+(`ttr.learn.eval_dash`). Several files combine (a game in two files counts once), so a pass, its control and
+the reference agents show together:
+
+```text
+ttr-dash runs/mcts/pass2.csv runs/mcts/pass1.csv runs/mcts/pass1_reference.csv --control "mcts:reward=score" --live
+ttr-dash "runs/mcts/*.csv" --save runs/mcts/dash               # all pages as PNG, no window
+```
+
+| Page | Shows |
+| --- | --- |
+| 1 Strength | per opponent, every agent's mean margin with a 95% interval, win share and games |
+| 2 Paired | per opponent, every agent minus the control agent on the same games, mean and 95% interval (`c` next control) |
+| 3 Behavior | for one opponent (`o` next): tickets kept / completed / failed, ticket draws, claims, claim length, ended the game, longest-path bonus, scores, turns, win share |
+| 4 Progress | games, margin, minutes a game and seconds a search per agent and opponent; each CSV's latest `OUT.log` line with the time left in that batch |
+
+`--live [SECONDS]` rereads the files every 10 s (or SECONDS) and redraws when they change.
 
 ## Tests and setup
 

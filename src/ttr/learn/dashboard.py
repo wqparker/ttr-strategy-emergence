@@ -6,6 +6,7 @@ training runs (the JSON `ttr-train-linear`, `ttr-train-dqn` or `ttr-train-ppo` w
     ttr-dash runs/linear/*.json --save runs/linear/dash                   # every page as PNG, no window
     ttr-dash runs/linear/pass2/*.json --group                             # average seeds: X_s0, X_s1 -> X
     ttr-dash --live runs/linear/pass3/q_random_s0.json                    # follow a run training with --live
+    ttr-dash runs/mcts/pass2.csv runs/mcts/pass1.csv --live              # evaluation CSVs: ttr.learn.eval_dash
 
 Pages (keys 1-7 or left/right):
 
@@ -766,6 +767,11 @@ def _shared_prefix(lists: Sequence[Sequence[str]]) -> int:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
+    given = list(sys.argv[1:] if argv is None else argv)
+    if any(a.lower().endswith(".csv") for a in given if not a.startswith("-")):
+        from ttr.learn.eval_dash import main as eval_main  # per-game evaluation CSVs, not training runs
+
+        return eval_main(given)
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("runs", nargs="+", help="training run JSON files (ttr-train-linear --out); "
                                                 "wildcards like runs/linear/pass3/*.json are expanded here")
