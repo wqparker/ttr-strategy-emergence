@@ -70,7 +70,7 @@ for 2 players).
 
 ## Current progress
 
-*Updated at the end of each session. Last updated: 2026-10-01.*
+*Updated at the end of each session. Last updated: 2026-10-04.*
 
 - **Earlier: engine ready, and every RL design question settled.**
   - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view,
@@ -1039,12 +1039,35 @@ for 2 players).
       the rest even) in place of greedy's move; greedy rollouts still judge the moves. The root's
       prior is computed once a search (the guide sees only the searcher's view); deeper nodes ask
       it per world. 3.7 s a decision against 2.8.
-  - MCTS pass 3 running (`scripts/mcts_pass3.ps1`, `runs/mcts/pass3.*`, started 02:29, ~6–7 h),
-    own score, pass 1's own-score search as the paired control:
+  - MCTS pass 3 (`scripts/mcts_pass3.ps1`, `runs/mcts/pass3.*`), own score, pass 1's own-score
+    search as the paired control:
     - `opponent=infer` against every opponent (PPO, linear, racer, greedy, wary, collector), 100
       games each: racer's gains against racers without its cost against ticket players?
     - `guide=ppo:runs/ppo/pass2/p2b_pool_s3.json` against PPO, linear, racer and greedy, 100 each.
     - `opponent=racer,iterations=1600` against PPO, 200 games: pass 2's two gains together.
+    - Interrupted: the PC slept from 04:22 to 11:52 on 2026-10-02, the moment the first batch ended
+      (Windows event log: "System Idle"). Only `eval_agents.py` held the keep-awake flag, so the gap
+      between one batch's process and the next let an idle PC sleep; the guide batch had played
+      4 minutes when the run was paused. The MCTS launchers now hold it across batches
+      (`Set-KeepAwake` in `scripts/run_queue.ps1`). Resumed 2026-10-04 for the last two batches.
+    - First batch, `opponent=infer` (margin ± standard error, win share; paired against the
+      control and against pass 2's `opponent=racer` arm on the same games):
+
+      | Opponent | `opponent=infer` | − control | − racer model |
+      | --- | --- | --- | --- |
+      | PPO p2b | −0.8 ± 2.8 (50%) | +4.8 ± 2.9 | +0.4 ± 3.0 |
+      | linear p7b | +8.4 ± 2.5 (67%) | +2.5 ± 3.4 | −3.1 ± 3.0 |
+      | racer | +17.5 ± 2.3 (81%) | +1.6 ± 2.6 | +2.1 ± 2.9 |
+      | greedy | +31.9 ± 3.3 (85%) | +0.5 ± 3.3 | +4.2 ± 3.8 |
+      | wary | +28.2 ± 2.7 (80%) | +1.8 ± 2.9 | — |
+      | collector | +44.2 ± 3.5 (90%) | −3.7 ± 4.3 | — |
+
+      Readings: it does what it was built for, within the noise. Against PPO it matches the racer
+      model (+0.4) and against greedy it avoids that model's cost (+4.2); over all six opponents it
+      is +1.3 ± 1.3 on the control, +3.7 ± 2.2 against the two racing learners. Against PPO the
+      play barely moves, as with the racer model: it never ends the game (0%), fails 0.49 tickets,
+      gets the longest-path bonus 32% of the time and scores 84 to 85. So knowing PPO races doesn't
+      give it PPO's tempo; parity with PPO is the most any opponent model has reached.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -1061,7 +1084,7 @@ for 2 players).
       scratch against this pool. Either warm-start it from a trained margin policy (needs an
       `--init` option in `ttr-train-ppo`) or train it in self-play only, where every game
       carries signal.
-    - MCTS (tier D): passes 1–2 done, pass 3 running (above). The own-score search wins by
+    - MCTS (tier D): passes 1–2 done, pass 3's last two batches running (above). The own-score search wins by
       tickets against every scripted bot, beats racer by more than PPO does; racer as the
       opponent model or 4× the search bring it to about parity with PPO head to head (each under
       2 SE). Left after pass 3: which of the prior and `steps=main` matters; racer rollouts;

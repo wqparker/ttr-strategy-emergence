@@ -21,9 +21,15 @@ $batches = @(
   @("mcts:reward=score,prior=0.25", "--opponents", $ppo, "racer", "greedy", "--games", "100", "--chunk", "2"),
   @("mcts:reward=score,iterations=1600", "--opponents", $ppo, "racer", "--games", "50", "--chunk", "1")
 )
-foreach ($batch in $batches) {
-  $cmd = @("scripts\eval_agents.py") + $batch + $common
-  if ($DryRun) { ".venv\Scripts\python.exe $($cmd -join ' ')"; continue }
-  & .venv\Scripts\python.exe @cmd
-  if ($LASTEXITCODE -ne 0) { throw "eval_agents.py exited with $LASTEXITCODE" }
+. "$PSScriptRoot\run_queue.ps1"
+if (-not $DryRun) { Set-KeepAwake $true }  # across batches: each eval_agents.py holds it only while it runs
+try {
+  foreach ($batch in $batches) {
+    $cmd = @("scripts\eval_agents.py") + $batch + $common
+    if ($DryRun) { ".venv\Scripts\python.exe $($cmd -join ' ')"; continue }
+    & .venv\Scripts\python.exe @cmd
+    if ($LASTEXITCODE -ne 0) { throw "eval_agents.py exited with $LASTEXITCODE" }
+  }
+} finally {
+  if (-not $DryRun) { Set-KeepAwake $false }
 }

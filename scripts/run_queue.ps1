@@ -5,6 +5,18 @@
 # OUT\name_sS.json", its output in OUT\name_sS.log and .err, at most SLOTS at a time. The PC stays awake
 # until every run has ended. OUT\LOG gets a line when the queue starts, when each run starts, each run's
 # exit code, and when it finishes. -DryRun prints the command lines and starts nothing.
+
+# ES_CONTINUOUS | ES_SYSTEM_REQUIRED: no idle sleep until Set-KeepAwake $false. A launcher that runs several
+# commands in turn holds it across all of them: a command that only holds it while it runs leaves a gap
+# between commands in which an idle PC sleeps (MCTS pass 3 slept 7.5 h that way, 2026-10-02).
+function Set-KeepAwake([bool] $On) {
+  if (-not ("Win32.Power" -as [type])) {
+    Add-Type -Namespace Win32 -Name Power -MemberDefinition `
+      '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);'
+  }
+  [Win32.Power]::SetThreadExecutionState([uint32]$(if ($On) { "0x80000001" } else { "0x80000000" })) | Out-Null
+}
+
 function Invoke-RunQueue {
   param(
     [Parameter(Mandatory)][string] $Exe,
@@ -28,12 +40,7 @@ function Invoke-RunQueue {
 
   New-Item -ItemType Directory -Force $Out | Out-Null
   $logFile = Join-Path $Out $Log
-  # ES_CONTINUOUS | ES_SYSTEM_REQUIRED: no idle sleep while the queue runs
-  if (-not ("Win32.Power" -as [type])) {
-    Add-Type -Namespace Win32 -Name Power -MemberDefinition `
-      '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint esFlags);'
-  }
-  [Win32.Power]::SetThreadExecutionState([uint32]"0x80000001") | Out-Null
+  Set-KeepAwake $true  # until the queue ends
   try {
     "started $(Get-Date -Format s)" | Out-File -Encoding utf8 $logFile
     $jobs = @()
@@ -53,6 +60,6 @@ function Invoke-RunQueue {
     foreach ($j in $jobs) { "exit $($j.Proc.ExitCode)  $($j.Run)" | Out-File -Append -Encoding utf8 $logFile }
     "finished $(Get-Date -Format s)" | Out-File -Append -Encoding utf8 $logFile
   } finally {
-    [Win32.Power]::SetThreadExecutionState([uint32]"0x80000000") | Out-Null  # let the PC sleep again
+    Set-KeepAwake $false
   }
 }
