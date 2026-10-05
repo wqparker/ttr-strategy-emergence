@@ -1068,19 +1068,30 @@ for 2 players).
       play barely moves, as with the racer model: it never ends the game (0%), fails 0.49 tickets,
       gets the longest-path bonus 32% of the time and scores 84 to 85. So knowing PPO races doesn't
       give it PPO's tempo; parity with PPO is the most any opponent model has reached.
-    - Paused 2026-10-04 at 328 of the guide batch's 400 games (80–84 per opponent); the 1600-
-      iteration batch hasn't started. Rerunning the launcher resumes. Interim, paired as above:
+    - Guide batch, `guide=ppo` (paused 2026-10-04 at 328 games and resumed; 100 games per
+      opponent). Paired as above, and against PPO p2b itself on the same games
+      (`pass1_reference`):
 
-      | Opponent | `guide=ppo` | − control | − `opponent=infer` |
-      | --- | --- | --- | --- |
-      | PPO p2b | +6.5 ± 2.7 (62%) | **+11.9 ± 3.9** | +7.8 ± 3.7 |
-      | linear p7b | +7.2 ± 2.7 (62%) | +1.9 ± 3.7 | −2.5 ± 3.7 |
-      | racer | +19.7 ± 2.5 (77%) | +3.7 ± 3.1 | +1.9 ± 3.3 |
-      | greedy | +17.5 ± 3.8 (69%) | **−13.7 ± 4.7** | −13.8 ± 4.7 |
+      | Opponent | `guide=ppo` | − control | − `opponent=infer` | − PPO p2b |
+      | --- | --- | --- | --- | --- |
+      | PPO p2b | +7.5 ± 2.5 (63%) | **+13.1 ± 3.5** | +8.3 ± 3.4 | +6.1 ± 2.7 |
+      | linear p7b | +7.6 ± 2.5 (64%) | +1.8 ± 3.3 | −0.8 ± 3.4 | +3.3 ± 2.7 |
+      | racer | +18.9 ± 2.3 (77%) | +3.0 ± 3.0 | +1.4 ± 3.0 | **+12.7 ± 2.7** |
+      | greedy | +18.9 ± 3.3 (71%) | **−12.5 ± 4.0** | −13.0 ± 4.3 | −9.5 ± 3.4 |
 
-      The PPO prior makes the search race: 2 tickets kept, about 1 completed, 10–12 claims of mean
-      length 3.7–4.2, longest-path bonus 94–96% (58% against PPO). It is the first search to beat
-      PPO head to head (3 SE over the control), and it gives up the ticket game's edge over greedy.
+      Readings:
+      - **The PPO prior makes the search race, and race better than PPO.** It keeps the opening 2
+        tickets, completes about 1 (failing 0.8–1.1), draws no more, claims 10–12 routes of mean
+        length 3.8–4.2 with 3.9–5.2 of them 5–6 long, and takes the longest-path bonus 93–96% of the
+        time (58% against PPO). It beats PPO head to head, +7.5 with 63% wins: the first search
+        to do so, 3.7 SE over the control. Against racer it does 12.7 better than PPO does.
+      - **It loses the ticket game's edge over greedy**: −12.5 against the control, which beats
+        greedy by playing tickets, and −9.5 against PPO, whose margin reward also takes points
+        from greedy (tempo). It ends 97% of the games against greedy and scores 105 to 86.
+      - Search over PPO's prior improves on PPO against the three racers (+6.1, +3.3, +12.7) and
+        falls short of it against greedy (−9.5); search over greedy's prior plays tickets and is
+        the stronger of the two against greedy. No search setting is best against every opponent.
+      - Cost: 2.2–2.5 min a game, 3.9–4.1 s a search (greedy prior: 3.0–3.5 s).
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
