@@ -1092,6 +1092,20 @@ for 2 players).
         falls short of it against greedy (−9.5); search over greedy's prior plays tickets and is
         the stronger of the two against greedy. No search setting is best against every opponent.
       - Cost: 2.2–2.5 min a game, 3.9–4.1 s a search (greedy prior: 3.0–3.5 s).
+    - Last batch, `opponent=racer,iterations=1600` against PPO, 200 games (finished 2026-10-04
+      21:02): **+3.4 ± 1.6, 56% wins**, the first ticket-playing search ahead of PPO (2.1 SE). On
+      games 0–99, which have the other arms: +5.9, paired +11.4 ± 2.9 over the control, +7.0 ± 2.7
+      over the racer model at 400 iterations, +2.1 ± 4.5 over 1600 iterations with the greedy model
+      (50 games), −1.7 ± 3.0 against the guided search. Pass 2's two gains (+4.4 and +5.5) add up.
+      Games 100–199 alone: +1.0 ± 2.2, so the first 100 games favor the searcher by a few points.
+      Its play is the ticket game: 3.6 kept, 3.2 completed, never ends the game, longest-path bonus
+      40%, 64 turns. 6.2 min a game, 11.1 s a search.
+    - **Pass 3 in short:** two ways past PPO head to head, equal on the same games. Race with PPO's
+      policy as the prior (+7.5, 2.2 min a game), or play tickets with racer as the opponent model
+      and 4× the search (+3.4 over 200 games, 6.2 min). The guided search is the strongest search
+      against racers (PPO, racer, linear); the inferred-model search, which plays tickets, against
+      ticket players (greedy +31.9 to the guided search's +18.9). Under own score, with greedy's
+      prior and enough search, tickets beat racing; with PPO's prior the search races.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -1108,11 +1122,13 @@ for 2 players).
       scratch against this pool. Either warm-start it from a trained margin policy (needs an
       `--init` option in `ttr-train-ppo`) or train it in self-play only, where every game
       carries signal.
-    - MCTS (tier D): passes 1–2 done, pass 3's last two batches running (above). The own-score search wins by
-      tickets against every scripted bot, beats racer by more than PPO does; racer as the
-      opponent model or 4× the search bring it to about parity with PPO head to head (each under
-      2 SE). Left after pass 3: which of the prior and `steps=main` matters; racer rollouts;
-      `known_tickets=1`; 3–5 players; blocking instrumentation (`docs/paper/measure.py`).
+    - MCTS (tier D): passes 1–3 done (above). The own-score search wins by tickets against every
+      scripted bot and beats racer by more than PPO does; PPO's policy as the prior (+7.5) or the
+      racer opponent model with 4× the search (+3.4) beat PPO head to head. Open: the guided
+      search under margin (PPO's tempo against greedy), with more search, with the inferred
+      opponent model; the two searches head to head; which of the prior and `steps=main` matters;
+      racer rollouts; `known_tickets=1`; 3–5 players; blocking instrumentation
+      (`docs/paper/measure.py`).
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
