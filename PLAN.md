@@ -1106,6 +1106,15 @@ for 2 players).
       against racers (PPO, racer, linear); the inferred-model search, which plays tickets, against
       ticket players (greedy +31.9 to the guided search's +18.9). Under own score, with greedy's
       prior and enough search, tickets beat racing; with PPO's prior the search races.
+  - MCTS pass 4 running (`scripts/mcts_pass4.ps1`, `runs/mcts/pass4.*`, started 2026-10-05, ~4.5 h):
+    the guided search, with pass 3's `guide=ppo` games (own score) as the paired control.
+    - `reward=margin,guide=ppo`: PPO's margin training takes points from greedy by tempo; does
+      margin close the guided search's −9.5 to PPO against greedy? Against PPO, linear, racer and
+      greedy, 100 games each.
+    - `guide=ppo,opponent=infer`: the inferred opponent model under the guide. Same opponents.
+    - `guide=ppo,iterations=1600` against PPO, 100 games: does the +7.5 grow with search?
+    - `guide=ppo` against `opponent=infer` (the ticket search), 100 games: the two strongest
+      searches head to head.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
