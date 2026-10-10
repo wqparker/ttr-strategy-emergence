@@ -1140,17 +1140,56 @@ for 2 players).
       search ≥ guided search (+2.4, under 1 SE). Against the ticket search the guided search ends
       92% of the games and takes the longest-path bonus 75% of the time, and still trails on
       tickets.
-  - PPO pass 6 running (`scripts/ppo_pass6.ps1`, `runs/ppo/pass6/`, started 2026-10-10, ~2.5–3 h):
-    **can a learner find tickets when its opponents don't race?** MCTS passes 1–4 show that under
-    own score tickets beat racing against greedy (the search keeps 5.5, completes 5.4 and scores
-    136; PPO p2b, racing, scores 89 on the same games). No learner ever found tickets, but every pool
-    had racers in it (5 of 8 seats). Own score, 2 players, pass 3's setting otherwise (no shaping,
+  - PPO pass 6 (`scripts/ppo_pass6.ps1`, `runs/ppo/pass6/`, 2026-10-10, 2 h 18 min): **can a
+    learner find tickets when its opponents don't race?** MCTS passes 1–4 show that under own score
+    tickets beat racing against greedy (the search keeps 5.5, completes 5.4 and scores 136; PPO
+    p2b, racing, scores 89 on the same games). No learner ever found tickets, but every pool had
+    racers in it (5 of 8 seats). Own score, 2 players, pass 3's setting otherwise (no shaping,
     default PPO settings, 50000 games), 3 seeds each, all 12 at once:
     - `p6a_greedy`: against greedy only. Separates "racing is the best response to the pool" from
       "tickets are too hard to learn".
     - `p6b_greedy_plan`: + the ticket-plan observation block (for DQN it doubled tickets completed).
     - `p6c_greedy_shape`: + shaping 1 (credit for progress toward tickets before the game ends).
     - `p6d_ticket_pool`: pool of ticket players only: greedy, wary, collector.
+
+    Re-scored on 1000 fresh games per opponent (`runs/ppo/rescore_pass6.*`), final policies, mean
+    over seeds (win share); own score against greedy from the last 5 training evaluations; pass
+    3's own-score arm (pool with racers) for reference:
+
+    | Arm | vs greedy | Own score vs greedy | vs wary | vs racer | vs collector | Tickets done |
+    | --- | --- | --- | --- | --- | --- | --- |
+    | `p6a_greedy` | +2.6 (53%) | 92 | −1.4 | −47.6 (2%) | +18.5 | 0.08 |
+    | `p6b_greedy_plan` | +9.5 (64%) | 97 | +6.4 | −40.7 (4%) | +25.4 | 0.08 |
+    | `p6c_greedy_shape` | +11.7 (67%) | 95 | +7.8 | −33.4 (10%) | +26.7 | 0.01 |
+    | `p6d_ticket_pool` | **+13.2** (69%) | 97 | **+9.0** | −10.5 (33%) | **+31.8** | 0.02 |
+    | pass 3 `p3b_score` (pool) | +11.8 (67%) | — | +8.5 | **+4.2** (64%) | +23.3 | 0.00 |
+
+    Best checkpoints are −1 to +5 against the final policies against the ticket players, +4 to +12
+    against racer.
+
+    Readings:
+    - **No learner found tickets, with no racer to play against.** From the first evaluation (2000
+      games) every seed of every arm keeps exactly the 2 opening tickets and never draws another
+      (most kept at any evaluation: 2.25); 0.0–0.1 completed. No ticket-hoarding phase either, unlike
+      the DQN pool arms of pass 2. The ticket plan, shaping and the ticket-player pool each failed
+      to change it. So it is "tickets are too hard to learn", not "racing is the best response to
+      the pool".
+    - **Racing is a local optimum here, not the best response.** The learners score 92–97 of their
+      own points against greedy; greedy scores 112 against greedy on the same evaluation games,
+      the own-score search 136. Copying the opponent would earn 15–20 more of the learner's own
+      reward. What it learns instead is the purest 6-route race yet: 8–9 claims of mean length
+      4.9–5.4, 104–108 route points, 2 tickets abandoned (−19 to −22), the end triggered in 94–98% of
+      games.
+    - **The aids improve the race, not the tickets**: the ticket plan +7 and shaping +9 over
+      `p6a` against greedy, with the same 0.0–0.1 tickets completed.
+    - **Trained without racers, the policy is fragile against them**: −33 to −48 against racer and
+      26–34 behind the linear agent in training evaluations. It waits for 6-routes that a racer takes
+      first and ends with 11–17 trains unused. The ticket-player pool is the exception (−10.5),
+      and is the strongest arm against every ticket player, about level with pass 3's score arm
+      there; pass 3's pool, racers included, is the only one positive against racer.
+    - Next step for the ticket question: the search plays tickets and the learners don't, so
+      train the network on the search's moves (expert iteration, below) and see whether a network
+      can hold a ticket strategy at all.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -1181,7 +1220,7 @@ for 2 players).
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
     needed for passes 4–5; the cross-play and the self-play head to head (2 + 2 seats) covered
     their questions.
-  - Own score against greedy alone: PPO pass 6, running (above).
+  - Own score against greedy alone: done, PPO pass 6 (above). No tickets.
   - Ticket choice: PPO abandons pricier tickets than racer does (−21 to −23 vs −19 a game).
   - Phase 6 strategy analysis on the agents we have (PLAN "Roadmap"): done in `docs/paper/` for
     the longest-path bonus, tempo, the race for the nine 6-routes, blocking against chance

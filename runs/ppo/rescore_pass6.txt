@@ -1,0 +1,36 @@
+vs greedy, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p6a_greedy               final   +2.6 (+2, -2, +8)  win  53%  tickets 0.08/1.92
+p6a_greedy               best    +8.0 (+12, +0, +12)  win  61%  tickets 0.08/1.92
+p6b_greedy_plan          final   +9.5 (+10, +10, +8)  win  64%  tickets 0.08/1.92
+p6b_greedy_plan          best   +13.2 (+8, +15, +17)  win  69%  tickets 0.09/1.91
+p6c_greedy_shape         final  +11.7 (+9, +16, +10)  win  67%  tickets 0.01/1.99
+p6c_greedy_shape         best   +13.0 (+11, +16, +12)  win  69%  tickets 0.01/2.00
+p6d_ticket_pool          final  +13.2 (+11, +13, +16)  win  69%  tickets 0.02/1.98
+p6d_ticket_pool          best   +17.0 (+18, +15, +18)  win  75%  tickets 0.01/1.99
+vs wary, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p6a_greedy               final   -1.4 (-2, -5, +3)  win  47%  tickets 0.08/1.92
+p6a_greedy               best    +3.4 (+7, -4, +6)  win  54%  tickets 0.08/1.92
+p6b_greedy_plan          final   +6.4 (+6, +6, +7)  win  62%  tickets 0.07/1.93
+p6b_greedy_plan          best    +9.3 (+4, +12, +13)  win  66%  tickets 0.09/1.91
+p6c_greedy_shape         final   +7.8 (+8, +11, +5)  win  64%  tickets 0.01/1.99
+p6c_greedy_shape         best    +8.7 (+8, +11, +7)  win  66%  tickets 0.00/2.00
+p6d_ticket_pool          final   +9.0 (+7, +8, +12)  win  66%  tickets 0.02/1.98
+p6d_ticket_pool          best   +12.5 (+14, +10, +13)  win  71%  tickets 0.01/1.99
+vs racer, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p6a_greedy               final  -47.6 (-65, -34, -44)  win   2%  tickets 0.03/1.97
+p6a_greedy               best   -35.8 (-41, -35, -31)  win   4%  tickets 0.03/1.97
+p6b_greedy_plan          final  -40.7 (-39, -38, -44)  win   4%  tickets 0.08/1.92
+p6b_greedy_plan          best   -30.4 (-27, -35, -29)  win  11%  tickets 0.10/1.90
+p6c_greedy_shape         final  -33.4 (-24, -19, -57)  win  10%  tickets 0.00/2.00
+p6c_greedy_shape         best   -24.2 (-15, -19, -39)  win  14%  tickets 0.00/2.00
+p6d_ticket_pool          final  -10.5 (-14, -6, -11)  win  33%  tickets 0.01/1.99
+p6d_ticket_pool          best    -6.9 (-12, -3, -5)  win  36%  tickets 0.01/1.99
+vs collector, 1000 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+p6a_greedy               final  +18.5 (+24, +12, +19)  win  74%  tickets 0.08/1.92
+p6a_greedy               best   +23.7 (+29, +12, +30)  win  77%  tickets 0.08/1.92
+p6b_greedy_plan          final  +25.4 (+21, +23, +32)  win  82%  tickets 0.07/1.93
+p6b_greedy_plan          best   +27.2 (+20, +27, +35)  win  83%  tickets 0.08/1.92
+p6c_greedy_shape         final  +26.7 (+22, +33, +26)  win  83%  tickets 0.01/1.99
+p6c_greedy_shape         best   +25.7 (+21, +33, +23)  win  82%  tickets 0.00/2.00
+p6d_ticket_pool          final  +31.8 (+33, +32, +30)  win  88%  tickets 0.01/1.99
+p6d_ticket_pool          best   +34.5 (+37, +32, +35)  win  90%  tickets 0.01/1.99
