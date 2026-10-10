@@ -1,0 +1,30 @@
+mcts:reward=margin,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json vs greedy (2p, 100 games): margin +17.4 ± 3.0, win 75%, score 98 to 81
+    tickets kept 2.08, done 1.22, failed 0.86, draws 0.02; claims 12.8 x 3.57 (3.8 of 5-6); ended it 98%, longest bonus 93%, 72 turns
+    2.4 min a game, 37 searches of 3.93 s
+mcts:reward=margin,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json vs linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best (2p, 100 games): margin +5.6 ± 2.4, win 63%, score 88 to 82
+    tickets kept 2.07, done 0.93, failed 1.14, draws 0.01; claims 11.2 x 3.75 (3.7 of 5-6); ended it 34%, longest bonus 98%, 66 turns
+    2.3 min a game, 34 searches of 4.03 s
+mcts:reward=margin,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json vs ppo:runs/ppo/pass2/p2b_pool_s3.json (2p, 100 games): margin -2.5 ± 2.8, win 54%, score 76 to 79
+    tickets kept 2.09, done 0.93, failed 1.16, draws 0.02; claims 10.7 x 3.73 (3.4 of 5-6); ended it 6%, longest bonus 52%, 63 turns
+    2.3 min a game, 32 searches of 4.19 s
+mcts:reward=margin,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json vs racer (2p, 100 games): margin +12.1 ± 2.3, win 73%, score 93 to 80
+    tickets kept 2.06, done 1.12, failed 0.94, draws 0.00; claims 12.3 x 3.55 (3.5 of 5-6); ended it 75%, longest bonus 98%, 67 turns
+    2.2 min a game, 35 searches of 3.89 s
+mcts:reward=score,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json vs mcts:reward=score,opponent=infer (2p, 100 games): margin -2.4 ± 3.0, win 42%, score 106 to 109
+    tickets kept 2.04, done 1.30, failed 0.74, draws 0.00; claims 11.3 x 4.03 (4.9 of 5-6); ended it 92%, longest bonus 75%, 74 turns
+    4.8 min a game, 38 searches of 4.23 s
+mcts:reward=score,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json,iterations=1600 vs ppo:runs/ppo/pass2/p2b_pool_s3.json (2p, 100 games): margin +15.9 ± 2.3, win 78%, score 95 to 79
+    tickets kept 2.11, done 1.78, failed 0.33, draws 0.04; claims 10.7 x 3.63 (3.1 of 5-6); ended it 1%, longest bonus 63%, 63 turns
+    10.5 min a game, 32 searches of 19.48 s
+mcts:reward=score,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json,opponent=infer vs greedy (2p, 100 games): margin +18.8 ± 3.4, win 71%, score 106 to 88
+    tickets kept 2.15, done 1.20, failed 0.95, draws 0.08; claims 11.1 x 4.11 (5.0 of 5-6); ended it 98%, longest bonus 90%, 74 turns
+    2.5 min a game, 38 searches of 3.91 s
+mcts:reward=score,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json,opponent=infer vs linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best (2p, 100 games): margin +3.0 ± 2.8, win 58%, score 88 to 85
+    tickets kept 2.06, done 0.96, failed 1.10, draws 0.02; claims 10.8 x 3.91 (4.1 of 5-6); ended it 24%, longest bonus 89%, 67 turns
+    2.0 min a game, 34 searches of 3.57 s
+mcts:reward=score,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json,opponent=infer vs ppo:runs/ppo/pass2/p2b_pool_s3.json (2p, 100 games): margin -3.7 ± 2.5, win 48%, score 75 to 79
+    tickets kept 2.10, done 0.78, failed 1.32, draws 0.04; claims 9.8 x 4.04 (4.0 of 5-6); ended it 0%, longest bonus 42%, 63 turns
+    2.0 min a game, 32 searches of 3.74 s
+mcts:reward=score,guide=ppo:runs/ppo/pass2/p2b_pool_s3.json,opponent=infer vs racer (2p, 100 games): margin +20.2 ± 2.4, win 82%, score 101 to 81
+    tickets kept 2.16, done 1.44, failed 0.72, draws 0.09; claims 12.2 x 3.67 (4.0 of 5-6); ended it 77%, longest bonus 98%, 69 turns
+    2.0 min a game, 36 searches of 3.43 s

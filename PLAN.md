@@ -1106,28 +1106,51 @@ for 2 players).
       against racers (PPO, racer, linear); the inferred-model search, which plays tickets, against
       ticket players (greedy +31.9 to the guided search's +18.9). Under own score, with greedy's
       prior and enough search, tickets beat racing; with PPO's prior the search races.
-  - MCTS pass 4, paused (`scripts/mcts_pass4.ps1`, `runs/mcts/pass4.*`, started 2026-10-05, ~4.5 h):
-    the guided search, with pass 3's `guide=ppo` games (own score) as the paired control.
-    - `reward=margin,guide=ppo`: PPO's margin training takes points from greedy by tempo; does
-      margin close the guided search's −9.5 to PPO against greedy? Against PPO, linear, racer and
-      greedy, 100 games each.
-    - `guide=ppo,opponent=infer`: the inferred opponent model under the guide. Same opponents.
-    - `guide=ppo,iterations=1600` against PPO, 100 games: does the +7.5 grow with search?
-    - `guide=ppo` against `opponent=infer` (the ticket search), 100 games: the two strongest
-      searches head to head.
-    - Paused 2026-10-05 at 724 of the first batch's 800 games (90–92 per pair); the 1600-iteration
-      and head-to-head batches haven't started. Rerunning the launcher resumes. Interim, paired
-      against the control (pass 3's `guide=ppo`) and PPO p2b on the same games:
+  - MCTS pass 4 (`scripts/mcts_pass4.ps1`, `runs/mcts/pass4.*`, 2026-10-05, finished 10-06 02:13;
+    paused once): the guided search, with pass 3's `guide=ppo` games (own score) as the paired
+    control. 100 games per opponent; margin ± standard error (win share), paired differences on
+    the same games:
 
-      | Opponent | `reward=margin` | − control | `opponent=infer` | − control |
-      | --- | --- | --- | --- | --- |
-      | PPO p2b | −3.0 ± 3.0 (53%) | **−9.7 ± 3.2** | −4.4 ± 2.6 (46%) | **−11.1 ± 3.3** |
-      | linear p7b | +5.8 ± 2.6 | −1.6 ± 3.3 | +3.2 ± 3.0 | −4.1 ± 3.7 |
-      | racer | +11.4 ± 2.5 | **−8.4 ± 3.1** | +20.7 ± 2.6 | +0.9 ± 3.0 |
-      | greedy | +18.9 ± 3.1 | +1.7 ± 3.7 | +18.8 ± 3.6 | +1.6 ± 4.1 |
+    | Arm | vs PPO p2b | vs linear p7b | vs racer | vs greedy |
+    | --- | --- | --- | --- | --- |
+    | control (pass 3 `guide=ppo`) | +7.5 ± 2.5 (63%) | +7.6 | +18.9 | +18.9 |
+    | `reward=margin` | −2.5 (54%); **−10.1 ± 3.0** | +5.6; −2.1 ± 3.2 | +12.1; **−6.8 ± 3.0** | +17.4; −1.5 ± 3.6 |
+    | `opponent=infer` | −3.7 (48%); **−11.2 ± 3.1** | +3.0; −4.6 ± 3.5 | +20.2; +1.3 ± 3.0 | +18.8; −0.1 ± 3.9 |
+    | `iterations=1600` | **+15.9 ± 2.3 (78%)**; **+8.4 ± 2.9** | — | — | — |
 
-      Both changes undo the guided search's win over PPO (about 3 SE each). Margin doesn't recover
-      PPO's edge over greedy (+1.7; still −8.4 against PPO there).
+    Head to head, the guided search against the inferred-model ticket search (pass 3's
+    `opponent=infer`): −2.4 ± 3.0, 42% wins, 106 to 109 points.
+
+    Readings:
+    - **More search on PPO's prior is the strongest agent against PPO so far**: +15.9, 78% wins
+      (+14.5 ± 2.6 over PPO against itself on the same games; +10.1 ± 2.7 over the ticket search
+      at 1600 iterations). The extra search goes into finishing its 2 opening tickets (1.78
+      completed, 0.33 failed; at 400 iterations 1.04 and 1.02); the race is unchanged (10.7 claims
+      of mean length 3.6, never ends the game against PPO). Cost: 10.5 min a game, 19.5 s a
+      search. Search over a policy is a policy-improvement step worth about 15 points here: the
+      case for training PPO on the search's moves (expert iteration, the AlphaZero-style goal).
+    - **Margin doesn't give the search PPO's edge over greedy** (−1.5; still −11.0 against PPO
+      there) and costs 10 against PPO and 7 against racer: under search, margin's noisier
+      rollout values hurt, as in pass 1 (greedy prior: margin 10–13 below own score).
+    - **The inferred opponent model hurts the guided search against PPO** (−11.2), where it helped
+      the greedy-prior search (+4.8 in pass 3), and changes nothing against the bots. Why is
+      untested. Both arms lose about 10 against PPO and nothing much elsewhere, so the control's
+      +7.5 may be on the high side; the 1600-iteration arm confirms the guided search beats PPO.
+    - **Non-transitive at the top**: guided search > PPO (+7.5), PPO ≈ ticket search (−0.8), ticket
+      search ≥ guided search (+2.4, under 1 SE). Against the ticket search the guided search ends
+      92% of the games and takes the longest-path bonus 75% of the time, and still trails on
+      tickets.
+  - PPO pass 6 running (`scripts/ppo_pass6.ps1`, `runs/ppo/pass6/`, started 2026-10-10, ~2.5–3 h):
+    **can a learner find tickets when its opponents don't race?** MCTS passes 1–4 show that under
+    own score tickets beat racing against greedy (the search keeps 5.5, completes 5.4 and scores
+    136; PPO's racers score 80–90 against greedy). No learner ever found tickets, but every pool
+    had racers in it (5 of 8 seats). Own score, 2 players, pass 3's setting otherwise (no shaping,
+    default PPO settings, 50000 games), 3 seeds each, all 12 at once:
+    - `p6a_greedy`: against greedy only. Separates "racing is the best response to the pool" from
+      "tickets are too hard to learn".
+    - `p6b_greedy_plan`: + the ticket-plan observation block (for DQN it doubled tickets completed).
+    - `p6c_greedy_shape`: + shaping 1 (credit for progress toward tickets before the game ends).
+    - `p6d_ticket_pool`: pool of ticket players only: greedy, wary, collector.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -1144,21 +1167,21 @@ for 2 players).
       scratch against this pool. Either warm-start it from a trained margin policy (needs an
       `--init` option in `ttr-train-ppo`) or train it in self-play only, where every game
       carries signal.
-    - MCTS (tier D): passes 1–3 done (above). The own-score search wins by tickets against every
-      scripted bot and beats racer by more than PPO does; PPO's policy as the prior (+7.5) or the
-      racer opponent model with 4× the search (+3.4) beat PPO head to head. Open: the guided
-      search under margin (PPO's tempo against greedy), with more search, with the inferred
-      opponent model; the two searches head to head; which of the prior and `steps=main` matters;
-      racer rollouts; `known_tickets=1`; 3–5 players; blocking instrumentation
-      (`docs/paper/measure.py`).
+    - MCTS (tier D): passes 1–4 done (above). The own-score search wins by tickets against every
+      scripted bot and beats racer by more than PPO does; PPO's policy as the prior beats PPO
+      head to head (+7.5 at 400 iterations, +15.9 at 1600). Open: which of the prior and
+      `steps=main` matters; racer rollouts; `known_tickets=1`; 3–5 players; blocking
+      instrumentation (`docs/paper/measure.py`).
+    - Expert iteration (the AlphaZero-style stretch goal): train PPO's policy toward the guided
+      search's moves, then search with the new policy. Pass 4 measured the improvement step at
+      about +15 against PPO. Needs a training mode on search targets; search games are slow
+      (2–10 min each), so targets come from about 30 searched decisions a game.
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
     needed for passes 4–5; the cross-play and the self-play head to head (2 + 2 seats) covered
     their questions.
-  - Own score against greedy alone (cheap): does a score learner find tickets when its
-    opponent doesn't race? Separates "racing is the best response to this pool" from
-    "tickets are too hard to learn".
+  - Own score against greedy alone: PPO pass 6, running (above).
   - Ticket choice: PPO abandons pricier tickets than racer does (−21 to −23 vs −19 a game).
   - Phase 6 strategy analysis on the agents we have (PLAN "Roadmap"): done in `docs/paper/` for
     the longest-path bonus, tempo, the race for the nine 6-routes, blocking against chance
