@@ -1143,7 +1143,7 @@ for 2 players).
   - PPO pass 6 running (`scripts/ppo_pass6.ps1`, `runs/ppo/pass6/`, started 2026-10-10, ~2.5–3 h):
     **can a learner find tickets when its opponents don't race?** MCTS passes 1–4 show that under
     own score tickets beat racing against greedy (the search keeps 5.5, completes 5.4 and scores
-    136; PPO's racers score 80–90 against greedy). No learner ever found tickets, but every pool
+    136; PPO p2b, racing, scores 89 on the same games). No learner ever found tickets, but every pool
     had racers in it (5 of 8 seats). Own score, 2 players, pass 3's setting otherwise (no shaping,
     default PPO settings, 50000 games), 3 seeds each, all 12 at once:
     - `p6a_greedy`: against greedy only. Separates "racing is the best response to the pool" from
