@@ -1202,23 +1202,62 @@ for 2 players).
       legal moves (target entropy 2.0 nats). A network trained on visit counts is therefore diffuse:
       fine for its most likely move and as a search prior, poor when it samples (as PPO does in
       training). Hence a move-target arm.
-  - Expert iteration pass 1 (`scripts/exit_pass1.ps1`, `scripts/exit_pass1_distill.ps1`,
+  - Expert iteration pass 1 (`scripts/exit_pass1.ps1`, `exit_pass1_distill.ps1`, `exit_pass1_ppo.ps1`;
     `runs/exit/pass1/`; started 2026-10-13 23:00):
-    - Stage 1, data: the teacher plays 500 games against each of greedy, wary, collector, racer, PPO
-      p2b and linear p7b, on batch seed 7001 (fresh; re-scores use 9001). 12 processes, about 9.5 h,
-      about 170k recorded decisions (100k searched). Its own results on these games are in
-      `teacher.csv`.
-    - Stage 2, distillation (starts by itself once stage 1 has finished): 4 arms × 3 seeds, 40 epochs,
-      evaluated every 5 against random, greedy, wary, racer, collector, PPO p2b and linear p7b (best
-      checkpoint on the mean margin over all but random and linear). `x1a_visits`: visit-count
-      targets; `x1b_move`: move targets; `x1c_plan`: visit targets + ticket plan; `x1d_half`: visit
-      targets on the first 250 games per opponent (would more data help?).
-    - Stage 3, planned (`scripts/exit_pass1_ppo.ps1 -Init PATH@best`): PPO from the best distilled
-      network under own score, each arm a pass 6 / pass 3 setting with only the start changed: against
-      greedy only (`p6a` raced from scratch), the ticket-player pool (`p6d`), pass 3's pool with racers
-      (`p3b_score`), and greedy at a fifth of the learning rate. Does RL keep the tickets or drift back
-      to the race? Stage 4: the search with the distilled network as its guide (`guide=ppo:PATH`), the
-      next ExIt iteration.
+    - Stage 1, data (finished 2026-10-14 07:15, 8 h 15 min): the teacher played 500 games against each
+      of six opponents on batch seed 7001 (fresh; re-scores use 9001), 12 processes, 1.6–2.4 min a game.
+      198,142 recorded decisions (119,357 searched), 66 a game. The teacher on these games
+      (`teacher.txt`; margin ± standard error, win share, tickets kept / completed):
+
+      | Opponent | Teacher | Pass 3, same search (100 games, seed 9001) |
+      | --- | --- | --- |
+      | greedy | +38.0 ± 1.3 (90%), 141 to 103; 5.5 / 5.4 | +31.9 |
+      | wary | +29.0 ± 1.3 (85%); 5.2 / 4.9 | +28.2 |
+      | collector | +47.8 ± 1.5 (92%); 5.6 / 5.5 | +44.2 |
+      | racer | +19.4 ± 1.0 (85%); 4.2 / 4.1 | +17.5 |
+      | linear p7b | +11.3 ± 1.0 (70%); 3.8 / 3.5 | +8.4 |
+      | PPO p2b | −1.6 ± 1.1 (47%); 3.6 / 3.2 | −0.8 |
+
+    - Stage 2, distillation (07:15–07:47). Arms, 3 seeds each, 40 epochs: `x1a_visits` (visit-count
+      targets), `x1b_move` (move targets), `x1c_plan` (visit targets + ticket plan), `x1d_half` (x1a on
+      the first 250 games per opponent), and, added after the first four, `x1e_plan_move` (move targets
+      + ticket plan). Last evaluation (epoch 40, 100 games per opponent, mean over seeds), and the
+      share of held-out decisions where the network's most likely move is the search's:
+
+      | Arm | Matches the search (main action / ticket keep) | vs greedy | vs wary | vs racer | vs collector | vs PPO p2b | vs linear | Vs greedy: score, tickets kept / done / failed |
+      | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+      | x1a visits | 68% (60% / 21%) | −50.4 (16%) | −52.0 | −24.1 | −59.3 | −34.9 | −31.7 | 65; 3.0 / 1.6 / 1.4 |
+      | x1b move | 69% (62% / 20%) | −38.3 (22%) | −41.4 | −16.4 | −40.2 | −33.5 | −24.6 | 72; 3.1 / 1.7 / 1.4 |
+      | x1d half the data | 64% (56% / 20%) | −69.2 (9%) | −70.1 | −36.4 | −71.8 | −42.7 | −41.9 | 50; 2.6 / 1.2 / 1.4 |
+      | **x1c plan** | **83% (79% / 43%)** | **+5.3** (58%) | +1.9 | +0.5 | +22.5 | −20.9 | −11.4 | **116; 4.9 / 4.4 / 0.6** |
+      | **x1e plan + move** | **82% (80% / 41%)** | **+8.6** (61%) | +2.0 | +1.3 | +16.1 | −25.2 | −9.8 | **118; 5.1 / 4.5 / 0.7** |
+
+      Readings:
+      - **A network holds the ticket strategy when the observation carries the ticket plan.** The plan
+        arms keep about 5 tickets and complete 4.4–4.5 a game against greedy, score 116–118 (every
+        PPO learner: 0.0–0.1 completed, 92–97 points), and are level with greedy, wary and racer. The
+        first learned agents in the project that win by tickets. They stay well short of the teacher
+        (+38 vs greedy) and lose to PPO by 21–25.
+      - **Without the plan the network can't imitate the search**: 68–69% of moves matched against
+        82–83%, 1.6–1.7 tickets completed, 38–50 behind greedy. Ticket IDs alone don't tell it which
+        routes serve which tickets (DQN pass 3 saw the same, more weakly).
+      - **More data would help the plain observation**: half the games is 19 points worse against
+        greedy and 4 points of match. The plan arms' validation loss was still falling at epoch 40.
+      - The hardest decisions to copy are the ticket choices: 37–46% of opening choices and 20–43%
+        of later keeps matched (out of 4 and 7 options).
+      - **Visit targets make a policy that can't sample.** `x1c_plan_s1` takes +3.5 from greedy with
+        its most likely move and −82.7 sampling (200 games); `x1b_move_s1` −33.0 and −28.0;
+        `x1e_plan_move_s1` +3.6 and −8.9 (3.6 tickets completed when sampling). PPO samples in
+        training, so stage 3 starts from `x1e_plan_move_s1@best` (epoch 40), with the ticket plan.
+    - Stage 3 (`scripts/exit_pass1_ppo.ps1 -Init runs/exit/pass1/x1e_plan_move_s1.json@best
+      -TicketPlan`, started 07:47): PPO under own score from the distilled network, each arm a pass 6
+      / pass 3 setting with only the start changed (and the ticket plan on, so `p6b`, +9.5 against
+      greedy with 0.08 tickets completed, is the from-scratch reference for greedy): `f1a_greedy`,
+      `f1b_ticket_pool` (greedy, wary, collector; `p6d`), `f1c_pool` (pass 3's pool, racers and self
+      included; `p3b_score`), `f1d_greedy_slow` (f1a at lr 5e-5). 3 seeds each, 50000 games. Does RL
+      keep the tickets, improve on them, or drift back to the race?
+    - Stage 4, later: the search with a distilled network as its guide (`guide=ppo:PATH`, the
+      visit-target network: a prior wants the spread), the next ExIt iteration.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
