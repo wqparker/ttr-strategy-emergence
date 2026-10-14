@@ -1213,10 +1213,12 @@ for 2 players).
       checkpoint on the mean margin over all but random and linear). `x1a_visits`: visit-count
       targets; `x1b_move`: move targets; `x1c_plan`: visit targets + ticket plan; `x1d_half`: visit
       targets on the first 250 games per opponent (would more data help?).
-    - Stage 3, planned: PPO from the best distilled network under own score, against greedy only
-      (pass 6's `p6a`, which raced from scratch), the ticket-player pool (`p6d`) and pass 3's pool with
-      racers: does RL keep the tickets or drift back to the race? Stage 4: the search with the
-      distilled network as its guide (`guide=ppo:PATH`), the next ExIt iteration.
+    - Stage 3, planned (`scripts/exit_pass1_ppo.ps1 -Init PATH@best`): PPO from the best distilled
+      network under own score, each arm a pass 6 / pass 3 setting with only the start changed: against
+      greedy only (`p6a` raced from scratch), the ticket-player pool (`p6d`), pass 3's pool with racers
+      (`p3b_score`), and greedy at a fifth of the learning rate. Does RL keep the tickets or drift back
+      to the race? Stage 4: the search with the distilled network as its guide (`guide=ppo:PATH`), the
+      next ExIt iteration.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
