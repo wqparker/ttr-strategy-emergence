@@ -86,6 +86,7 @@ def test_loading_counts_a_replayed_game_once(data_dir):
     assert all(k > 20 for k in per_game) and len(data["action"]) == sum(per_game)
     assert len(load_data(data_dir, opponents=["greedy"])["action"]) == sum(per_game)
     assert sorted(np.unique(load_data(data_dir, first_games=2)["game"]).tolist()) == [0, 1]
+    assert len(load_data([data_dir, data_dir])["action"]) == sum(per_game)  # the same games twice: once
     with pytest.raises(ValueError):
         load_data(data_dir, opponents=["racer"])
     with pytest.raises(ValueError):

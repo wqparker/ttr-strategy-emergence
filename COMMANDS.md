@@ -322,7 +322,7 @@ ttr-train-ppo --init runs/exit/NAME/x_s0.json@best --reward score ...   # RL fro
 
 | Option | Default | |
 | --- | --- | --- |
-| `--data DIR` | `runs/exit/pass1/data` | recorded decisions; a game saved twice counts once |
+| `--data DIR ...` | `runs/exit/pass1/data` | recorded decisions, one directory or several trained on together; a game saved twice counts once |
 | `--opponents SPEC ...` | all | train only on the games against these |
 | `--first-games N` | all | only games numbered below N in each batch (a smaller data set, for a learning curve) |
 | `--target` / `--temperature` | `visits` / `1` | a searched decision's target: its root visit counts ^ (1/T), or `move` (the move played). Second draws and payments (the rollout policy's) are always the move |

@@ -159,17 +159,19 @@ def save_chunk(path: Path, games: List[Dict[str, np.ndarray]], agent: str, oppon
 # ------------------------------------------------------------------ data
 
 
-def load_data(directory: Path, players: int = 2, opponents: Optional[Sequence[str]] = None,
+def load_data(directory, players: int = 2, opponents: Optional[Sequence[str]] = None,
               first_games: int = 0) -> Dict[str, np.ndarray]:
-    """Every recorded decision in `directory` (`save_chunk` files) at `players` players,
-    concatenated; a game saved twice (a chunk replayed after a stop) counts once. With
+    """Every recorded decision in `directory` (`save_chunk` files; or in each of several
+    directories) at `players` players, concatenated; a game saved twice (a chunk replayed
+    after a stop) counts once. With
     `opponents`, only the games against those; with `first_games`, only games numbered
     below it in each batch. "batch" is each row's index in "batches", the list of
     (agent, opponent, players, seed)."""
     parts: List[Dict[str, np.ndarray]] = []
     batches: List[Tuple[str, str, int, int]] = []
     seen = set()
-    for path in sorted(Path(directory).glob("*.npz")):
+    directories = [directory] if isinstance(directory, (str, Path)) else list(directory)
+    for path in [f for d in directories for f in sorted(Path(d).glob("*.npz"))]:
         with np.load(path) as f:
             batch = (str(f["agent"]), str(f["opponent"]), int(f["players"]), int(f["seed"]))
             if batch[2] != players or (opponents and batch[1] not in opponents):
@@ -234,7 +236,7 @@ def summarize_data(data: Dict[str, np.ndarray], val: np.ndarray) -> dict:
 
 @dataclass
 class DistillConfig:
-    data: str = "runs/exit/pass1/data"
+    data: Tuple[str, ...] = ("runs/exit/pass1/data",)  # one directory or several
     opponents: Tuple[str, ...] = ()  # train only on the games against these (empty: all)
     first_games: int = 0  # only games numbered below this in each batch (0: all)
     ticket_plan: bool = False
@@ -301,7 +303,7 @@ def train(cfg: DistillConfig, eval_every: int = 5, eval_games: int = 100, eval_l
     view = {"num_players": cfg.players, "memory_level": cfg.memory_level, "ticket_plan": cfg.ticket_plan}
     size = ObservationEncoder(**view).size
 
-    data = load_data(Path(cfg.data), cfg.players, cfg.opponents, cfg.first_games)
+    data = load_data(cfg.data, cfg.players, cfg.opponents, cfg.first_games)
     val = data["game"] % cfg.val_every == cfg.val_every - 1 if cfg.val_every else np.zeros(len(data["game"]), bool)
     targets = policy_targets(data, cfg.target, cfg.temperature)
     returns = value_targets(data, cfg.reward_mode, cfg.reward_scale)
@@ -408,7 +410,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
 
     d = DistillConfig()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--data", default=d.data, help="directory of recorded decisions (eval_agents.py --data)")
+    parser.add_argument("--data", nargs="+", default=list(d.data), metavar="DIR",
+                        help="directories of recorded decisions (eval_agents.py --data), trained on together")
     parser.add_argument("--opponents", nargs="+", default=[], metavar="SPEC",
                         help="train only on the games against these opponents (default: all)")
     parser.add_argument("--first-games", type=int, default=0, metavar="N",
@@ -442,13 +445,13 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
     torch.set_num_threads(args.threads)
-    cfg = DistillConfig(data=args.data, opponents=tuple(args.opponents), first_games=args.first_games,
+    cfg = DistillConfig(data=tuple(args.data), opponents=tuple(args.opponents), first_games=args.first_games,
                         ticket_plan=args.ticket_plan,
                         target=args.target, temperature=args.temperature, reward_mode=args.reward,
                         epochs=args.epochs, batch=args.batch, lr=args.lr, anneal_lr=args.anneal_lr,
                         weight_decay=args.weight_decay, hidden=tuple(args.hidden), val_every=args.val_every,
                         seed=args.seed, device=args.device)
-    print(f"distilling {cfg.data} on {resolve_device(cfg.device)}: target {cfg.target}"
+    print(f"distilling {' + '.join(cfg.data)} on {resolve_device(cfg.device)}: target {cfg.target}"
           + (f" ^ (1/{cfg.temperature})" if cfg.target == "visits" and cfg.temperature != 1 else "")
           + f", value {cfg.reward_mode}, {cfg.epochs} epochs of {cfg.batch}, lr {cfg.lr}"
           + (" annealed" if cfg.anneal_lr else "") + f", hidden {list(cfg.hidden)}"

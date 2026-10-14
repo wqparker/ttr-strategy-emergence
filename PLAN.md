@@ -1333,6 +1333,16 @@ for 2 players).
       4.7 tickets), and at the default rate among racers turns it into a race that finishes its
       opening tickets, the first learned agent ahead of PPO p2b (+2.3); the improved network as the
       prior makes a search +8.4 a game stronger than the teacher.
+  - Expert iteration pass 2 (`scripts/exit_pass2.ps1`, `exit_pass2_distill.ps1`; `runs/exit/pass2/`;
+    started 2026-10-14 16:45): the second round, with pass 1's best expert as the teacher:
+    `mcts:reward=score,opponent=infer,guide=ppo:runs/exit/pass1/f1d_greedy_slow_s2.json`.
+    - Stage 1, data: 500 games against each of the same six opponents on batch seed 7002, recorded as in
+      pass 1. About 9 h.
+    - Stage 2 (starts by itself after stage 1), all with the ticket plan, 3 seeds, 40 epochs:
+      `x2a_plan_move` (move targets), `x2b_plan_visits` (visit targets), `x2c_both_move` (move targets on
+      pass 1's and pass 2's data together; `ttr-train-distill --data` now takes several directories).
+    - Then, as pass 1: PPO from the best move-target network at lr 5e-5 against greedy, and at the
+      default rate in the pool with racers; the search with the improved network as its guide.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
