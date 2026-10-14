@@ -1300,11 +1300,39 @@ for 2 players).
         +20 points a game on ticket points alone.
       - **The full ticket game still loses to the racers head to head.** f1d (4.7 tickets against
         greedy) is −9.5 against PPO p2b, where it completes 2.4; the teacher itself is −1.6 there.
-    - Stage 4 (`scripts/exit_pass1_guided.ps1 -Guide2 runs/exit/pass1/f1d_greedy_slow_s2.json`, started
-      10:57, about 3 h): the teacher's search with a ticket network as its prior instead of greedy's
-      move: the distilled network (`x1c_plan_s1@best`, visit targets) and f1d s2. 100 games against
-      each of PPO p2b, linear p7b, racer and greedy on the re-score games, paired with pass 3's
-      teacher games. Is the guided search a stronger expert for the next ExIt round?
+    - Stage 4 (`scripts/exit_pass1_guided.ps1 -Guide2 runs/exit/pass1/f1d_greedy_slow_s2.json`,
+      10:57–13:17; `runs/exit/pass1_guided.*`): the teacher's search with a ticket network's policy as
+      the PUCT prior instead of greedy's move (rollouts and inferred opponent model unchanged): the
+      distilled network (`x1c_plan_s1@best`, visit targets) and the PPO-improved one (f1d s2). 100 games
+      per opponent on the re-score games; margin ± standard error (win share), and paired differences
+      on the same games against the teacher (pass 3) and the PPO-guided search (pass 3, `guide=ppo`
+      p2b):
+
+      | Search | vs PPO p2b | vs linear p7b | vs racer | vs greedy |
+      | --- | --- | --- | --- | --- |
+      | teacher (greedy prior; pass 3) | −0.8 ± 2.8 (50%) | +8.4 | +17.5 | +31.9 |
+      | PPO-guided (p2b prior; pass 3) | +7.5 ± 2.5 (63%) | +7.6 | +18.9 | +18.9 |
+      | x1c-guided | −6.8 ± 2.2 (40%); teacher −6.0 ± 2.9 | +7.0; −1.4 ± 2.8 | +16.0; −1.4 ± 2.4 | +31.9; 0.0 ± 3.8 |
+      | **f1d-guided** | **+5.9 ± 2.1 (62%)**; teacher **+6.6 ± 3.0**; PPO-guided −1.7 ± 3.1 | **+16.8 (83%)**; +8.4 ± 2.6 | **+28.9 (93%)**; +11.4 ± 2.8 | **+39.1 (87%)**; +7.2 ± 3.6 |
+
+      Readings:
+      - **The expert iteration step works: the PPO-improved ticket network makes a stronger expert.**
+        Over the four opponents the f1d-guided search is +8.4 ± 1.5 a game over the teacher (5.6 SE),
+        with the same budget (400 iterations, 1.9–2.7 min a game). It is the strongest search so far
+        against linear, racer and greedy (scoring 148 to 109 against greedy, 5.7 tickets completed),
+        and ahead of PPO head to head (+5.9, 62%), level with the PPO-guided search there (−1.7 ±
+        3.1) while 20 ahead of it against greedy. It still plays tickets against every opponent (2.8
+        completed against PPO, 4.0 against racer).
+      - **Imitation alone doesn't**: the distilled network as the prior is −2.2 ± 1.5 on the teacher
+        over the four opponents (−6.0 against PPO). It copies the teacher's own choices, so it adds
+        nothing; what helps is the policy improvement PPO added on top (f1d − x1c: +7 to +13 against
+        every opponent).
+    - **Pass 1 in short:** search → distil → PPO → guided search is one full ExIt round, and each step
+      measured: the network holds tickets once the observation carries the ticket plan (+3.5 vs
+      greedy, 4.2 tickets); PPO at a low learning rate improves it (+18.4 vs greedy, 131 own points,
+      4.7 tickets), and at the default rate among racers turns it into a race that finishes its
+      opening tickets, the first learned agent ahead of PPO p2b (+2.3); the improved network as the
+      prior makes a search +8.4 a game stronger than the teacher.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -1326,13 +1354,13 @@ for 2 players).
       head to head (+7.5 at 400 iterations, +15.9 at 1600). Open: which of the prior and
       `steps=main` matters; racer rollouts; `known_tickets=1`; 3–5 players; blocking
       instrumentation (`docs/paper/measure.py`).
-    - Expert iteration (the AlphaZero-style stretch goal): pass 1 above. A network holds tickets once
-      shown them (with the ticket plan), PPO from that start improves on it (f1d: 131 own points, 4.7
-      tickets against greedy) or, among racers, finds a race that finishes its opening tickets (f1c:
-      ahead of PPO p2b). Next round: record the best guided search (stage 4) on fresh seeds, distil,
-      PPO again at the low learning rate. A round robin with f1c, f1d, the teacher and p2b would
-      place them. The guided search's moves with PPO's prior (pass 4: +15 against PPO) remain the
-      other teacher, for the racing strategy.
+    - Expert iteration (the AlphaZero-style stretch goal): pass 1 above, one full round. Next round
+      (pass 2): record the f1d-guided search (+8.4 over the teacher) on fresh seeds (7002) against the
+      same six opponents, distil it with the ticket plan and move targets, PPO from that at lr 5e-5
+      (and the default rate among racers, which made f1c), then search with the new network. Does a
+      second round still gain, and does the ticket network close the gap to PPO head to head? A round
+      robin with f1c, f1d, the guided searches and p2b would place them. The PPO-guided search (pass
+      4: +15.9 against PPO at 1600 iterations) remains the other teacher, for the racing strategy.
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
