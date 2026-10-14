@@ -1221,23 +1221,28 @@ for 2 players).
     - Stage 2, distillation (07:15–07:47). Arms, 3 seeds each, 40 epochs: `x1a_visits` (visit-count
       targets), `x1b_move` (move targets), `x1c_plan` (visit targets + ticket plan), `x1d_half` (x1a on
       the first 250 games per opponent), and, added after the first four, `x1e_plan_move` (move targets
-      + ticket plan). Last evaluation (epoch 40, 100 games per opponent, mean over seeds), and the
-      share of held-out decisions where the network's most likely move is the search's:
+      + ticket plan). Final networks re-scored on 500 fresh games per opponent (batch seed 9001;
+      `runs/exit/rescore_pass1_x1abcd.*`, `rescore_pass1_x1e.*`; best checkpoints within 2 of the
+      finals), mean over seeds (win share), and the share of held-out decisions where the network's
+      most likely move is the search's:
 
-      | Arm | Matches the search (main action / ticket keep) | vs greedy | vs wary | vs racer | vs collector | vs PPO p2b | vs linear | Vs greedy: score, tickets kept / done / failed |
+      | Arm | Matches the search (main action / ticket keep) | vs greedy | vs wary | vs racer | vs collector | vs PPO p2b | vs linear | Tickets done / failed vs greedy |
       | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-      | x1a visits | 68% (60% / 21%) | −50.4 (16%) | −52.0 | −24.1 | −59.3 | −34.9 | −31.7 | 65; 3.0 / 1.6 / 1.4 |
-      | x1b move | 69% (62% / 20%) | −38.3 (22%) | −41.4 | −16.4 | −40.2 | −33.5 | −24.6 | 72; 3.1 / 1.7 / 1.4 |
-      | x1d half the data | 64% (56% / 20%) | −69.2 (9%) | −70.1 | −36.4 | −71.8 | −42.7 | −41.9 | 50; 2.6 / 1.2 / 1.4 |
-      | **x1c plan** | **83% (79% / 43%)** | **+5.3** (58%) | +1.9 | +0.5 | +22.5 | −20.9 | −11.4 | **116; 4.9 / 4.4 / 0.6** |
-      | **x1e plan + move** | **82% (80% / 41%)** | **+8.6** (61%) | +2.0 | +1.3 | +16.1 | −25.2 | −9.8 | **118; 5.1 / 4.5 / 0.7** |
+      | x1a visits | 68% (60% / 21%) | −51.7 (17%) | −53.4 | −23.8 | −60.4 | −33.1 | −27.9 | 1.50 / 1.42 |
+      | x1b move | 69% (62% / 20%) | −38.8 (22%) | −41.8 | −20.1 | −38.9 | −32.5 | −25.1 | 1.71 / 1.35 |
+      | x1d half the data | 64% (56% / 20%) | −66.8 (10%) | −67.6 | −37.6 | −67.2 | −42.2 | −37.6 | 1.19 / 1.55 |
+      | **x1c plan** | **83% (79% / 43%)** | **+3.0** (55%) | −1.3 | −3.1 | +16.1 | −21.6 (21%) | −9.4 | **4.32 / 0.62** |
+      | **x1e plan + move** | **82% (80% / 41%)** | **+3.5** (56%) | −1.7 | −2.4 | +17.4 | −22.2 (20%) | −8.2 | **4.18 / 0.62** |
+
+      Seeds agree within 3–8 points everywhere. Against greedy in the last training evaluation the
+      plan arms scored 116–118 and kept about 5 tickets (plain arms: 65–72, 3.0–3.1).
 
       Readings:
       - **A network holds the ticket strategy when the observation carries the ticket plan.** The plan
-        arms keep about 5 tickets and complete 4.4–4.5 a game against greedy, score 116–118 (every
+        arms keep about 5 tickets and complete 4.2–4.3 a game against greedy, score 116–118 (every
         PPO learner: 0.0–0.1 completed, 92–97 points), and are level with greedy, wary and racer. The
         first learned agents in the project that win by tickets. They stay well short of the teacher
-        (+38 vs greedy) and lose to PPO by 21–25.
+        (+38 vs greedy) and lose to PPO by 22.
       - **Without the plan the network can't imitate the search**: 68–69% of moves matched against
         82–83%, 1.6–1.7 tickets completed, 38–50 behind greedy. Ticket IDs alone don't tell it which
         routes serve which tickets (DQN pass 3 saw the same, more weakly).

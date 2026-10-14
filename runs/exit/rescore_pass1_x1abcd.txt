@@ -1,0 +1,54 @@
+vs greedy, 500 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+x1a_visits               final  -51.7 (-51, -51, -53)  win  17%  tickets 1.50/1.42
+x1a_visits               best   -53.5 (-51, -50, -59)  win  15%  tickets 1.47/1.45
+x1b_move                 final  -38.8 (-38, -41, -37)  win  22%  tickets 1.71/1.35
+x1b_move                 best   -38.3 (-40, -38, -37)  win  23%  tickets 1.73/1.34
+x1c_plan                 final   +3.0 (+6, +0, +3)  win  55%  tickets 4.32/0.62
+x1c_plan                 best    +2.4 (+4, +0, +3)  win  55%  tickets 4.31/0.64
+x1d_half                 final  -66.8 (-62, -69, -70)  win  10%  tickets 1.19/1.55
+x1d_half                 best   -67.6 (-67, -64, -71)  win   9%  tickets 1.14/1.63
+vs wary, 500 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+x1a_visits               final  -53.4 (-52, -53, -55)  win  14%  tickets 1.48/1.41
+x1a_visits               best   -55.2 (-53, -52, -61)  win  13%  tickets 1.45/1.43
+x1b_move                 final  -41.8 (-41, -44, -41)  win  17%  tickets 1.65/1.36
+x1b_move                 best   -41.3 (-43, -40, -41)  win  18%  tickets 1.66/1.35
+x1c_plan                 final   -1.3 (+1, -3, -2)  win  51%  tickets 4.05/0.71
+x1c_plan                 best    -2.0 (-1, -3, -2)  win  51%  tickets 4.02/0.72
+x1d_half                 final  -67.6 (-63, -70, -70)  win   7%  tickets 1.18/1.54
+x1d_half                 best   -68.5 (-68, -66, -72)  win   7%  tickets 1.13/1.63
+vs racer, 500 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+x1a_visits               final  -23.8 (-22, -24, -26)  win  25%  tickets 1.73/1.19
+x1a_visits               best   -25.4 (-23, -24, -29)  win  24%  tickets 1.68/1.22
+x1b_move                 final  -20.1 (-20, -19, -21)  win  26%  tickets 1.89/1.11
+x1b_move                 best   -19.6 (-21, -17, -21)  win  27%  tickets 1.88/1.12
+x1c_plan                 final   -3.1 (-4, -3, -2)  win  48%  tickets 3.35/0.65
+x1c_plan                 best    -3.3 (-5, -3, -2)  win  48%  tickets 3.36/0.66
+x1d_half                 final  -37.6 (-36, -39, -37)  win  15%  tickets 1.34/1.39
+x1d_half                 best   -38.8 (-39, -36, -41)  win  15%  tickets 1.31/1.42
+vs collector, 500 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+x1a_visits               final  -60.4 (-59, -62, -61)  win  16%  tickets 1.45/1.45
+x1a_visits               best   -61.0 (-58, -60, -66)  win  16%  tickets 1.47/1.46
+x1b_move                 final  -38.9 (-39, -42, -36)  win  28%  tickets 1.69/1.38
+x1b_move                 best   -38.2 (-40, -39, -36)  win  27%  tickets 1.67/1.37
+x1c_plan                 final  +16.1 (+18, +16, +14)  win  67%  tickets 4.49/0.71
+x1c_plan                 best   +15.1 (+15, +16, +14)  win  66%  tickets 4.47/0.73
+x1d_half                 final  -67.2 (-63, -67, -72)  win  14%  tickets 1.16/1.61
+x1d_half                 best   -72.1 (-67, -70, -79)  win  11%  tickets 1.10/1.65
+vs ppo:runs/ppo/pass2/p2b_pool_s3.json, 500 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+x1a_visits               final  -33.1 (-32, -32, -35)  win   9%  tickets 1.49/1.24
+x1a_visits               best   -34.2 (-32, -33, -38)  win   9%  tickets 1.45/1.27
+x1b_move                 final  -32.5 (-33, -31, -34)  win  12%  tickets 1.61/1.23
+x1b_move                 best   -33.2 (-34, -32, -34)  win  11%  tickets 1.61/1.24
+x1c_plan                 final  -21.6 (-23, -21, -21)  win  21%  tickets 2.63/0.92
+x1c_plan                 best   -21.2 (-22, -21, -21)  win  21%  tickets 2.63/0.91
+x1d_half                 final  -42.2 (-42, -43, -42)  win   7%  tickets 1.20/1.39
+x1d_half                 best   -43.3 (-44, -41, -45)  win   6%  tickets 1.19/1.42
+vs linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best, 500 fresh games each (seed 9001); mean over seeds, per-seed in brackets
+x1a_visits               final  -27.9 (-27, -29, -28)  win  19%  tickets 1.52/1.27
+x1a_visits               best   -28.8 (-27, -28, -32)  win  18%  tickets 1.49/1.31
+x1b_move                 final  -25.1 (-26, -24, -26)  win  19%  tickets 1.63/1.22
+x1b_move                 best   -25.4 (-26, -24, -26)  win  18%  tickets 1.63/1.21
+x1c_plan                 final   -9.4 (-10, -9, -9)  win  41%  tickets 2.89/0.82
+x1c_plan                 best    -9.2 (-9, -9, -9)  win  42%  tickets 2.91/0.82
+x1d_half                 final  -37.6 (-37, -38, -38)  win  11%  tickets 1.20/1.44
+x1d_half                 best   -37.6 (-37, -37, -39)  win  12%  tickets 1.21/1.45
