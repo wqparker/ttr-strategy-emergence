@@ -1,0 +1,18 @@
+mcts:reward=score,opponent=infer vs collector (2p, 500 games): margin +47.8 ± 1.5, win 92%, score 142 to 94
+    tickets kept 5.63, done 5.47, failed 0.16, draws 2.24; claims 15.0 x 2.97 (2.1 of 5-6); ended it 61%, longest bonus 89%, 84 turns
+    2.4 min a game, 45 searches of 3.19 s
+mcts:reward=score,opponent=infer vs greedy (2p, 500 games): margin +38.0 ± 1.3, win 90%, score 141 to 103
+    tickets kept 5.48, done 5.39, failed 0.09, draws 2.12; claims 15.3 x 2.93 (2.0 of 5-6); ended it 71%, longest bonus 88%, 82 turns
+    2.2 min a game, 44 searches of 3.03 s
+mcts:reward=score,opponent=infer vs linear:runs/linear/pass7/p7b_sarsa_lam98_random_s3.json@best (2p, 500 games): margin +11.3 ± 1.0, win 70%, score 97 to 85
+    tickets kept 3.82, done 3.46, failed 0.36, draws 1.05; claims 13.2 x 2.74 (1.1 of 5-6); ended it 0%, longest bonus 90%, 67 turns
+    1.6 min a game, 35 searches of 2.76 s
+mcts:reward=score,opponent=infer vs ppo:runs/ppo/pass2/p2b_pool_s3.json (2p, 500 games): margin -1.6 ± 1.1, win 47%, score 84 to 86
+    tickets kept 3.62, done 3.15, failed 0.47, draws 0.88; claims 12.5 x 2.77 (1.2 of 5-6); ended it 0%, longest bonus 37%, 64 turns
+    1.6 min a game, 34 searches of 2.90 s
+mcts:reward=score,opponent=infer vs racer (2p, 500 games): margin +19.4 ± 1.0, win 85%, score 110 to 91
+    tickets kept 4.24, done 4.08, failed 0.16, draws 1.31; claims 14.0 x 2.74 (1.2 of 5-6); ended it 8%, longest bonus 95%, 71 turns
+    1.7 min a game, 37 searches of 2.66 s
+mcts:reward=score,opponent=infer vs wary (2p, 500 games): margin +29.0 ± 1.3, win 85%, score 131 to 102
+    tickets kept 5.18, done 4.93, failed 0.25, draws 1.92; claims 14.7 x 2.95 (2.0 of 5-6); ended it 34%, longest bonus 87%, 80 turns
+    2.2 min a game, 43 searches of 3.12 s

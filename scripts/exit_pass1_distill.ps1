@@ -4,12 +4,14 @@
 #   x1b_move     policy target: the search's move only
 #   x1c_plan     x1a + the ticket-plan observation block
 #   x1d_half     x1a on the first 250 games against each opponent: would more data help?
+#   x1e_plan_move  move targets + the ticket-plan block (added after the first 12 runs: -Only x1e_plan_move)
 # Value head: own score still to come (the teacher's reward). 40 epochs, evaluated every 5 against random, greedy,
 # wary, racer, collector, PPO p2b and linear p7b (100 games each); best checkpoint on the mean margin over all but
 # random and linear. Games numbered 9, 19, 29, ... are held out for validation. 4 arms x 3 seeds, 6 at a time.
 # -WaitPid PID: first wait for that process (the stage 1 launcher) to exit; stage 1 must have finished.
+# -Only NAME ...: just those arms.
 #   powershell -ExecutionPolicy Bypass -File scripts\exit_pass1_distill.ps1 [-WaitPid PID]   (-DryRun prints the commands)
-param([switch]$DryRun, [int]$WaitPid = 0)
+param([switch]$DryRun, [int]$WaitPid = 0, [string[]]$Only = @())
 Set-Location (Split-Path $PSScriptRoot)
 . "$PSScriptRoot\run_queue.ps1"
 
@@ -30,6 +32,9 @@ $runs = [ordered]@{
   "x1b_move"   = "--target move"
   "x1c_plan"   = "--ticket-plan"
   "x1d_half"   = "--first-games 250"
+  "x1e_plan_move" = "--ticket-plan --target move"
 }
+if ($Only) { foreach ($name in @($runs.Keys)) { if ($name -notin $Only) { $runs.Remove($name) } } }
 
-Invoke-RunQueue -Exe ttr-train-distill -Out "runs\exit\pass1" -Common $common -Runs $runs -Seeds (0..2) -Slots 6 -Log distill.log -DryRun:$DryRun
+Invoke-RunQueue -Exe ttr-train-distill -Out "runs\exit\pass1" -Common $common -Runs $runs -Seeds (0..2) -Slots 6 `
+  -Log $(if ($Only) { "distill_$($Only -join '_').log" } else { "distill.log" }) -DryRun:$DryRun
