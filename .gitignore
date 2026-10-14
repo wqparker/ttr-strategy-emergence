@@ -38,6 +38,14 @@ runs/mcts/*
 !runs/dqn/rescore_*
 !runs/ppo/rescore_*
 !runs/round_robin_*
+# expert iteration: the teacher's games (one row per game) and re-scores, not the recorded decisions
+!runs/exit/
+runs/exit/*
+!runs/exit/rescore_*
+!runs/exit/pass*/
+runs/exit/pass*/*
+!runs/exit/pass*/teacher.csv
+!runs/exit/pass*/teacher.txt
 checkpoints/
 models/
 wandb/

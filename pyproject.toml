@@ -21,6 +21,7 @@ ttr-train-linear = "ttr.learn.linear:main"
 # Needs the [env] and [deep] extras (numpy, torch)
 ttr-train-dqn = "ttr.learn.dqn:main"
 ttr-train-ppo = "ttr.learn.ppo:main"
+ttr-train-distill = "ttr.learn.distill:main"
 # Needs the [analysis] extra (matplotlib)
 ttr-dash = "ttr.learn.dashboard:main"
 

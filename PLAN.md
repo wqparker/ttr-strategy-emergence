@@ -70,7 +70,7 @@ for 2 players).
 
 ## Current progress
 
-*Updated at the end of each session. Last updated: 2026-10-04.*
+*Updated at the end of each session. Last updated: 2026-10-13.*
 
 - **Earlier: engine ready, and every RL design question settled.**
   - Phases 0–2 (engine, random/greedy bots, `rich` log, ASCII board view,
@@ -1190,6 +1190,33 @@ for 2 players).
     - Next step for the ticket question: the search plays tickets and the learners don't, so
       train the network on the search's moves (expert iteration, below) and see whether a network
       can hold a ticket strategy at all.
+  - Decided (2026-10-13): expert iteration next, for the ticket question. Pass 6 says tickets are
+    too hard for a learner to find; what is left is whether a network can hold them once shown. The
+    teacher is the ticket search, `mcts:reward=score,opponent=infer` (pass 3: +31.9 vs greedy, +17.5
+    vs racer, −0.8 vs PPO; 5.4 tickets completed a game against greedy), not the guided search, which
+    races.
+  - Done: distillation (`src/ttr/learn/distill.py`, `ttr-train-distill`), `eval_agents.py --data DIR`,
+    `ttr-train-ppo --init PATH[@best]`. Design in "Methods to compare" (stretch).
+    - In the first 24 recorded games: about 57 recorded decisions a game, 34 of them searched. At a
+      turn's main action the most visited move gets 49% of the 400 visits on average, among about 42
+      legal moves (target entropy 2.0 nats). A network trained on visit counts is therefore diffuse:
+      fine for its most likely move and as a search prior, poor when it samples (as PPO does in
+      training). Hence a move-target arm.
+  - Expert iteration pass 1 (`scripts/exit_pass1.ps1`, `scripts/exit_pass1_distill.ps1`,
+    `runs/exit/pass1/`; started 2026-10-13 23:00):
+    - Stage 1, data: the teacher plays 500 games against each of greedy, wary, collector, racer, PPO
+      p2b and linear p7b, on batch seed 7001 (fresh; re-scores use 9001). 12 processes, about 9.5 h,
+      about 170k recorded decisions (100k searched). Its own results on these games are in
+      `teacher.csv`.
+    - Stage 2, distillation (starts by itself once stage 1 has finished): 4 arms × 3 seeds, 40 epochs,
+      evaluated every 5 against random, greedy, wary, racer, collector, PPO p2b and linear p7b (best
+      checkpoint on the mean margin over all but random and linear). `x1a_visits`: visit-count
+      targets; `x1b_move`: move targets; `x1c_plan`: visit targets + ticket plan; `x1d_half`: visit
+      targets on the first 250 games per opponent (would more data help?).
+    - Stage 3, planned: PPO from the best distilled network under own score, against greedy only
+      (pass 6's `p6a`, which raced from scratch), the ticket-player pool (`p6d`) and pass 3's pool with
+      racers: does RL keep the tickets or drift back to the race? Stage 4: the search with the
+      distilled network as its guide (`guide=ppo:PATH`), the next ExIt iteration.
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -1211,10 +1238,10 @@ for 2 players).
       head to head (+7.5 at 400 iterations, +15.9 at 1600). Open: which of the prior and
       `steps=main` matters; racer rollouts; `known_tickets=1`; 3–5 players; blocking
       instrumentation (`docs/paper/measure.py`).
-    - Expert iteration (the AlphaZero-style stretch goal): train PPO's policy toward the guided
-      search's moves, then search with the new policy. Pass 4 measured the improvement step at
-      about +15 against PPO. Needs a training mode on search targets; search games are slow
-      (2–10 min each), so targets come from about 30 searched decisions a game.
+    - Expert iteration (the AlphaZero-style stretch goal): in progress, pass 1 above, on the ticket
+      search. The guided search's moves (PPO's prior; pass 4 measured the improvement step at about
+      +15 against PPO) are the other teacher: distilled into PPO's network, they test policy
+      improvement for the racing strategy.
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
@@ -1464,7 +1491,7 @@ not just to find the strongest one. Each tier teaches something different:
 | B. Deep value-based | **DQN** with action masking (+ Double DQN) | Replay and target networks; how value methods cope with a large masked action space | CleanRL-style script |
 | C. Policy gradient | **PPO** with self-play and action masking | Main agent for studying emergent strategy | CleanRL-style script |
 | D. Search | **MCTS** with determinization (sample hidden hands and tickets, then search) | Planning with no training, as a contrast to the learned agents | Hand-rolled |
-| Stretch | AlphaZero-style (MCTS guided by learned policy/value networks) | Combines C and D | Later |
+| Stretch | AlphaZero-style (MCTS guided by learned policy/value networks) | Combines C and D | Hand-rolled; expert iteration started (pass 1) |
 
 - **Tier A features (first pass, `src/ttr/learn/features.py`).** Q(s, a) =
   w[type(a)] · φ(s, a), one weight vector per action type (claim, pay, draw a color,
@@ -1541,6 +1568,23 @@ not just to find the strongest one. Each tier teaches something different:
     a decision and a 2-player game 3-5 min; `scripts/eval_agents.py` spreads games over
     processes. Greedy's path and open-ticket answers are cached by position (not by game
     object), so the sampled worlds share them; bot play is unchanged (hash of 300 games).
+- **Stretch design, expert iteration (`src/ttr/learn/distill.py`).** A search's decisions become
+  supervised targets for PPO's network; the network can then guide the search (`guide=ppo:PATH`) or
+  start PPO (`--init`).
+  - **Recording** (`SearchRecorder`, `eval_agents.py --data DIR`): every decision of the search's
+    seat with more than one legal move: the observation with the ticket-plan block (989 numbers at 2
+    players; the plain 765 are its first part, so either network trains on the same files), the mask,
+    the move, and for a searched decision the root's visit counts and mean values; the sub-step, turn,
+    reward values then and at the game's end. One `.npz` per chunk of games, written before the
+    chunk's rows reach the CSV, so a resumed run replays a lost chunk; a game saved twice loads once.
+  - **Training** (`ttr-train-distill`): policy cross-entropy to the root visit counts (^ 1/T,
+    AlphaZero's target) or to the move; second draws and payments, which the rollout policy chose
+    (`steps=main`), are the move. Value: the return still to come in PPO's units (own score by
+    default, × 1/100), so the critic starts where PPO's would. Adam 3e-4 annealed to 0, batch 512.
+    Games numbered 9, 19, 29, … are held out in every run (paired validation). Evaluations and the
+    best checkpoint as the learners'. Saved as a PPO run.
+  - Search games cost minutes each (about 2.3 min at 400 iterations), so data is the budget: about
+    57 decisions a game, 3000 games a night on 12 processes.
 - **Why linear rather than tabular for tier A:** tabular methods are only feasible on a
   tiny map, and there is none. Linear features keep the same update rules and the same
   Q-learning vs. SARSA comparison on the full map.
@@ -1705,7 +1749,8 @@ not just to find the strongest one. Each tier teaches something different:
 - **Run data is local only** (decided 2026-09-28: development is on one machine).
   `runs/` (run JSON, network `.pt` files, logs) is gitignored; only the small summaries
   behind this file's tables are tracked (`runs/*/rescore_*`, `runs/round_robin_*`,
-  `runs/linear/overnight-*.md`). Linear passes 1–8 and DQN pass 1 were committed
+  `runs/linear/overnight-*.md`, the MCTS evaluation CSVs, `runs/exit/pass*/teacher.*`; not the
+  recorded search decisions). Linear passes 1–8 and DQN pass 1 were committed
   before that and remain in git history (up to commit 4859cc8), so an old run can be
   restored with `git checkout 4859cc8 -- runs/<path>`.
 - **Testing an old commit needs `PYTHONPATH`.** The venv installs `ttr` editable, so its

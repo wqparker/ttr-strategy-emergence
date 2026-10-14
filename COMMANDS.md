@@ -270,6 +270,7 @@ ttr-sim --agents ppo:runs/ppo/pool_s0.json@best racer
 | `--ent-coef` / `--vf-coef` / `--max-grad-norm` | `0.01` / `0.5` / `0.5` | loss weights, gradient clipping |
 | `--eval-sample` | off | evaluations sample moves instead of taking the most likely |
 | `--players` | `2` | seats per game (2-5): the learner and PLAYERS - 1 opponents, each seat drawn on its own; evaluations fill every other seat with the evaluation opponent. The network plays only this player count |
+| `--init PATH[@best]` | — | start from that PPO run's network (e.g. a distilled one, below) instead of a fresh one; observation settings and `--hidden` must match |
 | other flags | | as `ttr-train-dqn` (`--hidden`, `--reward`, `--memory-level`, `--device`, `--eval-*`, `--live`, ...) |
 
 `RUN.json` adds `updates` (per update: policy and value loss, entropy, approximate KL, clip fraction). In the
@@ -305,6 +306,34 @@ share, tickets, claims, minutes a game and seconds a search. Any agent spec work
 the same games. While it runs, `ttr-dash runs/mcts/NAME.csv --live` shows it in a window (see ttr-dash), and
 `python scripts/eval_agents.py --report 30 --out runs/mcts/NAME` redraws the
 summary of the games so far every 30 s (`--report` alone prints it once); progress lines are in `OUT.log`.
+`--data DIR` also records the agent's decisions for distillation (below), one `.npz` per chunk.
+
+### Distillation (expert iteration)
+
+A search's moves as training data for PPO's network (`ttr.learn.distill`, `[env]` + `[deep]` extras). Record
+the search with `eval_agents.py --data`, then train on the recordings, supervised:
+
+```text
+python scripts/eval_agents.py "mcts:reward=score,opponent=infer" --opponents greedy racer --games 500     --seed 7001 --data runs/exit/NAME/data --out runs/exit/NAME/teacher
+ttr-train-distill --data runs/exit/NAME/data --epochs 30 --out runs/exit/NAME/x_s0.json
+ttr-sim --agents ppo:runs/exit/NAME/x_s0.json greedy        # plays like any PPO run
+ttr-train-ppo --init runs/exit/NAME/x_s0.json@best --reward score ...   # RL from the distilled network
+```
+
+| Option | Default | |
+| --- | --- | --- |
+| `--data DIR` | `runs/exit/pass1/data` | recorded decisions; a game saved twice counts once |
+| `--opponents SPEC ...` | all | train only on the games against these |
+| `--first-games N` | all | only games numbered below N in each batch (a smaller data set, for a learning curve) |
+| `--target` / `--temperature` | `visits` / `1` | a searched decision's target: its root visit counts ^ (1/T), or `move` (the move played). Second draws and payments (the rollout policy's) are always the move |
+| `--reward` | `score` | what the value head learns: the return still to come under this reward, as PPO's critic |
+| `--ticket-plan` | off | observe with the ticket-plan block (always recorded) |
+| `--epochs` / `--batch` / `--lr` / `--no-anneal-lr` / `--weight-decay` | `30` / `512` / `3e-4` annealed / `0` | Adam on cross-entropy + value loss |
+| `--val-every N` | `10` | games numbered g % N == N − 1 are held out (the same in every run); each epoch prints the validation cross-entropy, the share of the search's moves matched (by sub-step) and the value error |
+| `--eval-every` / `--eval-games` / `--eval-opponents` / `--eval-linear` | `5` epochs / `100` / `random greedy wary racer collector` / pass 7's best | evaluations as the learners'; best checkpoint on the mean margin over all but random |
+
+The run is a PPO run (`"method": "ppo"`; `"epochs"` and `"data"` added), so `ppo:PATH[@best]`, `rescore.py`,
+`mcts:guide=ppo:PATH` and `ttr-train-ppo --init` take it.
 
 ### Round robin
 

@@ -15,6 +15,10 @@ players every other seat is a copy of the opponent and the margin is against the
 One CSV row per game: the agent's metrics (ttr.learn.metrics), its seat, the game's wall
 time and, for MCTS, its searches and their time. OUT.txt gets the summary table; progress
 lines go to the terminal and to OUT.log.
+
+`--data DIR` also records the agent's decisions (a search agent's: observation, mask, move,
+root visit counts; ttr.learn.distill) and saves each chunk as an .npz file in DIR before its
+rows reach OUT.csv, so a resumed run replays and rewrites a chunk whose rows were lost.
 """
 
 from __future__ import annotations
@@ -47,19 +51,29 @@ def keep_awake(on: bool) -> None:
 
 
 def play_chunk(task) -> list:
-    spec, opponent, players, seed, games, max_turns = task
+    spec, opponent, players, seed, games, max_turns, data = task
     board = load_board("usa")
-    rows = []
+    rows, records = [], []
     for g in games:
         game, agents, slot_of = match_game([spec] + [opponent] * (players - 1), board, seed, g, max_turns)
         seat = slot_of.index(0)
+        if data:
+            from ttr.learn.distill import SearchRecorder
+
+            agents[seat] = SearchRecorder(agents[seat], players)
         start = time.perf_counter()
         play_game(game, agents)
         me = agents[seat]
+        if data:
+            records.append(me.take(game, seat, g))
         rows.append({"agent": spec, "opponent": opponent, "players": players, "seed": seed, "game": g, "seat": seat,
                      **game_metrics(game, seat), "seconds": round(time.perf_counter() - start, 2),
                      "searches": getattr(me, "searches", 0),
                      "search_seconds": round(getattr(me, "search_seconds", 0.0), 2)})
+    if data:
+        from ttr.learn.distill import chunk_path, save_chunk
+
+        save_chunk(chunk_path(data, spec, opponent, players, seed, games), records, spec, opponent, players, seed)
     return rows
 
 
@@ -120,6 +134,8 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=12)
     ap.add_argument("--max-turns", type=int, default=1000)
     ap.add_argument("--out", type=Path, required=True, help="output prefix: OUT.csv, OUT.txt")
+    ap.add_argument("--data", type=Path, metavar="DIR",
+                    help="also save the agent's decisions, one .npz per chunk (ttr.learn.distill)")
     ap.add_argument("--report", nargs="?", type=float, const=0, metavar="SECONDS",
                     help="play nothing: print the summary of the games in OUT.csv so far, and with SECONDS "
                          "keep reprinting it that often (a live view of a running evaluation; Ctrl+C stops)")
@@ -142,7 +158,7 @@ def main() -> None:
             games = [g for g in range(start, min(start + args.chunk, args.games))
                      if (agent, opponent, args.players, args.seed, g) not in done]
             if games:
-                tasks.append((agent, opponent, args.players, args.seed, games, args.max_turns))
+                tasks.append((agent, opponent, args.players, args.seed, games, args.max_turns, args.data))
     total = sum(len(t[4]) for t in tasks)
 
     def say(line: str) -> None:

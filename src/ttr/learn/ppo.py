@@ -15,7 +15,9 @@ decisions, opponent moves included; optional potential-based `shaping` and the
 every other seat draws its own opponent the same way, the margin is against the
 opponents' mean, and evaluations fill every other seat with the evaluation opponent.
 A network plays only the player count it was trained for (the observation's size
-depends on it).
+depends on it). `init` (`--init PATH[@best]`) starts from another run's network
+instead of a fresh one, e.g. one distilled from a search (ttr.learn.distill); its
+observation settings and hidden layers must match.
 
     policy  pi(a | s) = softmax of actor(s) over the legal actions (illegal logits
             set to -1e8: invalid action masking, Huang & Ontanon 2020)
@@ -281,6 +283,7 @@ class PPOConfig:
     memory_level: int = 2
     ticket_plan: bool = False
     players: int = 2  # seats per game: the learner and players - 1 opponents
+    init: str = ""  # PATH[@best] of a PPO run whose network to start from (empty: a fresh one)
     seed: int = 0
     max_turns: int = 1000
     board: str = "usa"
@@ -340,7 +343,14 @@ def train(cfg: PPOConfig, eval_every: int = 0, eval_games: int = 100, eval_linea
     torch.manual_seed(cfg.seed)
     board = load_board(cfg.board)
     view = {"num_players": cfg.players, "memory_level": cfg.memory_level, "ticket_plan": cfg.ticket_plan}
-    net = ActorCritic(ObservationEncoder(**view).size, cfg.hidden).to(device)
+    net = ActorCritic(ObservationEncoder(**view).size, cfg.hidden)
+    if cfg.init:
+        path, best = (cfg.init.removesuffix("@best"), cfg.init.endswith("@best"))
+        start_net, start_view = load_policy(Path(path), best)
+        if start_view != view:
+            raise ValueError(f"--init {cfg.init} observes {start_view}, this run {view}")
+        net.load_state_dict(start_net.state_dict())  # fails if the hidden layers differ
+    net = net.to(device)
     cpu = torch.device("cpu")
     actor = net if device == cpu else copy.deepcopy(net).to(cpu).requires_grad_(False)
     eval_net = copy.deepcopy(net).to(cpu).requires_grad_(False)
@@ -438,6 +448,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser.add_argument("--vf-coef", type=float, default=d.vf_coef)
     parser.add_argument("--max-grad-norm", type=float, default=d.max_grad_norm)
     parser.add_argument("--eval-sample", action="store_true", help="evaluations sample moves (default: argmax)")
+    parser.add_argument("--init", default=d.init, metavar="PATH[@best]",
+                        help="start from this PPO run's network (e.g. a distilled one) instead of a fresh one")
     args = parser.parse_args(argv)
 
     cfg = PPOConfig(
@@ -447,13 +459,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         minibatches=args.minibatches, clip=args.clip, clip_vloss=args.clip_vloss, ent_coef=args.ent_coef,
         vf_coef=args.vf_coef, max_grad_norm=args.max_grad_norm, eval_sample=args.eval_sample,
         reward_mode=args.reward, memory_level=args.memory_level, ticket_plan=args.ticket_plan, players=args.players,
-        seed=args.seed, device=args.device,
+        init=args.init, seed=args.seed, device=args.device,
     )
     header = (f"training ppo vs {cfg.opponent} on {resolve_device(cfg.device)}: {cfg.players} players, "
               f"{cfg.games} games, {cfg.games_per_update} per update, hidden {list(cfg.hidden)}, "
               f"lr {cfg.lr}{' annealed' if cfg.anneal_lr else ''}, gamma {cfg.gamma}, lambda {cfg.gae_lambda}, "
               f"clip {cfg.clip}, entropy {cfg.ent_coef}, reward {cfg.reward_mode}"
               + (f", shaping {cfg.shaping}" if cfg.shaping else "") + (", ticket plan" if cfg.ticket_plan else "")
+              + (f", from {cfg.init}" if cfg.init else "")
               + (f"; pool {' '.join(cfg.pool)}" if cfg.opponent == "pool" else ""))
     run_from_cli(args, cfg, train, "ppo", header)
 
