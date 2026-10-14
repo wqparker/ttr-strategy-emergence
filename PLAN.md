@@ -1255,14 +1255,56 @@ for 2 players).
         `x1e_plan_move_s1` +3.6 and −8.9 (3.6 tickets completed when sampling). PPO samples in
         training, so stage 3 starts from `x1e_plan_move_s1@best` (epoch 40), with the ticket plan.
     - Stage 3 (`scripts/exit_pass1_ppo.ps1 -Init runs/exit/pass1/x1e_plan_move_s1.json@best
-      -TicketPlan`, started 07:47): PPO under own score from the distilled network, each arm a pass 6
-      / pass 3 setting with only the start changed (and the ticket plan on, so `p6b`, +9.5 against
-      greedy with 0.08 tickets completed, is the from-scratch reference for greedy): `f1a_greedy`,
-      `f1b_ticket_pool` (greedy, wary, collector; `p6d`), `f1c_pool` (pass 3's pool, racers and self
-      included; `p3b_score`), `f1d_greedy_slow` (f1a at lr 5e-5). 3 seeds each, 50000 games. Does RL
-      keep the tickets, improve on them, or drift back to the race?
-    - Stage 4, later: the search with a distilled network as its guide (`guide=ppo:PATH`, the
-      visit-target network: a prior wants the spread), the next ExIt iteration.
+      -TicketPlan`, 07:47–10:39): PPO under own score from the distilled network, each arm a pass 6 /
+      pass 3 setting with only the start changed and the ticket plan on (`p6b`, greedy + plan from
+      scratch: +9.5 vs greedy, 97 own points, 0.08 tickets completed), 3 seeds, 50000 games:
+      `f1a_greedy`, `f1b_ticket_pool` (greedy, wary, collector; `p6d`), `f1c_pool` (pass 3's pool, racers
+      and self included; `p3b_score`), `f1d_greedy_slow` (f1a at lr 5e-5 instead of 2.5e-4). Final
+      policies re-scored on 500 fresh games per opponent (`runs/exit/rescore_pass1_f1.*`), mean over
+      seeds (win share); behavior against greedy from the last 5 training evaluations:
+
+      | Arm | vs greedy | vs wary | vs racer | vs collector | vs PPO p2b | vs linear | Vs greedy: own score, tickets kept / done, ended it |
+      | --- | --- | --- | --- | --- | --- | --- | --- |
+      | distilled start (x1e) | +3.5 (56%) | −1.7 | −2.4 | +17.4 | −22.2 (20%) | −8.2 | 118; 5.1 / 4.5 |
+      | f1a greedy | +15.4 (67%) | +11.5 | +7.3 | +30.7 | −9.9 (36%) | +0.5 | 122; 4.0 / 3.4; 65% |
+      | **f1d greedy, lr 5e-5** | **+18.4** (69%) | +13.1 | +9.6 | +29.1 | −9.5 (38%) | +1.9 | **131; 5.1 / 4.7**; 40% |
+      | f1b ticket pool | +14.1 (68%) | +12.1 | +9.4 | +31.8 | −9.7 (38%) | +2.8 | 117; 2.3 / 2.1; 82% |
+      | **f1c pool with racers** | +15.4 (72%) | +12.5 | **+19.9** (87%) | +27.0 | **+2.3** (58%) | **+12.8** (76%) | 113; 2.0 / 1.7; 90% |
+      | pass 6 `p6a` / `p6d` (scratch, greedy / ticket pool) | +2.6 / +13.2 | −1.4 / +9.0 | −47.6 / −10.5 | +18.5 / +31.8 | — | — | 92–97; 2 / 0.0–0.1 |
+      | pass 3 `p3b_score` (scratch, pool) | +11.8 | +8.5 | +4.2 | +23.3 | — | — | —; 2 / 0.0 |
+      | PPO p2b (margin, pool; reference) | +26.1 | +19.5 | +7.2 | +39.6 | — | +5 to +7 | 89; 2 / 0.0 |
+
+      Best checkpoints are within 3 of the finals (f1b, f1c best +3 against greedy). Seeds agree within
+      2–7 points.
+
+      Readings:
+      - **Reinforcement learning keeps and improves the ticket strategy when it starts from one.** At a
+        fifth of the learning rate (f1d) every evaluation from the first on is ahead of the distilled
+        start; at the end it scores 131 of its own points against greedy (teacher 141, distilled 116,
+        every from-scratch learner 92–97), keeps 5.1 tickets and completes 4.7, and beats greedy by
+        18.4 where `p6b`, the same setting from scratch, raced to +9.5. So the from-scratch learners'
+        race was a local optimum of exploration, not the best response: started from tickets, PPO
+        finds a better policy than any it found from scratch under own score against greedy.
+      - **At the default learning rate the first updates break the start, and what grows back depends
+        on the opponents.** f1a–f1c fell to −1 to −35 against greedy within 2000 games, kept only the
+        2 opening tickets and completed most of them (1.6–2.4). Against greedy alone (f1a) the tickets
+        came back late (1.7 completed at 30k games, 3.4 at 50k, still rising); against the ticket pool
+        (f1b) and the pool with racers (f1c) the policy settled on a hybrid: keep the 2 opening
+        tickets and finish them (1.7–2.1 of 2, failing 0.2–0.3), claim long routes (mean length
+        3.9–4.0) and end the game (82–90%).
+      - **The hybrid is the strongest learned agent in the project.** f1c is ahead of PPO p2b head to
+        head (+2.3, 58% wins; p2b tied or beat every other learner in the round robins, and the
+        ticket search is −1.6 against it), and far ahead of it against racer (+19.9 to p2b's +7.2) and linear (+12.8 to +5–7), though it takes
+        less from greedy (+15.4 to +26.1; it was trained on own score, p2b on margin). It is the
+        race every learner found, plus the 2 opening tickets completed instead of abandoned: about
+        +20 points a game on ticket points alone.
+      - **The full ticket game still loses to the racers head to head.** f1d (4.7 tickets against
+        greedy) is −9.5 against PPO p2b, where it completes 2.4; the teacher itself is −1.6 there.
+    - Stage 4 (`scripts/exit_pass1_guided.ps1 -Guide2 runs/exit/pass1/f1d_greedy_slow_s2.json`, started
+      10:57, about 3 h): the teacher's search with a ticket network as its prior instead of greedy's
+      move: the distilled network (`x1c_plan_s1@best`, visit targets) and f1d s2. 100 games against
+      each of PPO p2b, linear p7b, racer and greedy on the re-score games, paired with pass 3's
+      teacher games. Is the guided search a stronger expert for the next ExIt round?
 - **Next:**
   - Every method, every reward that learned, every player count (2–5) and self-play converge
     on racing (PPO adding the connected network); tickets never appeared and blocking is at
@@ -1284,10 +1326,13 @@ for 2 players).
       head to head (+7.5 at 400 iterations, +15.9 at 1600). Open: which of the prior and
       `steps=main` matters; racer rollouts; `known_tickets=1`; 3–5 players; blocking
       instrumentation (`docs/paper/measure.py`).
-    - Expert iteration (the AlphaZero-style stretch goal): in progress, pass 1 above, on the ticket
-      search. The guided search's moves (PPO's prior; pass 4 measured the improvement step at about
-      +15 against PPO) are the other teacher: distilled into PPO's network, they test policy
-      improvement for the racing strategy.
+    - Expert iteration (the AlphaZero-style stretch goal): pass 1 above. A network holds tickets once
+      shown them (with the ticket plan), PPO from that start improves on it (f1d: 131 own points, 4.7
+      tickets against greedy) or, among racers, finds a race that finishes its opening tickets (f1c:
+      ahead of PPO p2b). Next round: record the best guided search (stage 4) on fresh seeds, distil,
+      PPO again at the low learning rate. A round robin with f1c, f1d, the teacher and p2b would
+      place them. The guided search's moves with PPO's prior (pass 4: +15 against PPO) remain the
+      other teacher, for the racing strategy.
     - Self-play share: self-play won head to head but lost edge over ticket players; a pool
       with more of the learner's own copies might keep both. Self-play at 2 and 5 players.
   - A multiplayer round robin (design open: for example each pair splits the seats) wasn't
