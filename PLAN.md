@@ -1337,7 +1337,9 @@ for 2 players).
     started 2026-10-14 16:45): the second round, with pass 1's best expert as the teacher:
     `mcts:reward=score,opponent=infer,guide=ppo:runs/exit/pass1/f1d_greedy_slow_s2.json`.
     - Stage 1, data: 500 games against each of the same six opponents on batch seed 7002, recorded as in
-      pass 1. About 9 h.
+      pass 1. About 9 h. **Paused 2026-10-14 19:40 at 792 of 3000 games** (53,262 decisions; CSV and
+      data files agree). Resume: rerun `scripts/exit_pass2.ps1` (skips the games already in
+      `teacher.csv`), then `scripts/exit_pass2_distill.ps1 -WaitPid <its PID>`.
     - Stage 2 (starts by itself after stage 1), all with the ticket plan, 3 seeds, 40 epochs:
       `x2a_plan_move` (move targets), `x2b_plan_visits` (visit targets), `x2c_both_move` (move targets on
       pass 1's and pass 2's data together; `ttr-train-distill --data` now takes several directories).
